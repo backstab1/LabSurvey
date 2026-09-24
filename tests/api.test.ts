@@ -113,3 +113,39 @@ test('exports', async () => {
   const info = await call('GET', `/api/admin/surveys/${surveyId}`);
   assert.deepEqual(info.json.counts.real, { completed: 1, screened_out: 1 });
 });
+
+test('hidden variables from URL param and from scripts', async () => {
+  const res = await app.inject({ method: 'POST', url: '/api/admin/login', payload: { login: 'admin', password: 'secret' } });
+  cookie = String(res.headers['set-cookie']).split(';')[0];
+  const def = {
+    formatVersion: 1, title: 'Hidden',
+    pages: [
+      { id: 'P1', questions: [
+        { id: 'H_pid', type: 'hidden', text: 'Панелист', fromParam: 'pid' },
+        { id: 'H_cell', type: 'hidden', text: 'Ячейка', valueType: 'number' },
+        { id: 'Q1', type: 'single', text: 'Q', options: [{ code: 1, text: 'a' }, { code: 2, text: 'b' }],
+          scripts: { onChange: "sl.set('H_cell', sl.value * 10)" } },
+      ] },
+      { id: 'P2', showIf: { q: 'H_cell', op: 'eq', value: 20 }, questions: [{ id: 'Q2', type: 'text', text: 'Только для ячейки 20' }] },
+    ],
+  };
+  const created = await call('POST', '/api/admin/surveys', { definition: def });
+  assert.deepEqual(created.json.errors, []);
+  await call('POST', `/api/admin/surveys/${created.json.id}/publish`);
+  cookie = '';
+  const sid = created.json.id;
+  let st = (await call('POST', `/api/s/${sid}/start`, { params: { pid: 'abc' } })).json;
+  assert.equal(st.answers.H_pid.v, 'abc');
+  // Страница P1 содержит только скрытые переменные + Q1 — она видима
+  st = (await call('POST', `/api/s/${sid}/submit`, { rid: st.rid, page: 'P1', answers: { Q1: { v: 2 }, H_cell: { v: 20 } } })).json;
+  assert.equal(st.page, 'P2');
+  st = (await call('POST', `/api/s/${sid}/submit`, { rid: st.rid, page: 'P2', answers: { Q2: { v: 'ok' } } })).json;
+  assert.equal(st.status, 'completed');
+  assert.equal(st.answers.H_cell.v, 20);
+  assert.equal(st.answers.H_pid.v, 'abc');
+  // Некорректное значение скрытой переменной игнорируется
+  const st2 = (await call('POST', `/api/s/${sid}/start`, {})).json;
+  const done = (await call('POST', `/api/s/${sid}/submit`, { rid: st2.rid, page: 'P1', answers: { Q1: { v: 1 }, H_cell: { v: [1, 2] } } })).json;
+  assert.equal(done.status, 'completed');
+  assert.equal(done.answers.H_cell, undefined);
+});
