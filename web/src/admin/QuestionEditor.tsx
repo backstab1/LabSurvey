@@ -10,7 +10,7 @@ import { ID_RE, RESERVED_IDS } from '../../../shared/validate.ts';
 import { Flag, Menu, Modal, NumField, Section, Segmented, compact } from './common.tsx';
 import { newQuestion, TYPE_ICONS } from './Builder.tsx';
 import {
-  CHOICE_TYPES, OPTION_TYPES, QUESTION_TYPE_LABELS, type Action, type MatrixQuestion, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
+  CHOICE_TYPES, OPTION_TYPES, QUESTION_TYPE_LABELS, settingsOf, type Action, type MatrixQuestion, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
 } from '../../../shared/types.ts';
 
 /** Смена типа с сохранением всего, что можно перенести */
@@ -125,7 +125,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
 
           <div className="sections">
             {q.type !== 'hidden' && <ActionsBlock def={def} q={q} prevId={prevId} set={set} onCreateVar={onCreateVar} />}
-            <SettingsSection q={q} set={set} />
+            <SettingsSection def={def} q={q} set={set} />
           </div>
         </div>
 
@@ -354,13 +354,21 @@ function Block({ title, note, children }: { title: string; note?: string; childr
 }
 
 /** Флажки и мелкие параметры — всё, что не нужно видеть постоянно */
-function SettingsSection({ q, set }: { q: Question; set: (p: Patch) => void }) {
+function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: Patch) => void }) {
   const a = q as any;
   const on: string[] = [];
   const body: ReactNode[] = [];
   const flag = (key: string, label: string, hint?: string) => {
     if (a[key]) on.push(label);
     body.push(<Flag key={key} label={label} hint={hint} checked={!!a[key]} onChange={(v) => set({ [key]: v || undefined })} />);
+  };
+  // Флаг со значением по умолчанию из настроек анкеты: в вопросе хранится только отличие от него
+  const inherited = (key: 'autoNext' | 'noPaste', label: string, hint?: string) => {
+    const base = !!settingsOf(def)[key];
+    const value = a[key] ?? base;
+    if (value) on.push(label);
+    body.push(<Flag key={key} label={label} hint={hint ?? (base ? 'Включено для всей анкеты в настройках' : undefined)} checked={value}
+      onChange={(v) => set({ [key]: v === base ? undefined : v })} />);
   };
   const group = (title: string) => body.push(<div key={`g-${title}`} className="flag-group">{title}</div>);
   const answerable = q.type !== 'info' && q.type !== 'hidden';
@@ -442,10 +450,10 @@ function SettingsSection({ q, set }: { q: Question; set: (p: Patch) => void }) {
         <input className="input mini" type="number" placeholder="—" value={q.maxLength ?? ''} onChange={(e) => set({ maxLength: e.target.value ? Number(e.target.value) : undefined })} />
       </div>,
     );
-    flag('noPaste', 'Запретить вставку из буфера обмена');
+    inherited('noPaste', 'Запретить вставку из буфера обмена');
   }
   if (q.type === 'single' || q.type === 'dropdown' || q.type === 'scale') {
-    flag('autoNext', 'Автопереход далее при выборе ответа', 'Если вопрос на странице один');
+    inherited('autoNext', 'Автопереход далее при выборе ответа');
   }
 
   // ---- Отображение ----

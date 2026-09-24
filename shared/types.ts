@@ -281,10 +281,46 @@ export interface SurveySettings {
   allowBack?: boolean;
   /** Кнопка «Завершить» — респондент может досрочно закончить опрос */
   allowEarlyFinish?: boolean;
+  /** Номер вопроса над текстом: «Вопрос 3» (по порядку показа респонденту) */
+  showQuestionNumbers?: boolean;
+  /** Enter в однострочном поле нажимает «Далее» */
+  enterSubmits?: boolean;
+  /** Значение по умолчанию для autoNext у вопросов single / dropdown / scale */
+  autoNext?: boolean;
+  /** Значение по умолчанию для noPaste у открытых вопросов */
+  noPaste?: boolean;
+
   completeMessage?: string;
   screenoutMessage?: string;
   earlyFinishMessage?: string;
   closedMessage?: string;
+  /** Редиректы после завершения / отсева / досрочного выхода. Подстановки: {{param.pid}}, {{Q1}}, {{resp_id}} */
+  redirectComplete?: string;
+  redirectScreenout?: string;
+  redirectEarlyFinish?: string;
+
+  // ---- Доступ и сбор ----
+  /** Пароль для входа в опрос (не отдаётся в браузер) */
+  password?: string;
+  /** Начало и окончание сбора, ISO-время */
+  openFrom?: string;
+  closeAt?: string;
+  /** Закрыть сбор после N завершённых анкет */
+  maxResponses?: number;
+  /** Разрешить пройти опрос ещё раз с того же устройства */
+  allowRetake?: boolean;
+
+  // ---- Оформление ----
+  /** Логотип над опросом (URL картинки) */
+  logoUrl?: string;
+  /** Основной цвет (#RRGGBB) */
+  accentColor?: string;
+  /** Текст под опросом; поддерживает **форматирование** и ссылки */
+  footerText?: string;
+  nextLabel?: string;
+  backLabel?: string;
+  submitLabel?: string;
+  earlyFinishLabel?: string;
 }
 
 export interface Survey {
@@ -318,15 +354,34 @@ export interface RespondentContext {
   survey: Survey;
 }
 
-export const DEFAULT_SETTINGS: Required<SurveySettings> = {
+/** Настройки, у которых есть значение по умолчанию; остальные по умолчанию не заданы */
+type DefaultedSettings = 'showProgress' | 'allowBack' | 'allowEarlyFinish' | 'showQuestionNumbers' | 'enterSubmits' | 'autoNext' | 'noPaste'
+  | 'allowRetake' | 'completeMessage' | 'screenoutMessage' | 'earlyFinishMessage' | 'closedMessage'
+  | 'nextLabel' | 'backLabel' | 'submitLabel' | 'earlyFinishLabel';
+
+export const DEFAULT_SETTINGS: Required<Pick<SurveySettings, DefaultedSettings>> & SurveySettings = {
   showProgress: true,
   allowBack: true,
   allowEarlyFinish: false,
+  showQuestionNumbers: false,
+  enterSubmits: true,
+  autoNext: false,
+  noPaste: false,
+  allowRetake: false,
   completeMessage: 'Спасибо! Ваши ответы сохранены.',
   screenoutMessage: 'Спасибо за интерес! К сожалению, вы не подходите под условия этого опроса.',
   earlyFinishMessage: 'Опрос завершён. Спасибо за уделённое время!',
   closedMessage: 'Опрос закрыт.',
+  nextLabel: 'Далее',
+  backLabel: 'Назад',
+  submitLabel: 'Отправить',
+  earlyFinishLabel: 'Завершить опрос досрочно',
 };
+
+/** Настройки анкеты с подставленными значениями по умолчанию */
+export function settingsOf(survey: Survey) {
+  return { ...DEFAULT_SETTINGS, ...survey.settings };
+}
 
 export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   single: 'Один ответ',

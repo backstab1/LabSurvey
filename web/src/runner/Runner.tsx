@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../api.ts';
 import { QuestionView } from './QuestionView.tsx';
 import { runScript, type ScriptEnv } from './scripts.ts';
@@ -6,7 +6,7 @@ import { rich } from './rich.tsx';
 import { actionError, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions } from '../../../shared/logic.ts';
 import { validateAnswer } from '../../../shared/answers.ts';
 import {
-  DEFAULT_SETTINGS, END, type Answer, type AnswerValue, type Answers, type Page, type RespondentContext, type Survey,
+  DEFAULT_SETTINGS, END, settingsOf, type Answer, type AnswerValue, type Answers, type Page, type RespondentContext, type Survey,
 } from '../../../shared/types.ts';
 
 interface RunnerState {
@@ -19,19 +19,24 @@ interface RunnerState {
   page: string | null;
   canBack: boolean;
   progress: number;
+  step: number;
   message?: string;
+  redirect?: string;
 }
 
 type Loaded =
   | { kind: 'state'; state: RunnerState }
   | { kind: 'closed'; title: string; message: string }
+  | { kind: 'password'; title: string; error?: string }
   | { kind: 'error'; message: string };
 
 export function Runner({ surveyId }: { surveyId: string }) {
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
-  const preview = query.get('preview') === '1';
+  const test = query.get('test') ?? undefined;
+  const preview = query.get('preview') === '1' || !!test;
   const storageKey = `sl:${surveyId}:${preview ? 'preview' : 'live'}`;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [checking, setChecking] = useState(false);
 
   const applyState = (state: RunnerState) => {
     try { localStorage.setItem(storageKey, state.rid); } catch { /* приватный режим */ }
@@ -40,21 +45,31 @@ export function Runner({ surveyId }: { surveyId: string }) {
     window.scrollTo(0, 0);
   };
 
-  useEffect(() => {
+  const start = (password?: string) => {
     let rid: string | null = null;
-    try { rid = query.get('new') === '1' ? null : localStorage.getItem(storageKey); } catch { /* */ }
+    // В предпросмотре new=1 — всегда новая сессия; в опросе — просьба пройти ещё раз (сервер решает, можно ли)
+    const fresh = query.get('new') === '1';
+    try { rid = fresh && preview ? null : localStorage.getItem(storageKey); } catch { /* */ }
     const params: Record<string, string> = {};
     query.forEach((v, k) => { params[k] = v; });
     const startAt = preview ? query.get('start') ?? undefined : undefined;
-    api('POST', `/api/s/${surveyId}/start`, { rid, params, preview, startAt })
-      .then((res) => (res.closed ? setLoaded({ kind: 'closed', title: res.title, message: res.message }) : applyState(res)))
-      .catch((e) => setLoaded({ kind: 'error', message: e instanceof ApiError && e.status === 404 ? 'Опрос не найден' : e.message }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setChecking(true);
+    api('POST', `/api/s/${surveyId}/start`, { rid, params, preview: preview && !test, test, startAt, restart: fresh && !preview, password })
+      .then((res) => {
+        if (res.closed) setLoaded({ kind: 'closed', title: res.title, message: res.message });
+        else if (res.needPassword) setLoaded({ kind: 'password', title: res.title, error: res.error });
+        else applyState(res);
+      })
+      .catch((e) => setLoaded({ kind: 'error', message: e instanceof ApiError && e.status === 404 ? 'Опрос не найден' : e.message }))
+      .finally(() => setChecking(false));
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { start(); }, []);
 
   if (!loaded) return <div className="runner"><div className="runner-card muted">Загрузка…</div></div>;
   if (loaded.kind === 'error') return <Final title="SurveyLAB" message={loaded.message} />;
   if (loaded.kind === 'closed') return <Final title={loaded.title} message={loaded.message} />;
+  if (loaded.kind === 'password') return <PasswordGate title={loaded.title} error={loaded.error} busy={checking} onSubmit={start} />;
 
   const { state } = loaded;
   const page = state.page ? findPage(state.survey, state.page) : null;
@@ -63,8 +78,41 @@ export function Runner({ surveyId }: { surveyId: string }) {
       {state.survey.css && <style>{state.survey.css}</style>}
       {page
         ? <PageView key={`${state.rid}:${page.id}:${state.progress}`} state={state} page={page} surveyId={surveyId} onState={applyState} />
-        : <Final title={state.survey.title} message={state.message ?? DEFAULT_SETTINGS.completeMessage} preview={state.preview} />}
+        : <Final survey={state.survey} title={state.survey.title} message={state.message ?? DEFAULT_SETTINGS.completeMessage}
+            preview={state.preview} redirect={state.redirect} />}
     </>
+  );
+}
+
+/** Оформление из настроек: цвет, логотип, подвал */
+function Shell({ survey, className, children }: { survey?: Survey; className?: string; children: ReactNode }) {
+  const st = survey ? settingsOf(survey) : DEFAULT_SETTINGS;
+  const style = st.accentColor
+    ? { '--accent': st.accentColor, '--accent-soft': `color-mix(in srgb, ${st.accentColor} 12%, white)` } as CSSProperties
+    : undefined;
+  return (
+    <div className={`runner${className ? ` ${className}` : ''}`} style={style}>
+      {st.logoUrl && <div className="runner-logo"><img src={st.logoUrl} alt="" /></div>}
+      {children}
+      {st.footerText && <div className="runner-footer">{rich(st.footerText)}</div>}
+    </div>
+  );
+}
+
+function PasswordGate({ title, error, busy, onSubmit }: { title: string; error?: string; busy: boolean; onSubmit: (p: string) => void }) {
+  const [value, setValue] = useState('');
+  useEffect(() => { document.title = title; }, [title]);
+  return (
+    <div className="runner">
+      <form className="runner-card final" onSubmit={(e) => { e.preventDefault(); if (value) onSubmit(value); }}>
+        <h1>{title}</h1>
+        <p className="muted">Опрос защищён паролем</p>
+        <input className="input password-input" type="password" autoFocus autoComplete="off" placeholder="Пароль"
+          value={value} onChange={(e) => setValue(e.target.value)} aria-label="Пароль" />
+        {error && <div className="q-error" role="alert">{error}</div>}
+        <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={busy || !value}>Начать</button>
+      </form>
+    </div>
   );
 }
 
@@ -72,7 +120,7 @@ function PageView({ state, page, surveyId, onState }: {
   state: RunnerState; page: Page; surveyId: string; onState: (s: RunnerState) => void;
 }) {
   const { survey } = state;
-  const settings = { ...DEFAULT_SETTINGS, ...survey.settings };
+  const settings = settingsOf(survey);
 
   // Ответы текущей страницы + значения, выставленные скриптами
   const [local, setLocal] = useState<Answers>(() => {
@@ -132,7 +180,7 @@ function PageView({ state, page, surveyId, onState }: {
     if (errors[id]) setErrors((e) => ({ ...e, [id]: '' }));
     const q = page.questions.find((x) => x.id === id);
     // Автопереход: единственный вопрос на странице, выбран обычный вариант (не «Другое»)
-    if (q && 'autoNext' in q && q.autoNext && typeof a?.v === 'number'
+    if (q && (q.type === 'single' || q.type === 'dropdown' || q.type === 'scale') && (q.autoNext ?? settings.autoNext) && typeof a?.v === 'number'
       && visible.filter((x) => x.type !== 'info').length === 1
       && !resolveOptions(ctx, q, 0, false).find((o) => o.code === a.v)?.other) {
       setAutoSubmit(true);
@@ -203,8 +251,10 @@ function PageView({ state, page, surveyId, onState }: {
 
   sendRef.current = send;
 
+  const numbered = settings.showQuestionNumbers && visible.some((q) => q.type !== 'info');
+
   return (
-    <div className={`runner page-${page.id}`}>
+    <Shell survey={survey} className={`page-${page.id}`}>
       {state.preview && <div className="preview-banner">Предпросмотр: ответы помечаются как тестовые</div>}
       {settings.showProgress && (
         <div className="progress" role="progressbar" aria-valuenow={state.progress} aria-valuemin={0} aria-valuemax={100}>
@@ -214,38 +264,48 @@ function PageView({ state, page, surveyId, onState }: {
       <div className="runner-card" onKeyDown={(e) => {
         // Enter в однострочном поле — «Далее»
         const t = e.target as HTMLElement;
-        if (e.key === 'Enter' && t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'checkbox' && (t as HTMLInputElement).type !== 'radio') {
+        if (e.key === 'Enter' && settings.enterSubmits && t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'checkbox' && (t as HTMLInputElement).type !== 'radio') {
           e.preventDefault();
           send('submit');
         }
       }}>
         {blockTitle && <div className="page-title">{rich(pipe(blockTitle, ctx))}</div>}
+        {numbered && <div className="q-number">Вопрос {state.step}</div>}
         {visible.map((q) => (
           <QuestionView key={q.id} q={q} ctx={ctx} answer={local[q.id]} error={errors[q.id]} onChange={(a) => setAnswer(q.id, a)} />
         ))}
         {pageError && <div className="q-error page-error" role="alert">{pageError}</div>}
         <div className="nav">
-          {state.canBack && !hideBack && <button className="btn btn-secondary" disabled={busy} onClick={() => send('back')}>Назад</button>}
-          <button className="btn btn-primary" disabled={busy} onClick={() => send('submit')}>{isLast ? 'Отправить' : 'Далее'}</button>
+          {state.canBack && !hideBack && <button className="btn btn-secondary" disabled={busy} onClick={() => send('back')}>{settings.backLabel}</button>}
+          <button className="btn btn-primary" disabled={busy} onClick={() => send('submit')}>{isLast ? settings.submitLabel : settings.nextLabel}</button>
         </div>
         {settings.allowEarlyFinish && !hideFinish && (
           <div className="early-finish">
-            <button className="btn-link" disabled={busy} onClick={() => send('finish')}>Завершить опрос досрочно</button>
+            <button className="btn-link" disabled={busy} onClick={() => send('finish')}>{settings.earlyFinishLabel}</button>
           </div>
         )}
       </div>
-    </div>
+    </Shell>
   );
 }
 
-function Final({ title, message, preview }: { title: string; message: string; preview?: boolean }) {
+function Final({ survey, title, message, preview, redirect }: {
+  survey?: Survey; title: string; message: string; preview?: boolean; redirect?: string;
+}) {
   useEffect(() => { document.title = title; }, [title]);
+  // Редирект (панель и т. п.) — сразу, без показа сообщения. В предпросмотре только показываем адрес
+  const go = !!redirect && !preview;
+  useEffect(() => { if (go) window.location.replace(redirect!); }, [go, redirect]);
+  const retake = preview || (survey && settingsOf(survey).allowRetake);
   return (
-    <div className="runner">
+    <Shell survey={survey}>
       <div className="runner-card final">
         <h1>{title}</h1>
-        <p style={{ whiteSpace: 'pre-line' }}>{rich(message)}</p>
-        {preview && (
+        {go ? <p className="muted">Переходим дальше…</p> : <p style={{ whiteSpace: 'pre-line' }}>{rich(message)}</p>}
+        {preview && redirect && (
+          <p className="preview-banner redirect-note">В опросе здесь будет переход на <a href={redirect} target="_blank" rel="noopener noreferrer">{redirect}</a></p>
+        )}
+        {retake && !go && (
           <button className="btn btn-secondary" onClick={() => {
             const u = new URL(window.location.href);
             u.searchParams.set('new', '1');
@@ -253,6 +313,6 @@ function Final({ title, message, preview }: { title: string; message: string; pr
           }}>Пройти ещё раз</button>
         )}
       </div>
-    </div>
+    </Shell>
   );
 }

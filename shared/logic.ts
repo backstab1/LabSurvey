@@ -467,11 +467,32 @@ export function answerText(ctx: RespondentContext, q: Question, rowCode?: string
   }
 }
 
-/** Заменяет {{Q1}}, {{Q5.2}} (строка матрицы), {{param.src}} на значения */
+/**
+ * Адрес редиректа: подстановки как в тексте плюс {{resp_id}}; значения кодируются для URL.
+ * Для вопросов с вариантами подставляется код ответа, а не текст — так удобнее панелям.
+ */
+export function pipeUrl(url: string, ctx: RespondentContext, respId: string): string {
+  return url.replace(/\{\{\s*([A-Za-z][\w]*)(?:\.([\w]+))?\s*\}\}/g, (_m, id: string, sub?: string) => {
+    let v = '';
+    if (id === 'resp_id') v = respId;
+    else if (id === 'param' && sub) v = ctx.params[sub] ?? '';
+    else {
+      const a = ctx.answers[id]?.v;
+      if (sub !== undefined && a && typeof a === 'object' && !Array.isArray(a)) {
+        const rv = (a as Record<string, number | number[]>)[sub];
+        v = rv === undefined ? '' : String(rv);
+      } else if (a !== undefined && (typeof a !== 'object' || Array.isArray(a))) v = Array.isArray(a) ? a.join(',') : String(a);
+    }
+    return encodeURIComponent(v);
+  });
+}
+
+/** Заменяет {{Q1}}, {{Q5.2}} (строка матрицы), {{param.src}}, {{resp_id}} на значения */
 export function pipe(text: string, ctx: RespondentContext): string {
   if (!text || !text.includes('{{')) return text;
   return text.replace(/\{\{\s*([A-Za-z][\w]*)(?:\.([\w]+))?\s*\}\}/g, (_m, id: string, sub?: string) => {
     if (id === 'param' && sub) return ctx.params[sub] ?? '';
+    if (id === 'resp_id') return ctx.seed;
     const q = findQuestion(ctx.survey, id);
     if (!q) return '';
     return answerText(ctx, q, sub);

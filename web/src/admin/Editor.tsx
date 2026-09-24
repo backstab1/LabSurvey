@@ -22,6 +22,7 @@ export interface SurveyInfo {
   sheets: any;
   counts: { real: Record<string, number>; test: number };
   sheetsAccount: { configured: boolean; email: string | null };
+  testToken: string;
 }
 
 type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'data';
@@ -204,6 +205,7 @@ export function Editor({ id }: { id: string }) {
         </button>
         <Menu className="btn btn-secondary menu-trigger" items={[
           { label: 'Скопировать ссылку на опрос', onClick: () => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); } },
+          { label: 'Скопировать тестовую ссылку', onClick: () => { navigator.clipboard.writeText(`${link}?test=${info.testToken}`); toast('Тестовая ссылка скопирована: черновик, без входа, ответы тестовые'); } },
           info.status === 'active' && { label: 'Закрыть сбор ответов', onClick: () => setStatus('closed') },
           info.status === 'closed' && { label: 'Возобновить сбор', onClick: () => setStatus('active') },
           { label: 'Дублировать анкету', onClick: async () => { const r = await api('POST', `/api/admin/surveys/${id}/duplicate`); navigate(`/admin/s/${r.id}`); } },
@@ -246,7 +248,7 @@ export function Editor({ id }: { id: string }) {
       {tab === 'builder' && <Builder def={def} onChange={update} issues={validation} focus={focus} onPreview={preview} />}
       {tab === 'logic' && <LogicTab def={def} onOpen={(qid) => { changeTab('builder'); setFocus({ where: qid, n: Date.now() }); }} />}
       {tab === 'json' && <JsonTab def={def} onChange={update} />}
-      {tab === 'settings' && <SettingsTab def={def} onChange={update} />}
+      {tab === 'settings' && <SettingsTab def={def} onChange={update} surveyId={id} testToken={info.testToken} completed={info.counts.real.completed ?? 0} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
       <Toaster />
     </div>

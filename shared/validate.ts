@@ -63,6 +63,7 @@ export function validateSurvey(input: unknown): ValidationResult {
   if (s.formatVersion !== 2) err('formatVersion', 'Должно быть 2');
   if (typeof s.title !== 'string' || !s.title.trim()) err('title', 'Укажите название анкеты');
   if (s.settings !== undefined && !isObj(s.settings)) err('settings', 'Ожидается объект');
+  else if (s.settings) validateSettings(s.settings, err, warn);
   if (s.css !== undefined && typeof s.css !== 'string') err('css', 'Ожидается строка');
   checkScripts(s.scripts, 'survey', 'анкета', err);
   if (!Array.isArray(s.blocks) || s.blocks.length === 0) {
@@ -231,13 +232,41 @@ export function validateSurvey(input: unknown): ValidationResult {
   function checkPiping(text: unknown, where: string, current: { page: number; pos: number }) {
     if (typeof text !== 'string') return;
     for (const m of text.matchAll(/\{\{\s*([A-Za-z]\w*)(?:\.(\w+))?\s*\}\}/g)) {
-      if (m[1] === 'param') continue;
+      if (m[1] === 'param' || m[1] === 'resp_id') continue;
       if (!qIndex.has(m[1])) warn(where, `Подстановка {{${m[1]}}}: такого вопроса нет`);
       else checkRef(`${where} → подстановка`, m[1], current, true);
     }
   }
 
   return { ok: errors.length === 0, errors, warnings };
+}
+
+const BOOL_SETTINGS = ['showProgress', 'allowBack', 'allowEarlyFinish', 'showQuestionNumbers', 'enterSubmits', 'autoNext', 'noPaste', 'allowRetake'];
+const TEXT_SETTINGS = [
+  'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'closedMessage', 'password', 'footerText',
+  'nextLabel', 'backLabel', 'submitLabel', 'earlyFinishLabel',
+];
+const URL_SETTINGS = ['redirectComplete', 'redirectScreenout', 'redirectEarlyFinish', 'logoUrl'];
+
+function validateSettings(st: Record<string, unknown>, err: (w: string, m: string) => void, warn: (w: string, m: string) => void) {
+  const w = (k: string) => `settings.${k}`;
+  for (const k of BOOL_SETTINGS) if (st[k] !== undefined && typeof st[k] !== 'boolean') err(w(k), 'Ожидается true или false');
+  for (const k of TEXT_SETTINGS) if (st[k] !== undefined && typeof st[k] !== 'string') err(w(k), 'Ожидается строка');
+  for (const k of URL_SETTINGS) {
+    if (st[k] === undefined) continue;
+    if (typeof st[k] !== 'string' || !/^https?:\/\/\S+$/i.test(st[k] as string)) err(w(k), 'Адрес должен начинаться с http:// или https://');
+  }
+  for (const k of ['openFrom', 'closeAt']) {
+    if (st[k] !== undefined && (typeof st[k] !== 'string' || isNaN(Date.parse(st[k] as string)))) err(w(k), 'Ожидается дата и время (ISO 8601)');
+  }
+  if (typeof st.openFrom === 'string' && typeof st.closeAt === 'string' && Date.parse(st.openFrom) >= Date.parse(st.closeAt)) {
+    err(w('closeAt'), 'Окончание сбора раньше начала');
+  }
+  if (st.maxResponses !== undefined && (!isInt(st.maxResponses) || st.maxResponses < 1)) err(w('maxResponses'), 'Целое число ≥ 1');
+  if (st.accentColor !== undefined && (typeof st.accentColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(st.accentColor))) {
+    err(w('accentColor'), 'Цвет в формате #RRGGBB');
+  }
+  if (st.allowRetake && st.maxResponses) warn(w('allowRetake'), 'При повторном прохождении один человек может занять несколько мест в лимите ответов');
 }
 
 function validateOptions(list: unknown, where: string, name: string, err: (w: string, m: string) => void, allowEmpty = false) {

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { checkPassword, clearSession, isAdmin, requireAdmin, setSession } from '../auth.ts';
+import { checkPassword, clearSession, isAdmin, requireAdmin, setSession, testToken } from '../auth.ts';
 import { responses, surveys, type SheetsConfig, type SurveyStatus } from '../db.ts';
 import { buildTable } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
@@ -69,7 +69,7 @@ export async function adminRoutes(app: FastifyInstance) {
     priv.get<{ Params: { id: string } }>('/api/admin/surveys/:id', async (req, reply) => {
       const s = await surveys.get(req.params.id);
       if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
-      return { ...s, counts: await responses.counts(s.id), sheetsAccount: sheetsStatus() };
+      return { ...s, counts: await responses.counts(s.id), sheetsAccount: sheetsStatus(), testToken: testToken(s.id) };
     });
 
     priv.put<{ Params: { id: string }; Body: { definition: unknown } }>('/api/admin/surveys/:id', async (req, reply) => {

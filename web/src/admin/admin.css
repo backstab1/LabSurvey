@@ -419,3 +419,10 @@
 .lchip.bad { background: var(--danger); color: #fff; }
 .lend { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ok); padding: 12px 8px 0; }
 @media (max-width: 640px) { .logic-map { padding-left: 12px; } .logic-arcs { display: none; } .ltext { white-space: normal; } }
+
+/* Настройки анкеты */
+.settings-tab .card h2 { margin: 0; font-size: 18px; }
+.settings-tab .check { align-items: flex-start; }
+.settings-tab .check input { margin-top: 3px; flex-shrink: 0; }
+.color-input { width: 44px; height: 40px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.finish-group { border-top: 1px solid var(--border); padding-top: 12px; }

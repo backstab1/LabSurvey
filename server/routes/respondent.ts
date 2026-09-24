@@ -1,13 +1,14 @@
 // API прохождения опроса. Сервер — источник истины: он проверяет ответы и решает, куда идти дальше.
 import type { FastifyInstance } from 'fastify';
-import { isAdmin } from '../auth.ts';
+import { checkTestToken, isAdmin } from '../auth.ts';
+import { config } from '../config.ts';
 import { responses, surveys, type StoredResponse, type SurveyRow } from '../db.ts';
 import { queueResponseSync } from '../sheets.ts';
 import {
-  actionError, allQuestions, cleanAnswers, findPage, firstPage, isQuestionVisible, nextPage, progressPercent,
+  actionError, allQuestions, cleanAnswers, findPage, firstPage, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
 } from '../../shared/logic.ts';
 import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
-import { DEFAULT_SETTINGS, END, SCREENOUT, type Answer, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
+import { END, SCREENOUT, settingsOf, type Answer, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
 
 export interface RunnerState {
@@ -20,10 +21,14 @@ export interface RunnerState {
   page: string | null;
   canBack: boolean;
   progress: number;
+  /** Порядковый номер вопроса у респондента (для «Вопрос N») */
+  step: number;
   message?: string;
+  /** Куда перенаправить после завершения */
+  redirect?: string;
 }
 
-const RESERVED_PARAMS = new Set(['preview', 'new', 'rid']);
+const RESERVED_PARAMS = new Set(['preview', 'new', 'rid', 'test']);
 
 function cleanParams(raw: unknown): Record<string, string> {
   const out: Record<string, string> = {};
@@ -42,20 +47,45 @@ function definitionFor(s: SurveyRow, r: { isTest: boolean }): Survey | null {
 const ctxOf = (survey: Survey, r: StoredResponse, answers: Answers): RespondentContext =>
   ({ survey, answers, params: r.params, seed: r.id });
 
-function finishedMessage(survey: Survey, status: ResponseStatus): string {
-  const st = { ...DEFAULT_SETTINGS, ...survey.settings };
-  if (status === 'screened_out') return st.screenoutMessage;
-  if (status === 'terminated') return st.earlyFinishMessage;
-  return st.completeMessage;
+/** Анкета для браузера респондента — без пароля */
+export function publicSurvey(survey: Survey): Survey {
+  if (!survey.settings?.password) return survey;
+  const { password: _, ...settings } = survey.settings;
+  return { ...survey, settings };
+}
+
+function finished(survey: Survey, r: StoredResponse): { message: string; redirect?: string } {
+  const st = settingsOf(survey);
+  const [message, redirect] = r.status === 'screened_out' ? [st.screenoutMessage, st.redirectScreenout]
+    : r.status === 'terminated' ? [st.earlyFinishMessage, st.redirectEarlyFinish]
+      : [st.completeMessage, st.redirectComplete];
+  const ctx = ctxOf(survey, r, r.answers);
+  return { message: pipe(message, ctx), redirect: redirect ? pipeUrl(redirect, ctx, r.id) : undefined };
+}
+
+/** Почему новый респондент не может начать опрос (null — может) */
+async function closedReason(surveyId: string, survey: Survey): Promise<string | null> {
+  const st = settingsOf(survey);
+  const now = Date.now();
+  if (st.openFrom && now < Date.parse(st.openFrom)) {
+    const when = new Date(st.openFrom).toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short', timeZone: config.timezone });
+    return `Опрос начнётся ${when}.`;
+  }
+  if (st.closeAt && now >= Date.parse(st.closeAt)) return st.closedMessage;
+  if (st.maxResponses) {
+    const done = (await responses.counts(surveyId)).real.completed ?? 0;
+    if (done >= st.maxResponses) return st.closedMessage;
+  }
+  return null;
 }
 
 function stateOf(survey: Survey, r: StoredResponse): RunnerState {
-  const st = { ...DEFAULT_SETTINGS, ...survey.settings };
+  const st = settingsOf(survey);
   const base = {
-    rid: r.id, status: r.status, preview: r.isTest, survey, params: r.params, answers: r.answers,
+    rid: r.id, status: r.status, preview: r.isTest, survey: publicSurvey(survey), params: r.params, answers: r.answers,
   };
   if (r.status !== 'in_progress' || !r.currentPage) {
-    return { ...base, page: null, canBack: false, progress: 100, message: finishedMessage(survey, r.status) };
+    return { ...base, page: null, canBack: false, progress: 100, step: 0, ...finished(survey, r) };
   }
   const nav = cleanAnswers(ctxOf(survey, r, r.answers), r.history);
   return {
@@ -65,6 +95,7 @@ function stateOf(survey: Survey, r: StoredResponse): RunnerState {
     page: r.currentPage,
     canBack: st.allowBack && r.history.length > 0,
     progress: progressPercent(ctxOf(survey, r, nav), r.currentPage, r.history),
+    step: r.history.filter((id) => findPage(survey, id)?.questions.some((q) => q.type !== 'info')).length + 1,
   };
 }
 
@@ -140,32 +171,36 @@ export async function respondentRoutes(app: FastifyInstance) {
     if (!s || !r || r.surveyId !== s.id) return null;
     const survey = definitionFor(s, r);
     if (!survey) return null;
-    // Анкету переопубликовали во время прохождения — продолжаем по новой версии
-    if (!r.isTest && r.version !== s.version && r.status === 'in_progress') {
-      r.version = s.version;
+    // Анкету переопубликовали (или черновик изменили) во время прохождения — продолжаем по текущей версии
+    const stale = r.currentPage && !findPage(survey, r.currentPage);
+    if (r.status === 'in_progress' && (stale || (!r.isTest && r.version !== s.version))) {
+      if (!r.isTest) r.version = s.version;
       if (r.currentPage && !findPage(survey, r.currentPage)) {
         r.currentPage = firstPage(ctxOf(survey, r, {}));
         r.history = [];
       }
       r.history = r.history.filter((p) => findPage(survey, p));
-      await responses.update(r.id, { version: s.version, currentPage: r.currentPage, history: r.history });
+      await responses.update(r.id, { version: r.version, currentPage: r.currentPage, history: r.history });
     }
     return { s, r, survey };
   }
 
-  app.post<{ Params: { id: string }; Body: { rid?: string; params?: unknown; preview?: boolean; startAt?: string } }>(
+  app.post<{
+    Params: { id: string };
+    Body: { rid?: string; params?: unknown; preview?: boolean; test?: string; startAt?: string; restart?: boolean; password?: string };
+  }>(
     '/api/s/:id/start',
     async (req, reply) => {
       const s = await surveys.get(req.params.id);
       if (!s) return reply.code(404).send({ error: 'Опрос не найден' });
-      const preview = !!req.body?.preview;
-      if (preview && !isAdmin(req)) return reply.code(401).send({ error: 'Предпросмотр доступен только после входа в админку' });
+      // Предпросмотр черновика: команда (после входа) или тестовая ссылка
+      const preview = !!req.body?.preview || !!req.body?.test;
+      if (preview && !isAdmin(req) && !checkTestToken(s.id, req.body?.test)) {
+        return reply.code(401).send({ error: req.body?.test ? 'Тестовая ссылка недействительна' : 'Предпросмотр доступен только после входа в админку' });
+      }
 
-      if (!preview) {
-        if (!s.published || s.status !== 'active') {
-          const msg = s.published?.settings?.closedMessage ?? DEFAULT_SETTINGS.closedMessage;
-          return { closed: true, title: s.published?.title ?? s.title, message: msg };
-        }
+      if (!preview && (!s.published || s.status !== 'active')) {
+        return { closed: true, title: s.published?.title ?? s.title, message: settingsOf(s.published ?? s.draft).closedMessage };
       }
 
       // Предпросмотр с выбранного вопроса — всегда новая сессия
@@ -174,12 +209,22 @@ export async function respondentRoutes(app: FastifyInstance) {
       if (req.body?.rid && !startAt) {
         const loaded = await load(s.id, req.body.rid);
         if (loaded && loaded.r.isTest === preview) {
-          // В предпросмотре завершённую сессию не показываем — начинаем заново
-          if (!(preview && loaded.r.status !== 'in_progress')) return stateOf(loaded.survey, loaded.r);
+          const done = loaded.r.status !== 'in_progress';
+          // Завершённую сессию показываем снова, если повторное прохождение не разрешено (в предпросмотре — всегда заново)
+          const retake = done && (preview || (req.body.restart && settingsOf(loaded.survey).allowRetake));
+          if (!retake) return stateOf(loaded.survey, loaded.r);
         }
       }
 
       const survey = preview ? s.draft : s.published!;
+      if (!preview) {
+        const reason = await closedReason(s.id, survey);
+        if (reason) return { closed: true, title: survey.title, message: reason };
+        const password = survey.settings?.password;
+        if (password && req.body?.password !== password) {
+          return { needPassword: true, title: survey.title, error: req.body?.password ? 'Неверный пароль' : undefined };
+        }
+      }
       const params = cleanParams(req.body?.params);
       // Скрытые переменные из параметров ссылки
       const initial: Answers = {};
@@ -235,7 +280,7 @@ export async function respondentRoutes(app: FastifyInstance) {
       const loaded = await load(req.params.id, req.body?.rid);
       if (!loaded) return reply.code(404).send({ error: 'Сессия не найдена' });
       const { survey, r } = loaded;
-      const st = { ...DEFAULT_SETTINGS, ...survey.settings };
+      const st = settingsOf(survey);
       if (r.status !== 'in_progress' || !st.allowBack || r.history.length === 0 || r.currentPage !== req.body.page) {
         return stateOf(survey, r);
       }
@@ -255,7 +300,7 @@ export async function respondentRoutes(app: FastifyInstance) {
       const loaded = await load(req.params.id, req.body?.rid);
       if (!loaded) return reply.code(404).send({ error: 'Сессия не найдена' });
       const { survey, r } = loaded;
-      const st = { ...DEFAULT_SETTINGS, ...survey.settings };
+      const st = settingsOf(survey);
       if (r.status !== 'in_progress' || !st.allowEarlyFinish || !r.currentPage) return stateOf(survey, r);
       const { pageAnswers, page } = checkPage(survey, r, r.currentPage, req.body.answers ?? {}, false);
       await finalize(survey, r, mergePage(r.answers, page, pageAnswers), [...r.history, page.id], 'terminated');

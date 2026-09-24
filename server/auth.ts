@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { config } from './config.ts';
 
@@ -32,6 +32,18 @@ export function isAdmin(req: FastifyRequest): string | null {
   const [login, exp] = res.value.split('|');
   if (Number(exp) < Date.now()) return null;
   return login;
+}
+
+/** Ключ тестовой ссылки анкеты: открывает предпросмотр черновика без входа в админку */
+export function testToken(surveyId: string): string {
+  return createHmac('sha256', config.sessionSecret).update(`test:${surveyId}`).digest('base64url').slice(0, 16);
+}
+
+export function checkTestToken(surveyId: string, token: unknown): boolean {
+  if (typeof token !== 'string' || !token) return false;
+  const a = Buffer.from(token);
+  const b = Buffer.from(testToken(surveyId));
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<void> {

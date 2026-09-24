@@ -149,3 +149,12 @@ textarea.input { resize: vertical; }
 .rank-option { width: 100%; text-align: left; align-items: center; }
 .rank-option:disabled { opacity: .5; cursor: default; }
 .rank-slot { width: 28px; height: 28px; border-radius: 50%; border: 1px dashed #aab4c2; color: #8a94a3; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+
+/* Оформление из настроек */
+.runner-logo { text-align: center; margin: 4px 0 14px; }
+.runner-logo img { max-height: 48px; max-width: 220px; object-fit: contain; }
+.runner-footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 18px; white-space: pre-line; }
+.runner-footer a { color: inherit; }
+.q-number { font-size: 13px; font-weight: 600; color: var(--accent); margin: 0 0 6px; }
+.password-input { max-width: 280px; margin: 0 auto; display: block; text-align: center; }
+.redirect-note { text-align: left; margin-top: 16px; word-break: break-all; }

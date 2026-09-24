@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { pipe, resolveOptions, resolveRows } from '../../../shared/logic.ts';
 import { isRequired } from '../../../shared/answers.ts';
 import { rich } from './rich.tsx';
+import { settingsOf } from '../../../shared/types.ts';
 import type { Answer, MatrixQuestion, Option, Question, RankingQuestion, RespondentContext, ScaleQuestion, TextQuestion } from '../../../shared/types.ts';
 
 interface Props {
@@ -36,7 +37,7 @@ function Body({ q, ctx, answer, onChange }: Omit<Props, 'error'>) {
     case 'multi': return <Choice q={q} options={resolveOptions(ctx, q)} multi answer={answer} onChange={onChange} max={q.maxSelected} otherAlways={q.showOtherAlways} />;
     case 'ranking': return <Ranking q={q} options={resolveOptions(ctx, q)} answer={answer} onChange={onChange} />;
     case 'dropdown': return <Dropdown options={resolveOptions(ctx, q)} answer={answer} onChange={onChange} />;
-    case 'text': return <TextInput q={q} answer={answer} onChange={onChange} />;
+    case 'text': return <TextInput q={q} noPaste={q.noPaste ?? settingsOf(ctx.survey).noPaste} answer={answer} onChange={onChange} />;
     case 'number': return <NumberInput decimals={q.decimals ?? 0} answer={answer} onChange={onChange} />;
     case 'scale': return <Scale q={q} answer={answer} onChange={onChange} />;
     case 'matrix': return <Matrix q={q} rows={resolveRows(ctx, q)} answer={answer} onChange={onChange} />;
@@ -168,7 +169,7 @@ function Dropdown({ options, answer, onChange }: { options: Option[]; answer?: A
   );
 }
 
-function TextInput({ q, answer, onChange }: { q: TextQuestion; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
+function TextInput({ q, noPaste, answer, onChange }: { q: TextQuestion; noPaste: boolean; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
   const value = typeof answer?.v === 'string' ? answer.v : '';
   const set = (s: string) => onChange(s ? { v: s } : undefined);
   const block = (e: { preventDefault: () => void }) => e.preventDefault();
@@ -176,8 +177,8 @@ function TextInput({ q, answer, onChange }: { q: TextQuestion; answer?: Answer; 
     value,
     maxLength: q.maxLength,
     onChange: (e: { target: { value: string } }) => set(e.target.value),
-    onPaste: q.noPaste ? block : undefined,
-    onDrop: q.noPaste ? block : undefined,
+    onPaste: noPaste ? block : undefined,
+    onDrop: noPaste ? block : undefined,
   };
   if (q.inputType === 'time') return <input className="input input-date" type="time" {...common} />;
   if (q.inputType === 'email') return <input className="input" type="email" inputMode="email" autoComplete="email" {...common} />;
