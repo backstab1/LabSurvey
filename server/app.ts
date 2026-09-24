@@ -23,9 +23,10 @@ export async function buildApp() {
   // В продакшене сервер сам отдаёт собранный фронтенд (npm run build → web/dist)
   const dist = resolve('web/dist');
   if (existsSync(dist)) {
-    await app.register(fastifyStatic, { root: dist, wildcard: false });
+    // Файлы ищутся при каждом запросе — пересборка фронтенда не требует перезапуска сервера
+    await app.register(fastifyStatic, { root: dist });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api/')) return reply.code(404).send({ error: 'Не найдено' });
+      if (req.url.startsWith('/api/') || req.url.startsWith('/assets/')) return reply.code(404).send({ error: 'Не найдено' });
       return reply.sendFile('index.html');
     });
   }
