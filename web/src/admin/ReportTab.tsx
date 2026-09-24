@@ -4,6 +4,8 @@ import { QUESTION_TYPE_LABELS } from '../../../shared/types.ts';
 import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
 import type { QuestionReport, Report, ReportRow } from '../../../shared/report.ts';
 import type { SurveyInfo } from './Editor.tsx';
+import { ConditionEditor, defaultCondition, describeCondition } from './ConditionEditor.tsx';
+import type { Condition } from '../../../shared/types.ts';
 
 const STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
 
@@ -13,12 +15,16 @@ export function ReportTab({ info }: { info: SurveyInfo }) {
   const [test, setTest] = useState(!info.published);
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState<Condition | undefined>();
+  const def = test ? info.draft : info.published ?? info.draft;
+  // Неполное условие (пустое значение) не отправляем, пока его не допишут
+  const filterJson = filter && !JSON.stringify(filter).includes('"value":""') ? JSON.stringify(filter) : '';
 
   useEffect(() => {
     setError('');
-    api<Report>('GET', `/api/admin/surveys/${info.id}/report?statuses=${statuses.join(',')}${test ? '&test=1' : ''}`)
+    api<Report>('GET', `/api/admin/surveys/${info.id}/report?statuses=${statuses.join(',')}${test ? '&test=1' : ''}${filterJson ? `&filter=${encodeURIComponent(filterJson)}` : ''}`)
       .then(setReport).catch((e) => setError((e as Error).message));
-  }, [info.id, statuses, test, info.counts]);
+  }, [info.id, statuses, test, info.counts, filterJson]);
 
   return (
     <div className="stack report">
@@ -35,13 +41,29 @@ export function ReportTab({ info }: { info: SurveyInfo }) {
           <input type="checkbox" checked={test} onChange={(e) => setTest(e.target.checked)} />Тестовые ответы
         </label>
       </div>
+      <div className="card stack report-filter">
+        {filter ? (
+          <>
+            <div className="row">
+              <strong className="grow">Подгруппа</strong>
+              <button className="btn-link" onClick={() => setFilter(undefined)}>убрать фильтр</button>
+            </div>
+            <ConditionEditor def={def} value={filter} required onChange={(c) => setFilter(c)} />
+          </>
+        ) : (
+          <button className="btn-link" style={{ alignSelf: 'flex-start', padding: 0 }}
+            onClick={() => setFilter(defaultCondition(def))}>+ Отчёт по подгруппе (например, только мужчины или только из VK)</button>
+        )}
+      </div>
       {error && <div className="error-box">{error}</div>}
       {report && (
         report.total === 0 ? (
           <div className="card muted">Нет ответов с выбранными статусами{test ? ' среди тестовых' : ''}.</div>
         ) : (
           <>
-            <div className="muted small">Анкет в отчёте: <strong>{report.total}</strong>. Проценты — от ответивших на вопрос.</div>
+            <div className="muted small">
+              Анкет в отчёте: <strong>{report.total}</strong>{filterJson ? <> · подгруппа: {describeCondition(def, filter)}</> : null}. Проценты — от ответивших на вопрос.
+            </div>
             {report.questions.map((q) => <QuestionBlock key={q.id} q={q} />)}
           </>
         )

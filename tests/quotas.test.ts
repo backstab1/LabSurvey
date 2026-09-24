@@ -78,4 +78,11 @@ test('full quota ends the survey with overquota status and redirect', async () =
   const info = (await call('GET', `/api/admin/surveys/${sid}`)).json;
   assert.deepEqual(info.quotas.map((q: { id: string; count: number }) => [q.id, q.count]), [['QT_m', 2], ['QT_vk', 0]]);
   assert.equal(info.counts.real.overquota, 2);
+
+  // Отчёт по подгруппе: только женщины
+  const all = (await call('GET', `/api/admin/surveys/${sid}/report`)).json;
+  assert.equal(all.total, 3);
+  const women = (await call('GET', `/api/admin/surveys/${sid}/report?filter=${encodeURIComponent(JSON.stringify({ q: 'SEX', op: 'eq', value: 2 }))}`)).json;
+  assert.equal(women.total, 1);
+  assert.equal((await call('GET', `/api/admin/surveys/${sid}/report?filter=%7Bbad`)).status, 400);
 });

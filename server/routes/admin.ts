@@ -10,7 +10,8 @@ import { quotaCounts, resetQuotas } from '../quotas.ts';
 import { buildReport } from '../../shared/report.ts';
 import { validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
-import type { Survey } from '../../shared/types.ts';
+import type { Condition, Survey } from '../../shared/types.ts';
+import { evalCondition } from '../../shared/logic.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
 
 /** Черновик можно сохранить с ошибками логики, но не с поломанной структурой */
@@ -184,13 +185,20 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     // Отчёт: распределения ответов и места, где бросают анкету
-    priv.get<{ Params: { id: string }; Querystring: { statuses?: string; test?: string } }>('/api/admin/surveys/:id/report', async (req, reply) => {
+    priv.get<{ Params: { id: string }; Querystring: { statuses?: string; test?: string; filter?: string } }>('/api/admin/surveys/:id/report', async (req, reply) => {
       const s = await surveys.get(req.params.id);
       if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
       const test = req.query.test === '1';
       const def = test ? s.draft : s.published ?? s.draft;
       const statuses = (req.query.statuses?.split(',').filter((x) => ALL_STATUSES.includes(x as ResponseStatus)) ?? ['completed']) as ResponseStatus[];
-      const all = (await responses.list(s.id, { includeTest: test })).filter((r) => r.isTest === test);
+      // Подгруппа: условие как у showIf (по ответам и параметрам ссылки)
+      let filter: Condition | undefined;
+      if (req.query.filter) {
+        try { filter = JSON.parse(req.query.filter); } catch { return reply.code(400).send({ error: 'Фильтр: некорректный JSON' }); }
+      }
+      const all = (await responses.list(s.id, { includeTest: test }))
+        .filter((r) => r.isTest === test)
+        .filter((r) => !filter || evalCondition(filter, { survey: def, answers: r.answers, params: r.params, seed: r.id }));
       const unfinished = all
         .filter((r) => r.status === 'in_progress' || r.status === 'terminated')
         .map((r) => ({ ...r, lastPage: r.status === 'in_progress' ? r.currentPage : r.history[r.history.length - 1] ?? null }));
