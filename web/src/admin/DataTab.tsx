@@ -106,9 +106,35 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
         </p>
       </div>
 
-      <SheetsCard info={info} reload={reload} />
-      <NotifyCard info={info} reload={reload} />
 
+      <div className="card" style={{ overflowX: 'auto' }}>
+        <div className="row" style={{ marginBottom: 8 }}>
+          <h2 className="grow" style={{ margin: 0 }}>Последние ответы</h2>
+          <label className="check small"><input type="checkbox" checked={showTest} onChange={(e) => setShowTest(e.target.checked)} />показывать тестовые</label>
+        </div>
+        {!recent ? <p className="muted">Загрузка…</p> : recent.length === 0 ? <p className="muted">Ответов пока нет</p> : (
+          <table className="table">
+            <thead><tr><th>ID</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Время</th><th>Ответов</th><th>Параметры</th></tr></thead>
+            <tbody>
+              {recent.filter((r) => showTest || !r.isTest).slice(0, 100).map((r) => (
+                <tr key={r.id} className={`clickable${r.rejected ? ' muted' : ''}`} onClick={() => setViewing(r.id)} title="Открыть ответ">
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{r.id}</td>
+                  <td>{STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}{r.rejected && <span className="badge closed">брак</span>}</td>
+                  <td>{fmt(r.startedAt)}</td>
+                  <td>{fmt(r.completedAt)}</td>
+                  <td>
+                    {r.durationSec !== null ? `${Math.floor(r.durationSec / 60)}:${String(r.durationSec % 60).padStart(2, '0')}` : '—'}
+                    {minDur && r.status === 'completed' && r.durationSec !== null && r.durationSec < minDur
+                      ? <span className="badge test" style={{ marginLeft: 6 }} title={`Быстрее ${minDur} сек`}>спидер</span> : null}
+                  </td>
+                  <td>{r.answered}</td>
+                  <td className="muted" style={{ fontSize: 13 }}>{Object.entries(r.params).map(([k, v]) => `${k}=${v}`).join(' ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
       <div className="card stack">
         <div className="row">
           <h2 className="grow" style={{ margin: 0 }}>Тестовые ответы: {info.counts.test}</h2>
@@ -141,33 +167,15 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
         </p>
       </div>
 
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <div className="row" style={{ marginBottom: 8 }}>
-          <h2 className="grow" style={{ margin: 0 }}>Последние ответы</h2>
-          <label className="check small"><input type="checkbox" checked={showTest} onChange={(e) => setShowTest(e.target.checked)} />показывать тестовые</label>
-        </div>
-        {!recent ? <p className="muted">Загрузка…</p> : recent.length === 0 ? <p className="muted">Ответов пока нет</p> : (
-          <table className="table">
-            <thead><tr><th>ID</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Время</th><th>Ответов</th><th>Параметры</th></tr></thead>
-            <tbody>
-              {recent.filter((r) => showTest || !r.isTest).slice(0, 100).map((r) => (
-                <tr key={r.id} className={`clickable${r.rejected ? ' muted' : ''}`} onClick={() => setViewing(r.id)} title="Открыть ответ">
-                  <td style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{r.id}</td>
-                  <td>{STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}{r.rejected && <span className="badge closed">брак</span>}</td>
-                  <td>{fmt(r.startedAt)}</td>
-                  <td>{fmt(r.completedAt)}</td>
-                  <td>
-                    {r.durationSec !== null ? `${Math.floor(r.durationSec / 60)}:${String(r.durationSec % 60).padStart(2, '0')}` : '—'}
-                    {minDur && r.status === 'completed' && r.durationSec !== null && r.durationSec < minDur
-                      ? <span className="badge test" style={{ marginLeft: 6 }} title={`Быстрее ${minDur} сек`}>спидер</span> : null}
-                  </td>
-                  <td>{r.answered}</td>
-                  <td className="muted" style={{ fontSize: 13 }}>{Object.entries(r.params).map(([k, v]) => `${k}=${v}`).join(' ')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <div className="integrations">
+        <details className="card integration" open={!!info.sheets || undefined}>
+          <summary><h2>Google Sheets</h2><span className="muted small">{info.sheets ? 'подключено' : 'автоматическая запись ответов в таблицу'}</span></summary>
+          <SheetsCard info={info} reload={reload} />
+        </details>
+        <details className="card integration" open={!!info.notify || undefined}>
+          <summary><h2>Уведомления</h2><span className="muted small">{info.notify ? 'настроены' : 'вебхук и Telegram'}</span></summary>
+          <NotifyCard info={info} reload={reload} />
+        </details>
       </div>
       {viewing && <ResponseModal surveyId={info.id} rid={viewing} onClose={() => setViewing(null)} onDeleted={() => { setViewing(null); refresh(); }} onChanged={refresh} />}
     </div>

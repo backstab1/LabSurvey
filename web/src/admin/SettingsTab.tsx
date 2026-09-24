@@ -9,6 +9,11 @@ export interface QuotaProgress { id: string; limit: number; count: number }
 
 type Key = keyof SurveySettings;
 
+const SECTIONS: [string, string][] = [
+  ['set-main', 'Основное'], ['set-access', 'Доступ и сбор'], ['set-quotas', 'Квоты'], ['set-ui', 'Интерфейс'],
+  ['set-design', 'Оформление'], ['set-finish', 'Завершение'], ['set-dev', 'CSS и скрипт'],
+];
+
 /** ISO-время ⇄ значение поля datetime-local (в часовом поясе браузера) */
 const toLocal = (iso?: string) => {
   if (!iso || isNaN(Date.parse(iso))) return '';
@@ -57,7 +62,12 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
 
   return (
     <div className="stack settings-tab">
-      <div className="card stack">
+      <nav className="settings-nav" aria-label="Разделы настроек">
+        {SECTIONS.map(([id, label]) => (
+          <a key={id} href={`#${id}`} onClick={(e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{label}</a>
+        ))}
+      </nav>
+      <div className="card stack" id="set-main">
         <h2>Основное</h2>
         <label className="field"><span>Название анкеты (видит респондент)</span>
           <input className="input" value={def.title} onChange={(e) => set({ title: e.target.value })} />
@@ -67,7 +77,7 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
         </label>
       </div>
 
-      <div className="card stack">
+      <div className="card stack" id="set-access">
         <h2>Доступ и сбор ответов</h2>
         {openState && <div className="warn-box">Сейчас новые респонденты не смогут начать опрос: {openState}.</div>}
         <div className="grid2">
@@ -125,7 +135,7 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
 
       <QuotasCard def={def} progress={quotaProgress} onChange={(quotas) => onChange(compact({ ...def, quotas: quotas.length ? quotas : undefined }))} />
 
-      <div className="card stack">
+      <div className="card stack" id="set-ui">
         <h2>Интерфейс респондента</h2>
         {check('showProgress', 'Полоса прогресса')}
         {check('allowBack', 'Кнопка «Назад»')}
@@ -137,7 +147,7 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
         {check('noPaste', 'Запретить вставку из буфера в открытые ответы')}
       </div>
 
-      <div className="card stack">
+      <div className="card stack" id="set-design">
         <h2>Оформление</h2>
         <div className="grid2">
           {text('logoUrl', 'Логотип (адрес картинки)', { placeholder: 'https://…/logo.png', mono: true })}
@@ -160,7 +170,7 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
         </div>
       </div>
 
-      <div className="card stack">
+      <div className="card stack" id="set-finish">
         <h2>Завершение</h2>
         <p className="muted small" style={{ margin: 0 }}>
           Если указан адрес перехода, респондент сразу попадает туда (например, обратно в панель), и сообщение не показывается.
@@ -179,8 +189,9 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
         {st.timeLimitMin ? text('timeoutMessage', 'Когда время на прохождение истекло', { area: true }) : null}
       </div>
 
-      <div className="card stack">
-        <h2>CSS</h2>
+      <details className="card stack dev-section" id="set-dev" open={!!(def.css || def.scripts?.init) || undefined}>
+        <summary><h2>Для разработчиков: CSS и глобальный скрипт</h2></summary>
+        <div className="sub-title">CSS</div>
         <p className="muted" style={{ margin: 0, fontSize: 14 }}>
           Стили страницы опроса. Классы: <code>.runner</code>, <code>.runner-card</code>, <code>.page-Q1</code>, <code>.question</code>,
           <code> #q-Q1</code>, <code>.option</code>, <code>.matrix</code>, <code>.btn-primary</code>. Цвета: переменные <code>--accent</code>, <code>--bg</code>.
@@ -188,12 +199,9 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
         <textarea className="input" rows={8} spellCheck={false} style={{ fontFamily: 'var(--mono)', fontSize: 13 }}
           placeholder={':root { --accent: #e4002b; }\n#q-Q5 .option { font-size: 18px; }'}
           value={def.css ?? ''} onChange={(e) => set({ css: e.target.value || undefined })} />
-      </div>
-
-      <div className="card stack">
-        <h2>Глобальный скрипт</h2>
+        <div className="sub-title">Глобальный скрипт</div>
         <ScriptsEditor level="survey" value={def.scripts} onChange={(s) => set({ scripts: s })} />
-      </div>
+      </details>
     </div>
   );
 }
@@ -217,7 +225,7 @@ function QuotasCard({ def, progress, onChange }: { def: Survey; progress: QuotaP
     onChange([...quotas, { id: nextId(quotas.map((q) => q.id), 'QT'), if: cond, limit: 100 }]);
   };
   return (
-    <div className="card stack">
+    <div className="card stack" id="set-quotas">
       <h2>Квоты</h2>
       <p className="muted small" style={{ margin: 0 }}>
         Когда набрано нужное число завершённых анкет с профилем из условия, следующие подходящие респонденты заканчивают опрос

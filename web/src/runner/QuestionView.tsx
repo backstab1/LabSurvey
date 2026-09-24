@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { pipe, resolveOptions, resolveRows } from '../../../shared/logic.ts';
 import { isRequired } from '../../../shared/answers.ts';
 import { rich } from './rich.tsx';
@@ -85,6 +85,8 @@ function Choice({ q, options, multi, answer, onChange, max, otherAlways }: {
   const withImages = options.some((o) => o.image);
   const cols = 'columnCount' in q && q.columnCount && q.columnCount > 1 ? q.columnCount : withImages ? 2 : 0;
   return (
+    <>
+    {multi && <div className="q-hint choice-hint">{max ? `Можно выбрать не более ${max}` : 'Можно выбрать несколько вариантов'}</div>}
     <div className={`options${cols ? ' cols' : ''}`} style={cols ? { ['--cols' as string]: cols } : undefined}>
       {options.map((o) => {
         const on = selected.includes(o.code);
@@ -102,8 +104,8 @@ function Choice({ q, options, multi, answer, onChange, max, otherAlways }: {
           </div>
         );
       })}
-      {multi && max ? <div className="q-hint">Можно выбрать не более {max}</div> : null}
     </div>
+    </>
   );
 }
 
@@ -209,7 +211,14 @@ function NumberInput({ q, answer, onChange }: { q: NumberQuestion; answer?: Answ
         onChange({ v: isNaN(n) ? NaN : n });
       }} />
   );
-  return q.suffix ? <div className="input-suffix">{input}<span>{q.suffix}</span></div> : input;
+  const range = q.min !== undefined && q.max !== undefined ? `от ${q.min} до ${q.max}`
+    : q.min !== undefined ? `не меньше ${q.min}` : q.max !== undefined ? `не больше ${q.max}` : '';
+  return (
+    <>
+      {q.suffix ? <div className="input-suffix">{input}<span>{q.suffix}</span></div> : input}
+      {range && <div className="q-hint range-hint">Введите число {range}</div>}
+    </>
+  );
 }
 
 const SMILEYS = ['😠', '🙁', '😐', '🙂', '😀'];
@@ -262,9 +271,18 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
     if (!Object.keys(cleanV).length && !Object.keys(cleanO).length) return onChange(undefined);
     onChange({ v: cleanV, o: cleanO });
   };
+  const wrapRef = useRef<HTMLDivElement>(null);
   const pick = (row: number, col: number) => {
     const key = String(row);
-    if (q.mode === 'single') return emit({ ...v, [key]: col }, others);
+    if (q.mode === 'single') {
+      const firstTime = v[key] === undefined;
+      emit({ ...v, [key]: col }, others);
+      if (firstTime && window.matchMedia('(max-width: 640px)').matches) {
+        const next = rows.find((r) => r.code !== row && !r.other && v[String(r.code)] === undefined);
+        if (next) setTimeout(() => wrapRef.current?.querySelector(`[data-row="${next.code}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+      }
+      return;
+    }
     const cur = (v[key] as number[] | undefined) ?? [];
     emit({ ...v, [key]: cur.includes(col) ? cur.filter((c) => c !== col) : [...cur, col] }, others);
   };
@@ -318,14 +336,14 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
   }
 
   return (
-    <div className="matrix-wrap">
+    <div className="matrix-wrap" ref={wrapRef}>
       <table className={cls}>
         <thead>
           <tr><th />{q.columns.map((c) => <th key={c.code} scope="col"><span>{c.text}</span></th>)}</tr>
         </thead>
         <tbody>
           {shownRows.map((r) => (
-            <tr key={r.code} className="fade-in">
+            <tr key={r.code} className="fade-in" data-row={r.code}>
               <th scope="row">{rowLabel(r)}</th>
               {q.columns.map((c) => <td key={c.code}>{cell(r, c, c.text)}</td>)}
             </tr>

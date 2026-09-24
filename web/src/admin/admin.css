@@ -517,3 +517,19 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
 .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .template-card { display: flex; flex-direction: column; gap: 4px; text-align: left; border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--surface); cursor: pointer; }
 .template-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+/* Разделы настроек */
+.settings-nav { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 14px; }
+.settings-nav a { color: var(--muted); text-decoration: none; }
+.settings-nav a:hover { color: var(--accent); }
+.settings-tab .card { scroll-margin-top: 48px; }
+.dev-section > summary, .integration > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 12px; }
+.dev-section > summary::-webkit-details-marker, .integration > summary::-webkit-details-marker { display: none; }
+.dev-section > summary h2::before, .integration > summary h2::before { content: '▸ '; color: var(--muted); }
+.dev-section[open] > summary h2::before, .integration[open] > summary h2::before { content: '▾ '; }
+.dev-section > summary h2, .integration > summary h2 { margin: 0; font-size: 18px; }
+
+/* Интеграции во вкладке «Данные»: карточка внутри раскрывающегося блока без второй рамки и заголовка */
+.integrations { display: flex; flex-direction: column; gap: 16px; }
+.integration > .card { box-shadow: none; border: 0; padding: 12px 0 0; }
+.integration > .card > h2 { display: none; }
