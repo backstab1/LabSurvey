@@ -377,3 +377,45 @@
   .editor-head .title-input { flex: 1 1 100%; order: -1; font-size: 19px; }
   .link-chip { display: none; }
 }
+
+/* ---- Карта логики ---- */
+.logic { display: flex; flex-direction: column; gap: 14px; }
+.logic-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.lstat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
+.lstat .stat { font-size: 24px; }
+.logic-issues { display: flex; flex-direction: column; gap: 4px; }
+.logic-issue { display: flex; gap: 10px; align-items: center; text-align: left; border: 0; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
+.logic-issue.warning { background: var(--warn-soft); color: var(--warn); }
+.logic-issue.error { background: var(--danger-soft); color: var(--danger); }
+.logic-issue .mono { font-size: 12px; background: rgba(255,255,255,.7); border-radius: 4px; padding: 1px 6px; }
+.logic-issue:disabled { cursor: default; }
+.logic-toolbar { gap: 16px; }
+.logic-map { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px 12px var(--gutter); }
+.logic-arcs { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; color: var(--accent); }
+.arc { fill: none; stroke: var(--accent); stroke-width: 1.6; opacity: .75; transition: opacity .12s, stroke-width .12s; }
+.arc.cond { stroke-dasharray: 5 3; }
+.arc.active { stroke-width: 2.6; opacity: 1; }
+.arc.dim { opacity: .15; }
+.lblock { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 14px 8px 4px; }
+.lblock:first-of-type { padding-top: 4px; }
+.lrow { padding: 7px 10px; border-radius: 8px; cursor: pointer; border-left: 3px solid transparent; }
+.lrow:hover, .lrow.related { background: #f3f6fc; }
+.lrow.related { border-left-color: var(--accent); }
+.lrow.unreachable { opacity: .55; border-left-color: var(--danger); }
+.lrow.hidden-q .ltext { color: var(--muted); font-style: italic; }
+.lhead { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lnum { font-size: 12px; color: var(--muted); font-weight: 700; min-width: 18px; text-align: right; }
+.lhead .qid { font-family: var(--mono); font-size: 12px; font-weight: 600; background: #eef0f3; border-radius: 5px; padding: 1px 6px; }
+.ltype { color: var(--accent); font-size: 13px; }
+.ltext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.lmeta { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0 0 26px; }
+.lmeta:empty { display: none; }
+.lchip { font-size: 12px; border-radius: 99px; padding: 1px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lchip.cond { background: var(--accent-soft); color: #2553b8; }
+.lchip.in { background: #eef0f3; color: #4a515b; }
+.lchip.goTo { background: #f1ebfd; color: #6531c4; }
+.lchip.end { background: var(--ok-soft); color: var(--ok); }
+.lchip.screenout { background: var(--danger-soft); color: var(--danger); }
+.lchip.bad { background: var(--danger); color: #fff; }
+.lend { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ok); padding: 12px 8px 0; }
+@media (max-width: 640px) { .logic-map { padding-left: 12px; } .logic-arcs { display: none; } .ltext { white-space: normal; } }

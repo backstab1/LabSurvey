@@ -4,10 +4,12 @@ import { Builder } from './Builder.tsx';
 import { JsonTab } from './JsonTab.tsx';
 import { DataTab } from './DataTab.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
+import { LogicTab } from './LogicTab.tsx';
 import { IssuesList, Menu, Toaster, toast } from './common.tsx';
 import { navigate } from './AdminApp.tsx';
 import { STATUS_TEXT } from './SurveyList.tsx';
 import { validateSurvey } from '../../../shared/validate.ts';
+import { analyzeFlow } from '../../../shared/flow.ts';
 import type { Survey } from '../../../shared/types.ts';
 
 export interface SurveyInfo {
@@ -22,7 +24,7 @@ export interface SurveyInfo {
   sheetsAccount: { configured: boolean; email: string | null };
 }
 
-type Tab = 'builder' | 'json' | 'settings' | 'data';
+type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'data';
 type SaveState = 'saved' | 'pending' | 'saving' | 'error';
 
 const SAVE_TEXT: Record<SaveState, string> = {
@@ -79,7 +81,17 @@ export function Editor({ id }: { id: string }) {
     return () => window.removeEventListener('beforeunload', h);
   }, [save]);
 
-  const validation = useMemo(() => (def ? validateSurvey(def) : null), [def]);
+  const validation = useMemo(() => {
+    if (!def) return null;
+    const v = validateSurvey(def);
+    // Проблемы маршрутов (недостижимые вопросы и т. п.) — как предупреждения
+    if (v.ok) {
+      try {
+        for (const i of analyzeFlow(def).issues) v.warnings.push({ where: i.id ?? 'маршрут', message: i.message });
+      } catch { /* анализ не критичен */ }
+    }
+    return v;
+  }, [def]);
 
   const apply = (next: Survey) => { setDef(next); latest.current = next; setSave('pending'); };
   const update = (next: Survey) => {
@@ -209,7 +221,7 @@ export function Editor({ id }: { id: string }) {
 
       <div className="tabs-row">
         <div className="tabs">
-          {([['builder', 'Конструктор'], ['json', 'JSON'], ['settings', 'Настройки'], ['data', 'Данные']] as [Tab, string][]).map(([t, label]) => (
+          {([['builder', 'Конструктор'], ['logic', 'Логика'], ['json', 'JSON'], ['settings', 'Настройки'], ['data', 'Данные']] as [Tab, string][]).map(([t, label]) => (
             <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => changeTab(t)}>{label}</button>
           ))}
         </div>
@@ -232,6 +244,7 @@ export function Editor({ id }: { id: string }) {
       )}
 
       {tab === 'builder' && <Builder def={def} onChange={update} issues={validation} focus={focus} onPreview={preview} />}
+      {tab === 'logic' && <LogicTab def={def} onOpen={(qid) => { changeTab('builder'); setFocus({ where: qid, n: Date.now() }); }} />}
       {tab === 'json' && <JsonTab def={def} onChange={update} />}
       {tab === 'settings' && <SettingsTab def={def} onChange={update} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
