@@ -91,5 +91,33 @@ export const TEMPLATES: Template[] = [
       ] }],
     },
   },
+  {
+    id: 'loops', title: 'Категории и марки (циклы)', description: 'Вопросы по каждой выбранной категории и вложенный цикл по маркам',
+    survey: {
+      formatVersion: 2, title: 'Покупки по категориям',
+      blocks: [
+        { id: 'B1', questions: [
+          { id: 'CAT', type: 'multi', text: 'Что из этого вы покупали за последний месяц?', options: [
+            { code: 1, text: 'Кофе' }, { code: 2, text: 'Чай' }, { code: 3, text: 'Соки' }, { code: 4, text: 'Вода' },
+            { code: 97, text: 'Другое', other: true }, { code: 99, text: 'Ничего из этого', exclusive: true },
+          ] },
+        ] },
+        { id: 'L_cat', title: 'Категория: {{loop}}', loop: { question: 'CAT' }, questions: [
+          { id: 'FREQ', type: 'single', text: 'Как часто вы покупаете {{loop}}?', autoNext: true, options: [
+            { code: 1, text: 'Несколько раз в неделю' }, { code: 2, text: 'Раз в неделю' }, { code: 3, text: 'Реже' },
+          ] },
+          { id: 'BRAND', type: 'multi', text: 'Какие марки ({{loop}}) вы покупали?', options: [
+            { code: 1, text: 'Марка А' }, { code: 2, text: 'Марка Б' }, { code: 3, text: 'Марка В' }, { code: 97, text: 'Другая', other: true },
+          ] },
+        ] },
+        { id: 'L_brand', title: '{{loop1}}: {{loop}}', parent: 'L_cat', loop: { question: 'BRAND' }, questions: [
+          { id: 'SAT', type: 'scale', text: 'Насколько вы довольны маркой «{{loop}}» ({{loop1}})?', from: 1, to: 5, display: 'stars', autoNext: true },
+        ] },
+        { id: 'B_end', questions: [
+          { id: 'FIN', type: 'text', text: 'Что ещё хотите добавить?', multiline: true, required: false },
+        ] },
+      ],
+    },
+  },
   { id: 'demo', title: 'Демо: все возможности', description: 'Все типы вопросов, условия, действия, перенос и подстановки', survey: demo as Survey },
 ];

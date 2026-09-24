@@ -192,7 +192,7 @@ function ResponseModal({ surveyId, rid, onClose, onDeleted, onChanged }: {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [surveyId, rid]);
   if (!data) return <Modal onClose={onClose} title="Ответ">Загрузка…</Modal>;
   const { response: r, survey } = data;
-  const ctx = { survey, answers: r.answers, params: r.params, seed: r.id };
+  const ctx = { survey: expandAllLoops(survey), answers: r.answers, params: r.params, seed: r.id };
   const qs = allQuestions(expandAllLoops(survey)).filter((q) => q.type !== 'info' && r.answers[q.id] !== undefined);
   return (
     <Modal onClose={onClose} title={<>Ответ <span className="mono muted" style={{ fontWeight: 400, fontSize: 14 }}>{r.id}</span></>}

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api.ts';
 import { describeCondition } from './ConditionEditor.tsx';
 import { describeActions } from './ActionsEditor.tsx';
+import { describeLoop } from './LoopEditor.tsx';
 import { QUESTION_TYPE_LABELS, settingsOf, type Option, type Question, type Survey } from '../../../shared/types.ts';
 
 /**
@@ -32,6 +33,8 @@ export function PrintView({ id }: { id: string }) {
       {def.blocks.map((b) => (
         <section key={b.id} className="print-block">
           <h2>{b.title || 'Блок'} <span className="print-id">{b.id}</span></h2>
+          {b.loop && <div className="print-note">{describeLoop(def, b).replace('↻ цикл', 'ЦИКЛ:').toUpperCase()}{b.parent ? ` (ВНУТРИ ЦИКЛА ${b.parent})` : ''}</div>}
+          {!b.loop && b.parent && <div className="print-note">ПОВТОРЯЕТСЯ ВНУТРИ ЦИКЛА {b.parent}</div>}
           {b.order && <div className="print-note">{b.order === 'random' ? 'ВОПРОСЫ БЛОКА В СЛУЧАЙНОМ ПОРЯДКЕ' : 'РОТАЦИЯ ВОПРОСОВ БЛОКА'}{b.questions.some((q) => q.fixed) ? ' (закреплённые — на местах)' : ''}</div>}
           {b.questions.map((q) => (
             <PrintQuestion key={q.id} def={def} q={q} n={q.type === 'hidden' ? null : ++n} />

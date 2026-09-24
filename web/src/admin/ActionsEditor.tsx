@@ -215,7 +215,7 @@ function ActionRow({ def, q, a, kinds, onChange, onCreateVar, tools }: {
 
       {condOpen && (
         <div className="action-cond">
-          <ConditionEditor def={def} value={a.if} suggest={q.type !== 'info' && q.type !== 'hidden' ? q.id : undefined}
+          <ConditionEditor def={def} value={a.if} self={q.id} suggest={q.type !== 'info' && q.type !== 'hidden' ? q.id : undefined}
             onChange={(c) => set({ if: c })} />
           {editCond && <button className="btn-link done-link" onClick={() => setEditCond(false)}>готово</button>}
         </div>

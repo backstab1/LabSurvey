@@ -216,7 +216,7 @@ function ActionsBlock({ def, q, prevId, set, onCreateVar }: {
         {beforeEmpty && <p className="empty-rules">Вопрос показывается всегда.</p>}
         {q.showIf && (
           <Rule title="Показывать вопрос" onRemove={() => set({ showIf: undefined })}>
-            <ConditionEditor def={def} value={q.showIf} suggest={prevId} onChange={(c) => set({ showIf: c })} />
+            <ConditionEditor def={def} value={q.showIf} suggest={prevId} self={q.id} onChange={(c) => set({ showIf: c })} />
           </Rule>
         )}
         {from && (

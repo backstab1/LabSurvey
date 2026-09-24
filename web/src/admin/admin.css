@@ -533,3 +533,10 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
 .integrations { display: flex; flex-direction: column; gap: 16px; }
 .integration > .card { box-shadow: none; border: 0; padding: 12px 0 0; }
 .integration > .card > h2 { display: none; }
+
+/* Циклы */
+.page-block.loop-block > .page-head { border-left: 3px solid #6531c4; }
+.page-block.nested { border-left: 2px dashed #c9b8ef; padding-left: 8px; }
+.loop-chip { border: 0; cursor: pointer; }
+.loop-help ul { margin: 4px 0 0; padding-left: 18px; font-size: 14px; color: var(--muted); }
+.loop-help code { font-size: 12px; }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { allOptions, allQuestions, allRows, findQuestion } from '../../../shared/logic.ts';
+import { LOOP_REF, loopLevelsOf, withInstances } from '../../../shared/loops.ts';
 import type { Condition, ConditionOp, Option, Question, SimpleCondition, Survey } from '../../../shared/types.ts';
 
 const OP_LABELS: Record<ConditionOp, string> = {
@@ -70,11 +71,18 @@ export function defaultCondition(def: Survey, questionId?: string): SimpleCondit
   return { q: q.id, ...(q.type === 'matrix' ? { row: allRows(def, q)[0]?.code } : {}), op, ...(NO_VALUE.includes(op) ? {} : { value: '' }) };
 }
 
-export function ConditionEditor({ def, value, onChange, required, suggest }: {
+type LoopLevel = { ref: string; label: string; items: Option[] };
+
+export function ConditionEditor({ def: baseDef, value, onChange, required, suggest, self }: {
   def: Survey; value: Condition | undefined; onChange: (c: Condition | undefined) => void; required?: boolean;
   /** ID вопроса, который подставляется в новое условие (обычно — предыдущий вопрос) */
   suggest?: string;
+  /** Вопрос, к которому относится условие: внутри цикла можно проверять код текущего повтора */
+  self?: string;
 }) {
+  // На копии вопросов из циклов (FREQ_1) тоже можно ссылаться
+  const def = withInstances(baseDef);
+  const loops: LoopLevel[] = loopLevelsOf(baseDef, self);
   const visual = toVisual(value);
   const [jsonMode, setJsonMode] = useState(visual === null);
   const [jsonText, setJsonText] = useState(value ? JSON.stringify(value, null, 2) : '');
@@ -119,7 +127,7 @@ export function ConditionEditor({ def, value, onChange, required, suggest }: {
   return (
     <div className="cond">
       {visual.items.map((c, i) => (
-        <CondRow key={i} def={def} c={c} questions={questions}
+        <CondRow key={i} def={def} c={c} questions={questions} loops={loops}
           label={i === 0 ? 'если' : visual.mode === 'all' ? 'и' : 'или'}
           onToggleMode={i > 0 ? () => setItems(visual.items, visual.mode === 'all' ? 'any' : 'all') : undefined}
           onChange={(nc) => setItems(visual.items.map((x, k) => (k === i ? nc : x)))}
@@ -135,19 +143,21 @@ export function ConditionEditor({ def, value, onChange, required, suggest }: {
   );
 }
 
-function CondRow({ def, c, questions, label, onToggleMode, onChange, onRemove }: {
-  def: Survey; c: SimpleCondition; questions: Question[]; label: string; onToggleMode?: () => void;
+function CondRow({ def, c, questions, loops, label, onToggleMode, onChange, onRemove }: {
+  def: Survey; c: SimpleCondition; questions: Question[]; loops: LoopLevel[]; label: string; onToggleMode?: () => void;
   onChange: (c: SimpleCondition) => void; onRemove: () => void;
 }) {
   const isParam = c.param !== undefined;
-  const q = !isParam && c.q ? findQuestion(def, c.q) : undefined;
-  const ops = opsFor(q, isParam);
-  const choices = valueChoices(def, q, c.row);
+  const loop = c.q && LOOP_REF.test(c.q) ? loops.find((l) => l.ref === c.q) ?? { ref: c.q, label: c.q, items: [] } : undefined;
+  const q = !isParam && !loop && c.q ? findQuestion(def, c.q) : undefined;
+  const ops: ConditionOp[] = loop ? ['eq', 'neq', 'in', 'notIn'] : opsFor(q, isParam);
+  const choices = loop ? loop.items : valueChoices(def, q, c.row);
   const numeric = q && ['number', 'scale', 'matrix', 'single', 'multi', 'dropdown', 'ranking'].includes(q.type)
     || (q?.type === 'hidden' && q.valueType === 'number');
 
   const setSource = (src: string) => {
     if (src === '__param') return onChange({ param: '', op: 'eq', value: '' });
+    if (LOOP_REF.test(src)) return onChange({ q: src, op: 'eq', value: '' });
     const nq = findQuestion(def, src);
     const op = opsFor(nq, false)[0];
     const row = nq?.type === 'matrix' ? allRows(def, nq)[0]?.code : undefined;
@@ -170,7 +180,13 @@ function CondRow({ def, c, questions, label, onToggleMode, onChange, onRemove }:
         : <span className="cond-label">{label}</span>}
       <div className="cond-fields">
         <select className="input cond-source" value={isParam ? '__param' : c.q ?? ''} onChange={(e) => setSource(e.target.value)}>
-          {!isParam && c.q && !q && <option value={c.q}>{c.q} (нет такого)</option>}
+          {!isParam && c.q && !q && !loop && <option value={c.q}>{c.q} (нет такого)</option>}
+          {(loops.length > 0 || loop) && (
+            <optgroup label="Цикл">
+              {loops.map((l) => <option key={l.ref} value={l.ref}>↻ {l.label}</option>)}
+              {loop && !loops.some((l) => l.ref === loop.ref) && <option value={loop.ref}>{loop.ref} (вне цикла)</option>}
+            </optgroup>
+          )}
           {questions.map((x) => <option key={x.id} value={x.id}>{x.id}{x.text ? ` · ${short(x.text, 40)}` : ''}</option>)}
           <option value="__param">параметр ссылки…</option>
         </select>
@@ -226,10 +242,15 @@ export function describeCondition(def: Survey, c: Condition | undefined): string
   if ('all' in c) return c.all.map((x) => describeCondition(def, x)).join(' и ');
   if ('any' in c) return c.any.map((x) => describeCondition(def, x)).join(' или ');
   if ('not' in c) return `не (${describeCondition(def, c.not)})`;
-  const q = c.q ? findQuestion(def, c.q) : undefined;
+  if (c.q && LOOP_REF.test(c.q)) {
+    const v = Array.isArray(c.value) ? c.value.join(', ') : String(c.value);
+    return `повтор цикла${c.q === 'LOOP' ? '' : ` ур. ${c.q.slice(4)}`} ${OP_LABELS[c.op]} ${v}`;
+  }
+  const full = withInstances(def);
+  const q = c.q ? findQuestion(full, c.q) : undefined;
   const subject = c.param !== undefined ? `?${c.param}` : `${c.q ?? '?'}${c.row !== undefined ? `[${c.row}]` : ''}`;
   if (c.op === 'answered' || c.op === 'notAnswered') return `${subject}: ${OP_LABELS[c.op]}`;
-  const choices = valueChoices(def, q, c.row);
+  const choices = valueChoices(full, q, c.row);
   const label = (v: unknown) => {
     const o = choices?.find((x) => x.code === v);
     const t = o ? o.text : String(v);

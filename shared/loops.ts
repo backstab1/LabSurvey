@@ -286,3 +286,40 @@ export function withLoops(ctx: RespondentContext): RespondentContext {
   const survey = expandLoops(ctx.survey, ctx.answers, ctx.params, ctx.seed);
   return survey === ctx.survey ? ctx : { ...ctx, survey };
 }
+
+// ---------- Для конструктора ----------
+
+/** Все возможные элементы цикла блока (по исходной анкете) */
+export function possibleItems(survey: Survey, block: Block): LoopItem[] {
+  if (!block.loop) return [];
+  return sourceItems(block.loop, null, loopBase(survey), block.loop.question);
+}
+
+const lookupCache = new WeakMap<Survey, Survey>();
+/** Исходная анкета + копии вопросов из циклов (FREQ_1…) — чтобы на копии можно было ссылаться в условиях */
+export function withInstances(survey: Survey): Survey {
+  if (!hasLoops(survey)) return survey;
+  let s = lookupCache.get(survey);
+  if (!s) {
+    const own = new Set(survey.blocks.flatMap((b) => b.questions.map((q) => q.id)));
+    const extra = expandAllLoops(survey).blocks
+      .map((b) => ({ ...b, questions: b.questions.filter((q) => !own.has(q.id)) }))
+      .filter((b) => b.questions.length);
+    s = { ...survey, blocks: [...survey.blocks, ...extra] };
+    lookupCache.set(survey, s);
+  }
+  return s;
+}
+
+/** Уровни циклов вокруг вопроса: LOOP1 — внешний … LOOP — текущий */
+export function loopLevelsOf(survey: Survey, questionId: string | undefined): { ref: string; label: string; items: LoopItem[] }[] {
+  if (!questionId) return [];
+  const block = survey.blocks.find((b) => b.questions.some((q) => q.id === questionId));
+  if (!block) return [];
+  const chain = loopChain(survey, block);
+  return chain.map((b, i) => ({
+    ref: i === chain.length - 1 ? 'LOOP' : `LOOP${i + 1}`,
+    label: `повтор цикла «${b.title?.replace(/\{\{[^}]*\}\}/g, '…') || b.id}»`,
+    items: possibleItems(survey, b),
+  }));
+}

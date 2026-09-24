@@ -4,7 +4,9 @@ import { describeCondition } from './ConditionEditor.tsx';
 import { describeActions } from './ActionsEditor.tsx';
 import { QuestionPreview } from './preview.tsx';
 import { Menu, toast } from './common.tsx';
-import { QUESTION_TYPE_LABELS, type Block, type Question, type QuestionType, type Survey } from '../../../shared/types.ts';
+import { QUESTION_TYPE_LABELS, type Block, type LoopSpec, type Question, type QuestionType, type Survey } from '../../../shared/types.ts';
+import { LoopDialog, describeLoop } from './LoopEditor.tsx';
+import { loopChain, loopDepth } from '../../../shared/loops.ts';
 import { allIds, nextId, renameId } from '../../../shared/refactor.ts';
 import type { ValidationResult } from '../../../shared/validate.ts';
 
@@ -35,6 +37,15 @@ type Pos = { bi: number; qi: number };
 /** Точечное обновление вопроса без пересоздания остальных объектов (карточки не перерисовываются) */
 function withQuestion(def: Survey, { bi, qi }: Pos, q: Question): Survey {
   return { ...def, blocks: def.blocks.map((b, i) => (i === bi ? { ...b, questions: b.questions.map((x, j) => (j === qi ? q : x)) } : b)) };
+}
+
+/** Циклы, в которые можно вложить блок: цикл прямо перед ним или внешние циклы предыдущего блока */
+function nestTargets(def: Survey, bi: number): Block[] {
+  const b = def.blocks[bi];
+  const prev = def.blocks[bi - 1];
+  if (!prev) return [];
+  const chain = loopChain(def, prev);
+  return chain.filter((t) => t.id !== b.parent && t.id !== b.id && loopChain(def, t).length < 3).reverse();
 }
 
 const compactBlock = (b: Block): Block => {
@@ -78,6 +89,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
   const [drag, setDrag] = useState<Pos | null>(null);
   const [drop, setDrop] = useState<Pos | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [loopFor, setLoopFor] = useState<string | null>(null);
   // Выделенные вопросы для массовых действий; lastPick — опора для выделения диапазона с Shift
   const [sel, setSel] = useState<Set<string>>(new Set());
   const lastPick = useRef<string | null>(null);
@@ -142,6 +154,17 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
   const moveBlock = (bi: number, dir: -1 | 1) => mutate((d) => {
     const [b] = d.blocks.splice(bi, 1);
     d.blocks.splice(bi + dir, 0, b);
+  });
+
+  const setBlockLoop = (id: string, loop: LoopSpec | undefined) => mutate((d) => {
+    const b = d.blocks.find((x) => x.id === id)!;
+    if (loop) b.loop = loop; else delete b.loop;
+    // Блок перестал быть циклом — вложенные в него поднимаются на уровень выше
+    if (!loop) for (const c of d.blocks) if (c.parent === id) { if (b.parent) c.parent = b.parent; else delete c.parent; }
+  });
+  const setBlockParent = (id: string, parent: string | undefined) => mutate((d) => {
+    const b = d.blocks.find((x) => x.id === id)!;
+    if (parent) b.parent = parent; else delete b.parent;
   });
 
   const setBlockOrder = (bi: number, order: 'random' | 'rotate' | undefined) =>
@@ -271,7 +294,8 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
           </div>
         )}
         {def.blocks.map((b, bi) => (
-          <section key={bi} className="page-block" id={`card-${b.id}`}>
+          <section key={bi} className={`page-block${b.parent ? ' nested' : ''}${b.loop ? ' loop-block' : ''}`} id={`card-${b.id}`}
+            style={b.parent ? { marginLeft: Math.min(3, loopDepth(def, b)) * 28 } : undefined}>
             <header className={`page-head${flash === b.id ? ' flash' : ''}`}>
               <button className="icon-btn chev-btn" title={collapsed.has(b.id) ? 'Развернуть блок' : 'Свернуть блок'}
                 onClick={() => toggleBlock(b.id)}>{collapsed.has(b.id) ? '▸' : '▾'}</button>
@@ -280,6 +304,10 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
               <span className="muted small mono" title="ID блока — для перехода «в начало блока»">{b.id}</span>
               {issueFor(b.id) && <span className="chip-error">{issueFor(b.id)!.message}</span>}
               <span className="grow" />
+              {b.loop && (
+                <button className="chip-info act loop-chip" title="Настроить цикл" onClick={() => setLoopFor(b.id)}>{describeLoop(def, b)}</button>
+              )}
+              {b.parent && !b.loop && <span className="chip-info plain" title="Повторяется внутри каждого повтора внешнего цикла">внутри цикла «{b.parent}»</span>}
               {b.order && (
                 <span className="chip-info act" title="Порядок вопросов у каждого респондента свой; закреплённые вопросы остаются на местах">
                   {b.order === 'random' ? '🔀 случайный порядок' : '↻ ротация'}
@@ -290,6 +318,10 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                 { label: collapsed.has(b.id) ? 'Развернуть' : 'Свернуть', onClick: () => toggleBlock(b.id) },
                 { label: 'Свернуть все блоки', onClick: () => setCollapsed(new Set(def.blocks.map((x) => x.id))) },
                 { label: 'Развернуть все', onClick: () => setCollapsed(new Set()) },
+                { label: 'Цикл', onClick: () => {}, group: true },
+                { label: b.loop ? 'Настроить цикл…' : 'Повторять блок в цикле…', onClick: () => setLoopFor(b.id) },
+                ...nestTargets(def, bi).map((t) => ({ label: `Вложить в цикл «${t.title || t.id}»`, onClick: () => setBlockParent(b.id, t.id) })),
+                !!b.parent && { label: 'Вынести из цикла на уровень выше', onClick: () => setBlockParent(b.id, def.blocks.find((x) => x.id === b.parent)?.parent) },
                 { label: 'Порядок вопросов', onClick: () => {}, group: true },
                 { label: `${!b.order ? '✓ ' : ''}Как в конструкторе`, onClick: () => setBlockOrder(bi, undefined) },
                 { label: `${b.order === 'random' ? '✓ ' : ''}Случайный для каждого респондента`, onClick: () => setBlockOrder(bi, 'random') },
@@ -304,7 +336,10 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                   label: 'Удалить блок', danger: true,
                   onClick: () => {
                     if (b.questions.length && !window.confirm(`Удалить блок вместе с вопросами (${b.questions.length})?`)) return;
-                    mutate((d) => { d.blocks.splice(bi, 1); });
+                    mutate((d) => {
+                      const [gone] = d.blocks.splice(bi, 1);
+                      for (const c of d.blocks) if (c.parent === gone.id) { if (gone.parent) c.parent = gone.parent; else delete c.parent; }
+                    });
                   },
                 },
               ]} />
@@ -346,6 +381,10 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
         <button className="add-page" onClick={() => addBlock(def.blocks.length - 1)}>+ Новый блок</button>
       </div>
 
+      {loopFor && def.blocks.find((b) => b.id === loopFor) && (
+        <LoopDialog def={def} block={def.blocks.find((b) => b.id === loopFor)!} onClose={() => setLoopFor(null)}
+          onSave={(loop) => { setBlockLoop(loopFor, loop); setLoopFor(null); }} />
+      )}
       {open && openQ && (
         <QuestionDialog
           key={`${open.bi}:${open.qi}`}
