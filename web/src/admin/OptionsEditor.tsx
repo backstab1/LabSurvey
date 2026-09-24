@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { compact } from './common.tsx';
+import { Menu, compact } from './common.tsx';
 import type { Option } from '../../../shared/types.ts';
 
 /**
  * Список вариантов. Быстрый ввод: Enter — новый вариант, Backspace в пустом — удалить,
  * вставка нескольких строк — несколько вариантов («97. Другое» задаёт код).
  */
-export function OptionsEditor({ options, onChange, allowOther, allowExclusive, quickAdd, placeholder = 'Вариант', emptyHint }: {
+export function OptionsEditor({ options, onChange, allowOther, allowExclusive, allowFlags, quickAdd, placeholder = 'Вариант', emptyHint }: {
   options: Option[];
   onChange: (o: Option[]) => void;
   allowOther?: boolean;
   allowExclusive?: boolean;
+  /** Флаги «закрепить при перемешивании» и «скрыть» */
+  allowFlags?: boolean;
   /** Быстрые кнопки «Другое» / «Затрудняюсь» */
   quickAdd?: boolean;
   placeholder?: string;
@@ -82,7 +84,7 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, q
     <div className="options-editor">
       {options.length === 0 && emptyHint && <p className="muted small">{emptyHint}</p>}
       {options.map((o, i) => (
-        <div key={i} className="opt-row">
+        <div key={i} className={`opt-row${o.hidden ? ' is-hidden' : ''}`}>
           <input className="opt-code" type="number" title="Код ответа" value={o.code}
             onChange={(e) => setAt(i, { code: Number(e.target.value) })} />
           <input ref={(el) => { inputs.current[i] = el; }} className="opt-text" value={o.text} placeholder={placeholder}
@@ -123,7 +125,15 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, q
             <button type="button" className={`chip${o.exclusive ? ' on' : ''}`} title="Снимает остальные варианты"
               onClick={() => setAt(i, { exclusive: o.exclusive ? undefined : true })}>искл.</button>
           )}
+          {o.fixed && <button type="button" className="chip on" title="Не перемешивается — снять" onClick={() => setAt(i, { fixed: undefined })}>📌</button>}
+          {o.hidden && <button type="button" className="chip on" title="Скрыт от респондента — показать" onClick={() => setAt(i, { hidden: undefined })}>скрыт</button>}
           <span className="row-tools">
+            {allowFlags && (
+              <Menu items={[
+                { label: o.fixed ? 'Не закреплять' : 'Закрепить на месте при перемешивании', onClick: () => setAt(i, { fixed: o.fixed ? undefined : true }) },
+                { label: o.hidden ? 'Показывать респонденту' : 'Скрыть от респондента (код останется)', onClick: () => setAt(i, { hidden: o.hidden ? undefined : true }) },
+              ]} />
+            )}
             <button type="button" className="icon-btn" title="Выше" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
             <button type="button" className="icon-btn" title="Ниже" disabled={i === options.length - 1} onClick={() => move(i, 1)}>↓</button>
             <button type="button" className="icon-btn" title="Удалить" onClick={() => remove(i)}>✕</button>

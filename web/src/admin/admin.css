@@ -426,3 +426,7 @@
 .settings-tab .check input { margin-top: 3px; flex-shrink: 0; }
 .color-input { width: 44px; height: 40px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); cursor: pointer; }
 .finish-group { border-top: 1px solid var(--border); padding-top: 12px; }
+.opt-row.is-hidden .opt-text { opacity: .5; text-decoration: line-through; }
+.flag-line .input.short { width: 220px; min-height: 34px; padding: 5px 10px; }
+.note-chip { background: #fff6d6; color: #7a5a00; }
+.qcard-note { font-size: 13px; color: #7a5a00; background: #fffaeb; border-radius: 6px; padding: 4px 8px; margin: 4px 0 6px; white-space: pre-line; }

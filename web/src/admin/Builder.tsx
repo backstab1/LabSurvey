@@ -116,7 +116,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
   });
 
   const q = query.trim().toLowerCase();
-  const matches = (x: Question) => !q || x.id.toLowerCase().includes(q) || x.text.toLowerCase().includes(q);
+  const matches = (x: Question) => !q || x.id.toLowerCase().includes(q) || x.text.toLowerCase().includes(q) || !!x.note?.toLowerCase().includes(q);
 
   const addBlock = (after: number) => {
     const id = nextId(allIds(def), 'B');
@@ -332,6 +332,7 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragg
         </span>
       </div>
       {error && <div className="card-error">{error}</div>}
+      {q.note && <div className="qcard-note" title="Комментарий для команды — респондент его не видит">💬 {q.note}</div>}
       {q.text || q.type === 'hidden'
         ? <QuestionPreview def={def} q={q} />
         : <div className="muted empty-q">Пустой вопрос — нажмите, чтобы заполнить</div>}

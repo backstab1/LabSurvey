@@ -158,3 +158,10 @@ textarea.input { resize: vertical; }
 .q-number { font-size: 13px; font-weight: 600; color: var(--accent); margin: 0 0 6px; }
 .password-input { max-width: 280px; margin: 0 auto; display: block; text-align: center; }
 .redirect-note { text-align: left; margin-top: 16px; word-break: break-all; }
+
+/* Варианты в несколько колонок (на телефоне — одна) */
+.options.cols { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
+.options.cols > .q-hint { grid-column: 1 / -1; }
+@media (max-width: 640px) { .options.cols { display: flex; } }
+.input-suffix { display: flex; align-items: center; gap: 10px; }
+.input-suffix span { color: var(--muted); }

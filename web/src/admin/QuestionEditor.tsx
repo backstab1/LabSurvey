@@ -19,7 +19,7 @@ function convert(q: Question, type: QuestionType): Question {
   const old = q as any;
   const keep = {
     id: q.id, text: q.text || fresh.text, hint: q.hint, required: q.required, showIf: q.showIf, scripts: q.scripts, actions: q.actions,
-    hideBack: q.hideBack, hideFinish: q.hideFinish,
+    hideBack: q.hideBack, hideFinish: q.hideFinish, requiredMessage: q.requiredMessage, note: q.note,
   };
   const opts: Option[] | undefined = old.options ?? old.rows;
   if (CHOICE_TYPES.includes(type) && opts?.length) {
@@ -57,6 +57,7 @@ interface Props {
 export function QuestionDialog({ def, q, prevId, position, onChange, onClose, onDelete, onDuplicate, onNav, hasPrev, hasNext, onCreateVar, onRename, onPreview }: Props) {
   const set = (patch: Patch) => onChange(compact({ ...q, ...patch } as Question));
   const [showHint, setShowHint] = useState(!!q.hint);
+  const [showNote, setShowNote] = useState(!!q.note);
   const [idDraft, setIdDraft] = useState(q.id);
   const [idError, setIdError] = useState('');
   const commitId = () => {
@@ -119,7 +120,19 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
             <label className="field"><span>Подсказка под вопросом</span>
               <input className="input" value={q.hint ?? ''} autoFocus={!q.hint} onChange={(e) => set({ hint: e.target.value || undefined })} />
             </label>
-          ) : <button className="btn-link" style={{ alignSelf: 'flex-start', padding: 0 }} onClick={() => setShowHint(true)}>+ подсказка</button>)}
+          ) : null)}
+          {showNote && (
+            <label className="field"><span>Комментарий для команды (респондент не видит)</span>
+              <textarea className="input note-input" rows={2} value={q.note ?? ''} autoFocus={!q.note}
+                placeholder="Например: из ТЗ заказчика, согласовать формулировку" onChange={(e) => set({ note: e.target.value || undefined })} />
+            </label>
+          )}
+          {(!showHint && answerable) || !showNote ? (
+            <div className="row" style={{ gap: 14 }}>
+              {answerable && !showHint && <button className="btn-link" style={{ padding: 0 }} onClick={() => setShowHint(true)}>+ подсказка</button>}
+              {!showNote && <button className="btn-link" style={{ padding: 0 }} onClick={() => setShowNote(true)}>+ комментарий для команды</button>}
+            </div>
+          ) : null}
 
           <TypeBody q={q} set={set} />
 
@@ -254,7 +267,7 @@ function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
     case 'ranking':
       return (
         <Block title="Варианты для ранжирования" note={q.optionsFrom ? `+ варианты из ${q.optionsFrom.question}` : undefined}>
-          <OptionsEditor options={q.options} onChange={(options) => set({ options })} />
+          <OptionsEditor options={q.options} onChange={(options) => set({ options })} allowFlags />
         </Block>
       );
     case 'single':
@@ -262,7 +275,7 @@ function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
     case 'dropdown':
       return (
         <Block title="Варианты ответа" note={q.optionsFrom ? `+ варианты из ${q.optionsFrom.question}` : undefined}>
-          <OptionsEditor options={q.options} onChange={(options) => set({ options })} allowOther allowExclusive={q.type === 'multi'} quickAdd />
+          <OptionsEditor options={q.options} onChange={(options) => set({ options })} allowOther allowExclusive={q.type === 'multi'} allowFlags quickAdd />
         </Block>
       );
     case 'matrix':
@@ -272,7 +285,7 @@ function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
             options={[{ value: 'single', label: 'Один ответ в строке' }, { value: 'multi', label: 'Несколько ответов в строке' }]} />
           <div className="grid2 matrix-editor">
             <Block title="Строки" note={q.rowsFrom ? `+ из ${q.rowsFrom.question}` : undefined}>
-              <OptionsEditor options={q.rows} onChange={(rows) => set({ rows })} allowOther placeholder="Утверждение" />
+              <OptionsEditor options={q.rows} onChange={(rows) => set({ rows })} allowOther allowFlags placeholder="Утверждение" />
             </Block>
             <Block title="Столбцы">
               <OptionsEditor options={q.columns} onChange={(columns) => set({ columns })} placeholder="Ответ" />
@@ -424,7 +437,20 @@ function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: P
       </div>,
     );
   }
+  // Короткое текстовое поле настройки
+  const textLine = (key: string, label: string, placeholder?: string, summary?: (v: string) => string) => {
+    const v = a[key] as string | undefined;
+    if (v && summary) on.push(summary(v));
+    body.push(
+      <div key={key} className="flag-line">
+        <span>{label}</span>
+        <input className="input short" placeholder={placeholder} value={v ?? ''} onChange={(e) => set({ [key]: e.target.value || undefined })} />
+      </div>,
+    );
+  };
   if (q.type === 'number') {
+    textLine('suffix', 'Единица измерения справа от поля', 'лет, ₽, шт.', (v) => `Ед.: ${v}`);
+    textLine('placeholder', 'Подсказка внутри поля', 'например, 25');
     if (q.decimals) on.push(`Дробные (${q.decimals} зн.)`);
     body.push(
       <div key="dec" className="flag-line">
@@ -443,13 +469,21 @@ function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: P
           options={[{ value: 'text', label: 'Текст' }, { value: 'email', label: 'E-mail' }, { value: 'time', label: 'Время' }]} />
       </div>,
     );
-    if (q.maxLength) on.push(`До ${q.maxLength} симв.`);
+    if (q.minLength || q.maxLength) on.push(`${q.minLength ?? 0}–${q.maxLength ?? '∞'} симв.`);
     body.push(
       <div key="ml" className="flag-line">
-        <span>Максимум символов</span>
-        <input className="input mini" type="number" placeholder="—" value={q.maxLength ?? ''} onChange={(e) => set({ maxLength: e.target.value ? Number(e.target.value) : undefined })} />
+        <span>Длина ответа, символов</span>
+        <div className="row" style={{ gap: 6 }}>
+          <input className="input mini" type="number" min={1} placeholder="от" value={q.minLength ?? ''} onChange={(e) => set({ minLength: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })} />
+          <input className="input mini" type="number" min={1} placeholder="до" value={q.maxLength ?? ''} onChange={(e) => set({ maxLength: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })} />
+        </div>
       </div>,
     );
+    if (it === 'text') {
+      textLine('pattern', 'Формат ответа (регулярное выражение)', 'например, [А-Яа-яЁё\\s-]+', () => 'Проверка формата');
+      if (q.pattern) textLine('patternMessage', 'Сообщение, если формат не подходит', 'Ответ в неверном формате');
+    }
+    textLine('placeholder', 'Подсказка внутри поля', 'например, Ваш ответ');
     inherited('noPaste', 'Запретить вставку из буфера обмена');
   }
   if (q.type === 'single' || q.type === 'dropdown' || q.type === 'scale') {
@@ -459,6 +493,17 @@ function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: P
   // ---- Отображение ----
   if (answerable) group('Отображение');
   if (q.type === 'text' && (q.inputType ?? 'text') === 'text') flag('multiline', 'Большое поле для ответа');
+  if (q.type === 'single' || q.type === 'multi') {
+    const cols = q.columnCount ?? 1;
+    if (cols > 1) on.push(`${cols} колонки`);
+    body.push(
+      <div key="cols" className="flag-line">
+        <span>Варианты в колонки<small className="muted"> (на телефоне — одна)</small></span>
+        <Segmented value={String(cols)} onChange={(v) => set({ columnCount: v === '1' ? undefined : Number(v) })}
+          options={[{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }]} />
+      </div>,
+    );
+  }
   if (q.type === 'single' || q.type === 'multi') flag('showOtherAlways', 'Не скрывать поле «Другое»', 'Поле видно сразу, ввод текста отмечает вариант');
   if (q.type === 'matrix') {
     flag('transpose', 'Перевернуть таблицу', 'Строки и столбцы меняются местами');
@@ -466,6 +511,7 @@ function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: P
     flag('progressiveRows', 'Показывать строки по мере ответа');
     flag('carousel', 'Таблица как карусель', 'По одной строке на экране');
   }
+  if (answerable && q.required !== false) textLine('requiredMessage', 'Сообщение, если нет ответа', 'Пожалуйста, ответьте на вопрос', () => 'Своё сообщение');
   if (answerable || q.type === 'info') {
     if (!answerable) group('Отображение');
     flag('hideBack', 'Скрыть кнопку «Назад»');

@@ -68,15 +68,26 @@ function seededShuffle<T>(items: T[], seed: string): T[] {
   return arr;
 }
 
-/** Перемешивает или сдвигает варианты; «Другое» и эксклюзивные варианты остаются в конце */
+/**
+ * Перемешивает или сдвигает варианты. «Другое» и эксклюзивные варианты остаются в конце,
+ * закреплённые (fixed) — на своих местах.
+ */
 function orderOptions(options: Option[], seed: string, order: 'random' | 'rotate' | undefined): Option[] {
   if (!order) return options;
-  const fixed = options.filter((o) => o.other || o.exclusive);
-  const free = options.filter((o) => !o.other && !o.exclusive);
-  if (order === 'random') return [...seededShuffle(free, seed), ...fixed];
-  const shift = free.length ? hash(seed) % free.length : 0;
-  return [...free.slice(shift), ...free.slice(0, shift), ...fixed];
+  const tail = options.filter((o) => o.other || o.exclusive);
+  const body = options.filter((o) => !o.other && !o.exclusive);
+  const free = body.filter((o) => !o.fixed);
+  let moved: Option[];
+  if (order === 'random') moved = seededShuffle(free, seed);
+  else {
+    const shift = free.length ? hash(seed) % free.length : 0;
+    moved = [...free.slice(shift), ...free.slice(0, shift)];
+  }
+  let k = 0;
+  return [...body.map((o) => (o.fixed ? o : moved[k++])), ...tail];
 }
+
+const shown = (list: Option[]) => (list.some((o) => o.hidden) ? list.filter((o) => !o.hidden) : list);
 
 // ---------- Варианты с учётом переноса ----------
 
@@ -157,14 +168,14 @@ function filterByActions(ctx: RespondentContext, q: Question, opts: Option[], de
 /** Варианты, которые видит конкретный респондент */
 export function resolveOptions(ctx: RespondentContext, q: Question, depth = 0, shuffle = true): Option[] {
   if (!hasOptions(q)) return [];
-  let opts = q.optionsFrom && depth < 10 ? applyFrom(ctx, q.optionsFrom, q.options, depth) : q.options;
+  let opts = q.optionsFrom && depth < 10 ? applyFrom(ctx, q.optionsFrom, shown(q.options), depth) : shown(q.options);
   opts = filterByActions(ctx, q, opts, depth);
   if (shuffle) opts = orderOptions(opts, ctx.seed + ':' + q.id, q.order ?? (q.randomize ? 'random' : undefined));
   return opts;
 }
 
 export function resolveRows(ctx: RespondentContext, q: MatrixQuestion, depth = 0): Option[] {
-  let rows = q.rowsFrom && depth < 10 ? applyFrom(ctx, q.rowsFrom, q.rows, depth) : q.rows;
+  let rows = q.rowsFrom && depth < 10 ? applyFrom(ctx, q.rowsFrom, shown(q.rows), depth) : shown(q.rows);
   rows = filterByActions(ctx, q, rows, depth);
   rows = orderOptions(rows, ctx.seed + ':' + q.id, q.rowOrder ?? (q.randomizeRows ? 'random' : undefined));
   return rows;

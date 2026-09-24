@@ -279,7 +279,11 @@ function validateOptions(list: unknown, where: string, name: string, err: (w: st
     else if (codes.has(o.code)) err(where, `${name}: код ${o.code} повторяется`);
     else codes.add(o.code);
     if (typeof o.text !== 'string' || !o.text.trim()) err(where, `${name}[${i + 1}]: нужен текст`);
+    for (const k of ['other', 'exclusive', 'fixed', 'hidden']) {
+      if (o[k] !== undefined && typeof o[k] !== 'boolean') err(where, `${name}[${i + 1}].${k}: true или false`);
+    }
   });
+  if (list.length > 0 && list.every((o) => isObj(o) && o.hidden === true) && !allowEmpty) err(where, `${name}: все варианты скрыты`);
 }
 
 function validateQuestion(
@@ -288,6 +292,13 @@ function validateQuestion(
   err: (w: string, m: string) => void,
   warn: (w: string, m: string) => void,
 ) {
+  for (const k of ['requiredMessage', 'note', 'placeholder', 'suffix', 'patternMessage'] as const) {
+    const v = (q as unknown as Record<string, unknown>)[k];
+    if (v !== undefined && typeof v !== 'string') err(w, `${k}: ожидается строка`);
+  }
+  if ('columnCount' in q && q.columnCount !== undefined && (!isInt(q.columnCount) || q.columnCount < 1 || q.columnCount > 4)) {
+    err(w, 'columnCount: от 1 до 4');
+  }
   switch (q.type) {
     case 'single':
     case 'dropdown':
@@ -343,6 +354,15 @@ function validateQuestion(
     case 'text':
       if (q.maxLength !== undefined && (!isInt(q.maxLength) || q.maxLength < 1)) err(w, 'maxLength: целое ≥ 1');
       if (q.inputType !== undefined && !['text', 'email', 'time'].includes(q.inputType)) err(w, 'inputType: text, email или time');
+      if (q.minLength !== undefined && (!isInt(q.minLength) || q.minLength < 1)) err(w, 'minLength: целое ≥ 1');
+      if (isInt(q.minLength) && isInt(q.maxLength) && q.minLength > q.maxLength) err(w, 'minLength больше maxLength');
+      if (q.pattern !== undefined) {
+        if (typeof q.pattern !== 'string' || !q.pattern) err(w, 'pattern: регулярное выражение');
+        else {
+          try { new RegExp(q.pattern, 'u'); } catch (e) { err(w, `pattern: ${(e as Error).message}`); }
+          if (q.inputType && q.inputType !== 'text') warn(w, 'pattern работает только для обычного текста');
+        }
+      }
       break;
     case 'date':
       for (const k of ['min', 'max'] as const) {

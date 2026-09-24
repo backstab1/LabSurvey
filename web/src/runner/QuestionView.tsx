@@ -3,7 +3,7 @@ import { pipe, resolveOptions, resolveRows } from '../../../shared/logic.ts';
 import { isRequired } from '../../../shared/answers.ts';
 import { rich } from './rich.tsx';
 import { settingsOf } from '../../../shared/types.ts';
-import type { Answer, MatrixQuestion, Option, Question, RankingQuestion, RespondentContext, ScaleQuestion, TextQuestion } from '../../../shared/types.ts';
+import type { Answer, MatrixQuestion, NumberQuestion, Option, Question, RankingQuestion, RespondentContext, ScaleQuestion, TextQuestion } from '../../../shared/types.ts';
 
 interface Props {
   q: Question;
@@ -38,7 +38,7 @@ function Body({ q, ctx, answer, onChange }: Omit<Props, 'error'>) {
     case 'ranking': return <Ranking q={q} options={resolveOptions(ctx, q)} answer={answer} onChange={onChange} />;
     case 'dropdown': return <Dropdown options={resolveOptions(ctx, q)} answer={answer} onChange={onChange} />;
     case 'text': return <TextInput q={q} noPaste={q.noPaste ?? settingsOf(ctx.survey).noPaste} answer={answer} onChange={onChange} />;
-    case 'number': return <NumberInput decimals={q.decimals ?? 0} answer={answer} onChange={onChange} />;
+    case 'number': return <NumberInput q={q} answer={answer} onChange={onChange} />;
     case 'scale': return <Scale q={q} answer={answer} onChange={onChange} />;
     case 'matrix': return <Matrix q={q} rows={resolveRows(ctx, q)} answer={answer} onChange={onChange} />;
     case 'date':
@@ -81,8 +81,9 @@ function Choice({ q, options, multi, answer, onChange, max, otherAlways }: {
   };
 
   const atMax = multi && !!max && selected.length >= max;
+  const cols = 'columnCount' in q && q.columnCount && q.columnCount > 1 ? q.columnCount : 0;
   return (
-    <div className="options">
+    <div className={`options${cols ? ' cols' : ''}`} style={cols ? { ['--cols' as string]: cols } : undefined}>
       {options.map((o) => {
         const on = selected.includes(o.code);
         return (
@@ -176,6 +177,7 @@ function TextInput({ q, noPaste, answer, onChange }: { q: TextQuestion; noPaste:
   const common = {
     value,
     maxLength: q.maxLength,
+    placeholder: q.placeholder,
     onChange: (e: { target: { value: string } }) => set(e.target.value),
     onPaste: noPaste ? block : undefined,
     onDrop: noPaste ? block : undefined,
@@ -190,10 +192,10 @@ function TextInput({ q, noPaste, answer, onChange }: { q: TextQuestion; noPaste:
   );
 }
 
-function NumberInput({ decimals, answer, onChange }: { decimals: number; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
+function NumberInput({ q, answer, onChange }: { q: NumberQuestion; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
   const [raw, setRaw] = useState(typeof answer?.v === 'number' ? String(answer.v).replace('.', ',') : '');
-  return (
-    <input className="input input-number" inputMode={decimals > 0 ? 'decimal' : 'numeric'} value={raw}
+  const input = (
+    <input className="input input-number" inputMode={(q.decimals ?? 0) > 0 ? 'decimal' : 'numeric'} value={raw} placeholder={q.placeholder}
       onChange={(e) => {
         const s = e.target.value.replace(/[^\d,.\-]/g, '');
         setRaw(s);
@@ -202,6 +204,7 @@ function NumberInput({ decimals, answer, onChange }: { decimals: number; answer?
         onChange({ v: isNaN(n) ? NaN : n });
       }} />
   );
+  return q.suffix ? <div className="input-suffix">{input}<span>{q.suffix}</span></div> : input;
 }
 
 function Scale({ q, answer, onChange }: { q: ScaleQuestion; answer?: Answer; onChange: (a: Answer | undefined) => void }) {

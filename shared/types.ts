@@ -11,6 +11,10 @@ export interface Option {
   other?: boolean;
   /** Для multi: выбор этого варианта снимает все остальные */
   exclusive?: boolean;
+  /** Оставить на своём месте при перемешивании и ротации */
+  fixed?: boolean;
+  /** Не показывать респонденту (код остаётся в выгрузке и условиях) */
+  hidden?: boolean;
 }
 
 /** Перенос вариантов из другого вопроса (single/multi/dropdown или строки матрицы) */
@@ -112,6 +116,10 @@ interface QuestionBase {
   hideBack?: boolean;
   /** Скрыть кнопку «Завершить досрочно», пока вопрос на экране */
   hideFinish?: boolean;
+  /** Своё сообщение, если на обязательный вопрос не ответили */
+  requiredMessage?: string;
+  /** Комментарий для команды — респондент его не видит */
+  note?: string;
 }
 
 /** Порядок вариантов: random — перемешать, rotate — циклический сдвиг с сохранением порядка */
@@ -125,6 +133,8 @@ interface ChoiceBase extends QuestionBase {
   order?: OptionOrder;
   /** Поле «укажите» видно всегда, а не только после выбора варианта */
   showOtherAlways?: boolean;
+  /** Варианты в несколько колонок (на телефоне — всегда одна) */
+  columnCount?: number;
 }
 
 export interface ChoiceQuestion extends ChoiceBase {
@@ -154,6 +164,12 @@ export interface TextQuestion extends QuestionBase {
   inputType?: 'text' | 'email' | 'time';
   /** Запретить вставку из буфера обмена */
   noPaste?: boolean;
+  minLength?: number;
+  /** Проверка по регулярному выражению (для inputType text) */
+  pattern?: string;
+  patternMessage?: string;
+  /** Подсказка внутри поля */
+  placeholder?: string;
 }
 
 export interface NumberQuestion extends QuestionBase {
@@ -162,6 +178,9 @@ export interface NumberQuestion extends QuestionBase {
   max?: number;
   /** Число знаков после запятой, по умолчанию 0 (только целые) */
   decimals?: number;
+  /** Единица измерения справа от поля: «лет», «₽» */
+  suffix?: string;
+  placeholder?: string;
 }
 
 export interface ScaleQuestion extends QuestionBase {

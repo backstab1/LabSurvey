@@ -39,6 +39,11 @@ function formatDate(s: string): string {
   return `${d}.${m}.${y}`;
 }
 
+/** Проверка по шаблону анкеты; некорректный шаблон не блокирует респондента */
+function safeTest(pattern: string, value: string): boolean {
+  try { return new RegExp(`^(?:${pattern})$`, 'u').test(value); } catch { return true; }
+}
+
 function otherError(opt: Option | undefined, a: Answer): string | null {
   if (opt?.other && !a.o?.[String(opt.code)]?.trim()) return `Укажите ваш вариант для «${opt.text}»`;
   return null;
@@ -60,7 +65,7 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
 
   if (q.type === 'matrix') return validateMatrix(ctx, q, a, required);
 
-  if (empty) return required ? 'Пожалуйста, ответьте на вопрос' : null;
+  if (empty) return required ? (q.requiredMessage || 'Пожалуйста, ответьте на вопрос') : null;
   const v = a!.v;
 
   switch (q.type) {
@@ -101,10 +106,12 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
     }
     case 'text': {
       if (typeof v !== 'string') return 'Некорректный ответ';
-      if (required && !v.trim()) return 'Пожалуйста, ответьте на вопрос';
+      if (required && !v.trim()) return q.requiredMessage || 'Пожалуйста, ответьте на вопрос';
       if (q.inputType === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())) return 'Введите корректный e-mail';
       if (q.inputType === 'time' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v.trim())) return 'Введите время в формате ЧЧ:ММ';
       if (q.maxLength && v.length > q.maxLength) return `Не более ${q.maxLength} символов`;
+      if (q.minLength && v.trim().length < q.minLength) return `Не менее ${q.minLength} символов`;
+      if (q.pattern && (q.inputType ?? 'text') === 'text' && !safeTest(q.pattern, v.trim())) return q.patternMessage || 'Ответ в неверном формате';
       return null;
     }
     case 'number': {
