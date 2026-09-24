@@ -51,3 +51,12 @@ test('formulas are validated and follow renames', () => {
   const renamed = renameId(survey, 'Q1', 'A1');
   assert.equal((renamed.blocks[0].questions[3] as any).calc, 'score(A1) + Q2 * 2 + score(M)');
 });
+
+test('built-in templates are valid surveys', async () => {
+  const { TEMPLATES } = await import('../web/src/admin/templates.ts');
+  for (const t of TEMPLATES) {
+    if (!t.survey) continue;
+    const r = validateSurvey(t.survey);
+    assert.deepEqual(r.errors, [], t.id);
+  }
+});

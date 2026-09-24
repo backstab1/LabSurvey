@@ -504,3 +504,16 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
 .embed-code textarea { font-size: 12px; margin: 8px 0; }
 
 .opt-score { width: 54px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 13px; background: #fbfbf4; }
+
+/* Печать отчёта: только содержимое */
+@media print {
+  .topbar, .editor-head, .tabs-row, .issues-panel, .report-filters, .report-filter, .readonly-note, .toast { display: none !important; }
+  .admin, .container { max-width: none; padding: 0; margin: 0; background: #fff; }
+  .report .card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+  .report-texts[open] ul, .report-texts ul { max-height: none; overflow: visible; }
+}
+
+/* Шаблоны */
+.template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.template-card { display: flex; flex-direction: column; gap: 4px; text-align: left; border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--surface); cursor: pointer; }
+.template-card:hover { border-color: var(--accent); background: var(--accent-soft); }

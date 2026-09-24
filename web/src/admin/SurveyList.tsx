@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { canEdit, navigate, useMe } from './AdminApp.tsx';
+import { TEMPLATES, type Template } from './templates.ts';
 import { IssuesList, Menu, Modal } from './common.tsx';
 import type { Issue } from '../../../shared/validate.ts';
 
@@ -20,6 +21,7 @@ export function SurveyList() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [backupsOpen, setBackupsOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
   const me = useMe();
   const editable = canEdit(me);
   const [query, setQuery] = useState('');
@@ -28,8 +30,8 @@ export function SurveyList() {
   const load = () => api<Row[]>('GET', '/api/admin/surveys').then(setRows);
   useEffect(() => { load(); }, []);
 
-  const createBlank = async () => {
-    const r = await api('POST', '/api/admin/surveys', {});
+  const createFrom = async (t: Template) => {
+    const r = await api('POST', '/api/admin/surveys', t.survey ? { definition: t.survey } : {});
     navigate(`/admin/s/${r.id}`);
   };
 
@@ -39,7 +41,7 @@ export function SurveyList() {
         <h1 className="grow" style={{ margin: 0, fontSize: 24 }}>Анкеты</h1>
         {me.role === 'admin' && <button className="btn btn-secondary" onClick={() => setBackupsOpen(true)}>Резервные копии</button>}
         {editable && <button className="btn btn-secondary" onClick={() => setImportOpen(true)}>Импорт JSON</button>}
-        {editable && <button className="btn btn-primary" onClick={createBlank}>+ Новая анкета</button>}
+        {editable && <button className="btn btn-primary" onClick={() => setNewOpen(true)}>+ Новая анкета</button>}
       </div>
       {rows && (rows.length > 3 || rows.some((r) => r.archived)) && (
         <div className="row list-filters">
@@ -94,6 +96,19 @@ export function SurveyList() {
       </div>
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
       {backupsOpen && <BackupsModal onClose={() => setBackupsOpen(false)} />}
+      {newOpen && (
+        <Modal onClose={() => setNewOpen(false)} title="Новая анкета">
+          <div className="template-grid">
+            {TEMPLATES.map((t) => (
+              <button key={t.id} className="template-card" onClick={() => createFrom(t)}>
+                <strong>{t.title}</strong>
+                <span className="muted small">{t.description}</span>
+              </button>
+            ))}
+          </div>
+          <p className="muted small" style={{ marginBottom: 0 }}>Есть анкета в Word или PDF? Кнопка «Импорт JSON» и инструкция для ИИ на вкладке JSON.</p>
+        </Modal>
+      )}
     </div>
   );
 }

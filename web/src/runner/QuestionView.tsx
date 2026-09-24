@@ -81,17 +81,22 @@ function Choice({ q, options, multi, answer, onChange, max, otherAlways }: {
   };
 
   const atMax = multi && !!max && selected.length >= max;
-  const cols = 'columnCount' in q && q.columnCount && q.columnCount > 1 ? q.columnCount : 0;
+  // С картинками варианты — карточки в сетке
+  const withImages = options.some((o) => o.image);
+  const cols = 'columnCount' in q && q.columnCount && q.columnCount > 1 ? q.columnCount : withImages ? 2 : 0;
   return (
     <div className={`options${cols ? ' cols' : ''}`} style={cols ? { ['--cols' as string]: cols } : undefined}>
       {options.map((o) => {
         const on = selected.includes(o.code);
         return (
           <div key={o.code}>
-            <label className={`option${on ? ' selected' : ''}`}>
-              <input type={multi ? 'checkbox' : 'radio'} name={q.id} checked={on} disabled={!on && atMax && !o.exclusive}
-                onChange={() => toggle(o)} />
-              <span>{rich(o.text)}</span>
+            <label className={`option${on ? ' selected' : ''}${o.image ? ' with-image' : ''}`}>
+              {o.image && <img className="opt-img" src={o.image} alt="" loading="lazy" />}
+              <span className="opt-line">
+                <input type={multi ? 'checkbox' : 'radio'} name={q.id} checked={on} disabled={!on && atMax && !o.exclusive}
+                  onChange={() => toggle(o)} />
+                <span>{rich(o.text)}</span>
+              </span>
             </label>
             {o.other && (on || otherAlways) && <OtherInput autoFocus={on && !others[o.code]} value={others[o.code] ?? ''} onChange={(t) => setOther(o.code, t)} />}
           </div>
@@ -207,18 +212,26 @@ function NumberInput({ q, answer, onChange }: { q: NumberQuestion; answer?: Answ
   return q.suffix ? <div className="input-suffix">{input}<span>{q.suffix}</span></div> : input;
 }
 
+const SMILEYS = ['😠', '🙁', '😐', '🙂', '😀'];
+
 function Scale({ q, answer, onChange }: { q: ScaleQuestion; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
   const points = Array.from({ length: q.to - q.from + 1 }, (_, i) => q.from + i);
   const value = typeof answer?.v === 'number' ? answer.v : null;
   const labels = q.labels ?? {};
   const hasEndLabels = labels[String(q.from)] || labels[String(q.to)];
   const midLabels = points.filter((p) => p !== q.from && p !== q.to && labels[String(p)]);
+  const display = q.display ?? 'buttons';
+  const inScale = value !== null && value >= q.from && value <= q.to;
+  const face = (i: number) => SMILEYS[Math.round((i / Math.max(1, points.length - 1)) * (SMILEYS.length - 1))];
   return (
     <div className="scale">
-      <div className="scale-points" style={{ ['--n' as string]: points.length }}>
-        {points.map((p) => (
-          <button type="button" key={p} className={`scale-point${value === p ? ' selected' : ''}`} aria-pressed={value === p}
-            title={labels[String(p)]} onClick={() => onChange({ v: p })}>{p}</button>
+      <div className={`scale-points ${display}`} style={{ ['--n' as string]: points.length }}>
+        {points.map((p, i) => (
+          <button type="button" key={p} aria-pressed={value === p} aria-label={labels[String(p)] ? `${p} — ${labels[String(p)]}` : String(p)}
+            className={`scale-point${value === p ? ' selected' : ''}${display === 'stars' && inScale && p <= value! ? ' lit' : ''}`}
+            title={labels[String(p)] ?? String(p)} onClick={() => onChange({ v: p })}>
+            {display === 'stars' ? '★' : display === 'smileys' ? face(i) : p}
+          </button>
         ))}
       </div>
       {hasEndLabels && (

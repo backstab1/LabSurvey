@@ -17,6 +17,8 @@ export interface Option {
   hidden?: boolean;
   /** Баллы варианта для формул: score(Q1) */
   score?: number;
+  /** Картинка варианта (https://…) */
+  image?: string;
 }
 
 /** Перенос вариантов из другого вопроса (single/multi/dropdown или строки матрицы) */
@@ -205,6 +207,8 @@ export interface ScaleQuestion extends QuestionBase {
   /** Дополнительные варианты вне шкалы, например {code: 99, text: "Затрудняюсь ответить"} */
   extraOptions?: Option[];
   autoNext?: boolean;
+  /** Вид: кнопки с числами (по умолчанию), звёзды или смайлики */
+  display?: 'buttons' | 'stars' | 'smileys';
 }
 
 export interface MatrixQuestion extends QuestionBase {
@@ -353,6 +357,9 @@ export interface SurveySettings {
   maxStartsPerIpHour?: number;
   /** Завершённые быстрее N секунд помечаются как «спидеры» (переменная speeder в выгрузке) */
   minDurationSec?: number;
+  /** Ограничение времени на прохождение, минут: по истечении анкета завершается досрочно */
+  timeLimitMin?: number;
+  timeoutMessage?: string;
 
   // ---- Оформление ----
   /** Логотип над опросом (URL картинки) */
@@ -412,7 +419,7 @@ export interface RespondentContext {
 
 /** Настройки, у которых есть значение по умолчанию; остальные по умолчанию не заданы */
 type DefaultedSettings = 'showProgress' | 'allowBack' | 'allowEarlyFinish' | 'showQuestionNumbers' | 'enterSubmits' | 'autoNext' | 'noPaste'
-  | 'allowRetake' | 'completeMessage' | 'screenoutMessage' | 'earlyFinishMessage' | 'closedMessage' | 'overquotaMessage'
+  | 'allowRetake' | 'completeMessage' | 'screenoutMessage' | 'earlyFinishMessage' | 'closedMessage' | 'overquotaMessage' | 'timeoutMessage'
   | 'nextLabel' | 'backLabel' | 'submitLabel' | 'earlyFinishLabel';
 
 export const DEFAULT_SETTINGS: Required<Pick<SurveySettings, DefaultedSettings>> & SurveySettings = {
@@ -429,6 +436,7 @@ export const DEFAULT_SETTINGS: Required<Pick<SurveySettings, DefaultedSettings>>
   earlyFinishMessage: 'Опрос завершён. Спасибо за уделённое время!',
   closedMessage: 'Опрос закрыт.',
   overquotaMessage: 'Спасибо за интерес! Участники с похожим профилем уже набраны.',
+  timeoutMessage: 'Время на прохождение опроса истекло. Спасибо за ответы!',
   nextLabel: 'Далее',
   backLabel: 'Назад',
   submitLabel: 'Отправить',

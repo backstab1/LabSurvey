@@ -310,7 +310,7 @@ function checkRandomBlocks(s: Survey, err: (w: string, m: string) => void, warn:
 
 const BOOL_SETTINGS = ['showProgress', 'allowBack', 'allowEarlyFinish', 'showQuestionNumbers', 'enterSubmits', 'autoNext', 'noPaste', 'allowRetake'];
 const TEXT_SETTINGS = [
-  'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'closedMessage', 'overquotaMessage', 'password', 'footerText',
+  'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'closedMessage', 'overquotaMessage', 'timeoutMessage', 'password', 'footerText',
   'nextLabel', 'backLabel', 'submitLabel', 'earlyFinishLabel',
 ];
 const URL_SETTINGS = ['redirectComplete', 'redirectScreenout', 'redirectEarlyFinish', 'redirectOverquota', 'logoUrl'];
@@ -329,7 +329,7 @@ function validateSettings(st: Record<string, unknown>, err: (w: string, m: strin
   if (typeof st.openFrom === 'string' && typeof st.closeAt === 'string' && Date.parse(st.openFrom) >= Date.parse(st.closeAt)) {
     err(w('closeAt'), 'Окончание сбора раньше начала');
   }
-  for (const k of ['maxResponses', 'maxStartsPerIpHour', 'minDurationSec']) {
+  for (const k of ['maxResponses', 'maxStartsPerIpHour', 'minDurationSec', 'timeLimitMin']) {
     if (st[k] !== undefined && (!isInt(st[k]) || (st[k] as number) < 1)) err(w(k), 'Целое число ≥ 1');
   }
   if (st.uniqueParam !== undefined && (typeof st.uniqueParam !== 'string' || !/^[\w.-]{1,50}$/.test(st.uniqueParam))) {
@@ -355,6 +355,7 @@ function validateOptions(list: unknown, where: string, name: string, err: (w: st
       if (o[k] !== undefined && typeof o[k] !== 'boolean') err(where, `${name}[${i + 1}].${k}: true или false`);
     }
     if (o.score !== undefined && (typeof o.score !== 'number' || !isFinite(o.score))) err(where, `${name}[${i + 1}].score: число`);
+    if (o.image !== undefined && (typeof o.image !== 'string' || !/^(https?:\/\/|\/)\S+$/i.test(o.image))) err(where, `${name}[${i + 1}].image: адрес картинки https://…`);
   });
   if (list.length > 0 && list.every((o) => isObj(o) && o.hidden === true) && !allowEmpty) err(where, `${name}: все варианты скрыты`);
 }
@@ -404,6 +405,7 @@ function validateQuestion(
       else if (q.from >= q.to) err(w, 'from должно быть меньше to');
       else if (q.to - q.from > 20) err(w, 'Шкала не может быть длиннее 21 точки');
       if (q.labels !== undefined && !isObj(q.labels)) err(w, 'labels: объект {"1": "подпись"}');
+      if (q.display !== undefined && !['buttons', 'stars', 'smileys'].includes(q.display)) err(w, 'display: buttons, stars или smileys');
       if (q.extraOptions !== undefined) {
         validateOptions(q.extraOptions, w, 'extraOptions', err);
         if (Array.isArray(q.extraOptions) && isInt(q.from) && isInt(q.to)) {

@@ -134,11 +134,19 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, a
           )}
           {o.fixed && <button type="button" className="chip on" title="Не перемешивается — снять" onClick={() => setAt(i, { fixed: undefined })}>📌</button>}
           {o.hidden && <button type="button" className="chip on" title="Скрыт от респондента — показать" onClick={() => setAt(i, { hidden: undefined })}>скрыт</button>}
+          {o.image && <button type="button" className="chip on" title={`Картинка: ${o.image} — изменить`} onClick={() => {
+            const url = window.prompt('Адрес картинки (пусто — убрать)', o.image);
+            if (url !== null) setAt(i, { image: url.trim() || undefined });
+          }}>🖼</button>}
           <span className="row-tools">
             {allowFlags && (
               <Menu items={[
                 { label: o.fixed ? 'Не закреплять' : 'Закрепить на месте при перемешивании', onClick: () => setAt(i, { fixed: o.fixed ? undefined : true }) },
                 { label: o.hidden ? 'Показывать респонденту' : 'Скрыть от респондента (код останется)', onClick: () => setAt(i, { hidden: o.hidden ? undefined : true }) },
+                { label: o.image ? 'Изменить картинку…' : 'Добавить картинку…', onClick: () => {
+                  const url = window.prompt('Адрес картинки https://… (пусто — убрать)', o.image ?? '');
+                  if (url !== null) setAt(i, { image: url.trim() || undefined });
+                } },
               ]} />
             )}
             <button type="button" className="icon-btn" title="Выше" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>

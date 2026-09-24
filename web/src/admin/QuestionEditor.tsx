@@ -315,6 +315,11 @@ function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
                 onChange={(e) => set({ labels: emptyToUndef(compact({ ...q.labels, [String(q.to)]: e.target.value || undefined })) })} />
             </label>
           </div>
+          <div className="row" style={{ marginTop: 10 }}>
+            <span className="muted small">Вид</span>
+            <Segmented value={q.display ?? 'buttons'} onChange={(v) => set({ display: v === 'buttons' ? undefined : v })}
+              options={[{ value: 'buttons', label: 'Числа' }, { value: 'stars', label: '★ Звёзды' }, { value: 'smileys', label: '🙂 Смайлики' }]} />
+          </div>
           <div className="sub-title">Варианты вне шкалы</div>
           <OptionsEditor options={q.extraOptions ?? []} onChange={(extraOptions) => set({ extraOptions: extraOptions.length ? extraOptions : undefined })}
             emptyHint="Например, «Затрудняюсь ответить»" quickAdd />

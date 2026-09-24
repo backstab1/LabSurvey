@@ -169,3 +169,28 @@ textarea.input { resize: vertical; }
 /* Опрос во встроенном iframe: без внешних отступов и фона страницы */
 html.embedded body { background: transparent; }
 html.embedded .runner { padding-top: 0; padding-bottom: 8px; }
+
+/* Таймер */
+.countdown { position: sticky; top: 0; z-index: 5; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--muted); margin: -4px 0 8px; }
+.countdown.urgent { color: var(--danger); font-weight: 600; }
+
+/* Шкала: звёзды и смайлики */
+.scale-points.stars, .scale-points.smileys { display: flex; flex-wrap: wrap; gap: 6px; }
+.scale-points.stars .scale-point { border: 0; background: none; font-size: 34px; line-height: 1; min-height: 44px; min-width: 40px; color: #d5dae1; }
+.scale-points.stars .scale-point.lit { color: #f5b301; background: none; }
+.scale-points.stars .scale-point:hover { color: #f7c948; }
+.scale-points.smileys .scale-point { font-size: 28px; min-width: 52px; filter: grayscale(.7); opacity: .75; }
+.scale-points.smileys .scale-point.selected { background: var(--accent-soft); border-color: var(--accent); filter: none; opacity: 1; color: inherit; }
+
+/* Картинки вариантов */
+.option.with-image { flex-direction: column; align-items: stretch; gap: 8px; }
+.opt-img { width: 100%; max-height: 180px; object-fit: contain; border-radius: 8px; background: #f3f4f6; }
+.opt-line { display: flex; align-items: flex-start; gap: 12px; }
+.option:not(.with-image) .opt-line { display: contents; }
+
+/* Панель отладки в предпросмотре */
+.debug-panel { margin-top: 20px; border: 1px dashed #c9ced6; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--muted); }
+.debug-panel summary { cursor: pointer; }
+.debug-panel table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+.debug-panel td { padding: 3px 8px 3px 0; vertical-align: top; border-top: 1px solid #eef0f3; color: var(--text); }
+.debug-panel td.mono { font-family: var(--mono); white-space: nowrap; color: var(--muted); }

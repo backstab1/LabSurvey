@@ -3,7 +3,7 @@ import { api, ApiError } from '../api.ts';
 import { QuestionView } from './QuestionView.tsx';
 import { runScript, type ScriptEnv } from './scripts.ts';
 import { rich } from './rich.tsx';
-import { actionError, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions } from '../../../shared/logic.ts';
+import { actionError, allQuestions, answerText, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions } from '../../../shared/logic.ts';
 import { validateAnswer } from '../../../shared/answers.ts';
 import {
   DEFAULT_SETTINGS, END, settingsOf, type Answer, type AnswerValue, type Answers, type Page, type RespondentContext, type Survey,
@@ -22,6 +22,7 @@ interface RunnerState {
   step: number;
   message?: string;
   redirect?: string;
+  deadline?: string;
 }
 
 type Loaded =
@@ -95,10 +96,53 @@ export function Runner({ surveyId }: { surveyId: string }) {
     <>
       {state.survey.css && <style>{state.survey.css}</style>}
       {page
-        ? <PageView key={`${state.rid}:${page.id}:${state.progress}`} state={state} page={page} surveyId={surveyId} onState={applyState} />
+        ? <PageView key={`${state.rid}:${page.id}:${state.progress}`} state={state} page={page} surveyId={surveyId} onState={applyState} onExpire={() => start()} />
         : <Final survey={state.survey} title={state.survey.title} message={state.message ?? DEFAULT_SETTINGS.completeMessage}
             preview={state.preview} redirect={state.redirect} />}
     </>
+  );
+}
+
+/** Предпросмотр: что сейчас известно движку — для проверки логики, подстановок и формул */
+function DebugPanel({ ctx, pageId }: { ctx: RespondentContext; pageId: string }) {
+  const rows = allQuestions(ctx.survey).filter((q) => ctx.answers[q.id] !== undefined);
+  const params = Object.entries(ctx.params);
+  return (
+    <details className="debug-panel">
+      <summary>Отладка: вопрос {pageId} · ответов {rows.length}</summary>
+      <table>
+        <tbody>
+          {rows.map((q) => (
+            <tr key={q.id}>
+              <td className="mono">{q.id}</td>
+              <td>{q.type === 'hidden' ? <em>переменная</em> : null} {answerText(ctx, q) || JSON.stringify(ctx.answers[q.id].v)}</td>
+            </tr>
+          ))}
+          {params.map(([k, v]) => <tr key={k}><td className="mono">?{k}</td><td>{v}</td></tr>)}
+        </tbody>
+      </table>
+      {!rows.length && !params.length && <p>Ответов пока нет.</p>}
+    </details>
+  );
+}
+
+/** Оставшееся время; по истечении сервер завершает анкету — перезапрашиваем состояние */
+function Countdown({ deadline, onExpire }: { deadline: string; onExpire: () => void }) {
+  const end = Date.parse(deadline);
+  const [left, setLeft] = useState(() => Math.max(0, Math.round((end - Date.now()) / 1000)));
+  useEffect(() => {
+    const t = setInterval(() => {
+      const s = Math.max(0, Math.round((end - Date.now()) / 1000));
+      setLeft(s);
+      if (s === 0) { clearInterval(t); setTimeout(onExpire, 6000); }
+    }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [end]);
+  return (
+    <div className={`countdown${left < 60 ? ' urgent' : ''}`} role="timer" aria-live={left < 60 ? 'polite' : 'off'}>
+      Осталось {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
+    </div>
   );
 }
 
@@ -134,8 +178,8 @@ function PasswordGate({ title, error, busy, onSubmit }: { title: string; error?:
   );
 }
 
-function PageView({ state, page, surveyId, onState }: {
-  state: RunnerState; page: Page; surveyId: string; onState: (s: RunnerState) => void;
+function PageView({ state, page, surveyId, onState, onExpire }: {
+  state: RunnerState; page: Page; surveyId: string; onState: (s: RunnerState) => void; onExpire: () => void;
 }) {
   const { survey } = state;
   const settings = settingsOf(survey);
@@ -274,6 +318,7 @@ function PageView({ state, page, surveyId, onState }: {
   return (
     <Shell survey={survey} className={`page-${page.id}`}>
       {state.preview && <div className="preview-banner">Предпросмотр: ответы помечаются как тестовые</div>}
+      {state.deadline && <Countdown deadline={state.deadline} onExpire={onExpire} />}
       {settings.showProgress && (
         <div className="progress" role="progressbar" aria-valuenow={state.progress} aria-valuemin={0} aria-valuemax={100}>
           <div className="progress-fill" style={{ width: `${state.progress}%` }} />
@@ -297,6 +342,7 @@ function PageView({ state, page, surveyId, onState }: {
           {state.canBack && !hideBack && <button className="btn btn-secondary" disabled={busy} onClick={() => send('back')}>{settings.backLabel}</button>}
           <button className="btn btn-primary" disabled={busy} onClick={() => send('submit')}>{isLast ? settings.submitLabel : settings.nextLabel}</button>
         </div>
+        {state.preview && <DebugPanel ctx={ctx} pageId={page.id} />}
         {settings.allowEarlyFinish && !hideFinish && (
           <div className="early-finish">
             <button className="btn-link" disabled={busy} onClick={() => send('finish')}>{settings.earlyFinishLabel}</button>

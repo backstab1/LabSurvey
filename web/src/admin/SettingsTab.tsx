@@ -98,6 +98,11 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
               onChange={(e) => setSettings({ maxStartsPerIpHour: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} />
             <span className="field-help">Осторожно с опросами сотрудников: из одного офиса часто один IP</span>
           </label>
+          <label className="field"><span>Ограничение времени, минут</span>
+            <input className="input" type="number" min={1} placeholder="без ограничения" value={st.timeLimitMin ?? ''}
+              onChange={(e) => setSettings({ timeLimitMin: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} />
+            <span className="field-help">Респондент видит таймер; по истечении анкета завершается досрочно с сохранёнными ответами</span>
+          </label>
           <label className="field"><span>«Спидеры»: быстрее, чем за N секунд</span>
             <input className="input" type="number" min={1} placeholder="не отмечать" value={st.minDurationSec ?? ''}
               onChange={(e) => setSettings({ minDurationSec: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} />
@@ -171,6 +176,7 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
         <Finish title="Досрочное завершение" message={text('earlyFinishMessage', 'Сообщение', { area: true })}
           redirect={text('redirectEarlyFinish', 'Перейти по адресу', { placeholder: 'необязательно', mono: true })} />
         {text('closedMessage', 'Когда опрос закрыт, срок вышел или набран лимит', { area: true })}
+        {st.timeLimitMin ? text('timeoutMessage', 'Когда время на прохождение истекло', { area: true }) : null}
       </div>
 
       <div className="card stack">

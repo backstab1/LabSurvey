@@ -37,6 +37,7 @@ export function ReportTab({ info }: { info: SurveyInfo }) {
           </label>
         ))}
         <span className="grow" />
+        <button className="btn btn-secondary btn-sm" onClick={() => window.print()} title="Печать или сохранение в PDF">Печать / PDF</button>
         <label className="check" title="Отчёт по тестовым ответам черновика (предпросмотр, тестовое заполнение)">
           <input type="checkbox" checked={test} onChange={(e) => setTest(e.target.checked)} />Тестовые ответы
         </label>

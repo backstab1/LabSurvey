@@ -28,6 +28,8 @@ export interface RunnerState {
   message?: string;
   /** Куда перенаправить после завершения */
   redirect?: string;
+  /** До какого момента нужно закончить (ограничение времени), ISO */
+  deadline?: string;
 }
 
 const RESERVED_PARAMS = new Set(['preview', 'new', 'rid', 'test']);
@@ -102,6 +104,7 @@ function stateOf(survey: Survey, r: StoredResponse): RunnerState {
     canBack: st.allowBack && r.history.length > 0,
     progress: progressPercent(ctxOf(survey, r, nav), r.currentPage, r.history),
     step: r.history.filter((id) => findPage(survey, id)?.questions.some((q) => q.type !== 'info')).length + 1,
+    deadline: st.timeLimitMin ? new Date(Date.parse(r.startedAt) + st.timeLimitMin * 60_000).toISOString() : undefined,
   };
 }
 
@@ -199,6 +202,12 @@ export async function respondentRoutes(app: FastifyInstance) {
       }
       r.history = r.history.filter((p) => findPage(survey, p));
       await responses.update(r.id, { version: r.version, currentPage: r.currentPage, history: r.history });
+    }
+    // Время вышло — анкета завершается досрочно с сохранёнными ответами
+    const limit = settingsOf(survey).timeLimitMin;
+    if (limit && r.status === 'in_progress' && Date.now() > Date.parse(r.startedAt) + limit * 60_000 + 5_000) {
+      await finalize(survey, r, r.answers, r.history, 'terminated', { message: settingsOf(survey).timeoutMessage });
+      return { s, r: (await responses.get(r.id))!, survey };
     }
     return { s, r, survey };
   }
