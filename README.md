@@ -45,6 +45,17 @@ npm run dev               # сервер :3000 + фронтенд :5173 с ав�
 
 Тесты: `npm test` (тест .sav использует Python + pyreadstat, если они установлены, иначе пропускается). Проверка типов: `npm run typecheck`.
 
+## Установка через Docker
+
+```bash
+git clone https://github.com/backstab1/LabSurvey.git surveylab && cd surveylab
+cp .env.example .env && nano .env       # ADMIN_PASSWORD; без HTTPS — COOKIE_SECURE=0
+mkdir -p data && sudo chown 1000:1000 data   # сервис в контейнере работает от пользователя node (uid 1000)
+docker compose up -d --build
+```
+
+Данные, резервные копии и секрет сессий лежат в `./data`. Обновление: `git pull && docker compose up -d --build`.
+
 ## Установка на VPS (Ubuntu)
 
 ```bash

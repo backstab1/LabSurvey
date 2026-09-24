@@ -1,0 +1,14 @@
+# docker compose up -d — сервис на порту 3000, данные и копии базы в ./data
+services:
+  surveylab:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+      # Ключ Google (если нужен): положите файл рядом и укажите в .env GOOGLE_APPLICATION_CREDENTIALS=/app/google-key.json
+      # - ./google-key.json:/app/google-key.json:ro
