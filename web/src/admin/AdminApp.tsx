@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { SurveyList } from './SurveyList.tsx';
 import { Editor } from './Editor.tsx';
+import { PrintView } from './PrintView.tsx';
 
 export function navigate(path: string) {
   window.history.pushState(null, '', path);
@@ -29,6 +30,8 @@ export function AdminApp() {
   if (login === undefined) return null;
   if (!login) return <Login onDone={setLogin} />;
 
+  const printMatch = path.match(/^\/admin\/s\/([\w-]+)\/print/);
+  if (printMatch) return <PrintView id={printMatch[1]} />;
   const editorMatch = path.match(/^\/admin\/s\/([\w-]+)/);
   return (
     <div className="admin">

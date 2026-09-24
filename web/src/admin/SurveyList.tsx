@@ -9,6 +9,7 @@ interface Row {
   title: string;
   status: 'draft' | 'active' | 'closed';
   version: number;
+  archived: boolean;
   updatedAt: string;
   counts: Record<string, number>;
 }
@@ -19,7 +20,7 @@ export function SurveyList() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState<'all' | Row['status']>('all');
+  const [status, setStatus] = useState<'all' | Row['status'] | 'archived'>('all');
 
   const load = () => api<Row[]>('GET', '/api/admin/surveys').then(setRows);
   useEffect(() => { load(); }, []);
@@ -36,7 +37,7 @@ export function SurveyList() {
         <button className="btn btn-secondary" onClick={() => setImportOpen(true)}>Импорт JSON</button>
         <button className="btn btn-primary" onClick={createBlank}>+ Новая анкета</button>
       </div>
-      {rows && rows.length > 3 && (
+      {rows && (rows.length > 3 || rows.some((r) => r.archived)) && (
         <div className="row list-filters">
           <input className="input" type="search" placeholder="Поиск по названию…" value={query} onChange={(e) => setQuery(e.target.value)} />
           <select className="input" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
@@ -44,6 +45,7 @@ export function SurveyList() {
             <option value="active">Идёт сбор</option>
             <option value="draft">Черновики</option>
             <option value="closed">Закрытые</option>
+            <option value="archived">Архив ({rows.filter((r) => r.archived).length})</option>
           </select>
         </div>
       )}
@@ -56,10 +58,11 @@ export function SurveyList() {
               <tr><th>Название</th><th>Статус</th><th>Завершили</th><th>Начали</th><th>Изменена</th><th /></tr>
             </thead>
             <tbody>
-              {rows.filter((r) => (status === 'all' || r.status === status) && r.title.toLowerCase().includes(query.trim().toLowerCase())).map((r) => (
+              {rows.filter((r) => (status === 'archived' ? r.archived : !r.archived && (status === 'all' || r.status === status))
+                && r.title.toLowerCase().includes(query.trim().toLowerCase())).map((r) => (
                 <tr key={r.id} className="clickable" onClick={() => navigate(`/admin/s/${r.id}`)}>
                   <td><strong>{r.title}</strong><div className="muted" style={{ fontSize: 13 }}>/s/{r.id}{r.version ? ` · версия ${r.version}` : ''}</div></td>
-                  <td><span className={`badge ${r.status}`}>{STATUS_TEXT[r.status]}</span></td>
+                  <td>{r.archived ? <span className="badge">В архиве</span> : <span className={`badge ${r.status}`}>{STATUS_TEXT[r.status]}</span>}</td>
                   <td>{r.counts.completed ?? 0}</td>
                   <td>{Object.values(r.counts).reduce((a, b) => a + b, 0)}</td>
                   <td className="muted">{new Date(r.updatedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</td>
@@ -68,6 +71,7 @@ export function SurveyList() {
                       { label: 'Открыть', onClick: () => navigate(`/admin/s/${r.id}`) },
                       { label: 'Предпросмотр', onClick: () => window.open(`/s/${r.id}?preview=1&new=1`, '_blank') },
                       { label: 'Дублировать', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/duplicate`); load(); } },
+                      { label: r.archived ? 'Вернуть из архива' : 'В архив', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/archive`, { archived: !r.archived }); load(); } },
                       {
                         label: 'Удалить', danger: true, onClick: async () => {
                           const n = Object.values(r.counts).reduce((a, b) => a + b, 0);

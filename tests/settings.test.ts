@@ -153,3 +153,26 @@ test('question numbers count answered questions', async () => {
   assert.equal(st.page, 'Q2');
   assert.equal(st.step, 2);
 });
+
+test('archive closes collection and version history restores a draft', async () => {
+  const sid = await publish(base({}));
+  await login();
+  const v1 = base({});
+  v1.title = 'Версия 2';
+  await call('PUT', `/api/admin/surveys/${sid}`, { definition: v1 });
+  await call('POST', `/api/admin/surveys/${sid}/publish`);
+  const versions = (await call('GET', `/api/admin/surveys/${sid}/versions`)).json;
+  assert.deepEqual(versions.map((v: { version: number }) => v.version), [2, 1]);
+  assert.equal((await call('GET', `/api/admin/surveys/${sid}/versions/1`)).json.title, 'Настройки');
+  await call('POST', `/api/admin/surveys/${sid}/versions/1/restore`);
+  assert.equal((await call('GET', `/api/admin/surveys/${sid}`)).json.draft.title, 'Настройки');
+
+  await call('POST', `/api/admin/surveys/${sid}/archive`, { archived: true });
+  const info = (await call('GET', `/api/admin/surveys/${sid}`)).json;
+  assert.equal(info.archived, true);
+  assert.equal(info.status, 'closed');
+  assert.equal((await call('POST', `/api/admin/surveys/${sid}/status`, { status: 'active' })).status, 400);
+  assert.equal((await call('GET', '/api/admin/surveys')).json.find((s: { id: string }) => s.id === sid).archived, true);
+  cookie = '';
+  assert.equal((await call('POST', `/api/s/${sid}/start`, {})).json.closed, true);
+});

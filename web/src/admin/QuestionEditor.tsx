@@ -492,7 +492,18 @@ function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: P
 
   // ---- Отображение ----
   if (answerable) group('Отображение');
-  if (q.type === 'text' && (q.inputType ?? 'text') === 'text') flag('multiline', 'Большое поле для ответа');
+  if (q.type === 'text' && (q.inputType ?? 'text') === 'text') {
+    flag('multiline', 'Большое поле для ответа');
+    if (q.multiline) {
+      body.push(
+        <div key="rows" className="flag-line">
+          <span>Высота поля, строк</span>
+          <input className="input mini" type="number" min={2} max={20} placeholder="4" value={q.rows ?? ''}
+            onChange={(e) => set({ rows: e.target.value ? Math.min(20, Math.max(2, Number(e.target.value))) : undefined })} />
+        </div>,
+      );
+    }
+  }
   if (q.type === 'single' || q.type === 'multi') {
     const cols = q.columnCount ?? 1;
     if (cols > 1) on.push(`${cols} колонки`);

@@ -97,7 +97,31 @@ export async function adminRoutes(app: FastifyInstance) {
       const status = req.body?.status;
       if (status !== 'active' && status !== 'closed') return reply.code(400).send({ error: 'Статус: active или closed' });
       if (status === 'active' && !s.published) return reply.code(400).send({ error: 'Сначала опубликуйте анкету' });
+      if (status === 'active' && s.archived) return reply.code(400).send({ error: 'Сначала верните анкету из архива' });
       await surveys.setStatus(s.id, status);
+      return { ok: true };
+    });
+
+    priv.post<{ Params: { id: string }; Body: { archived: boolean } }>('/api/admin/surveys/:id/archive', async (req, reply) => {
+      const s = await surveys.get(req.params.id);
+      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
+      await surveys.setArchived(s.id, !!req.body?.archived);
+      return { ok: true };
+    });
+
+    // История опубликованных версий: просмотр и возврат версии в черновик
+    priv.get<{ Params: { id: string } }>('/api/admin/surveys/:id/versions', async (req) => surveys.versions(req.params.id));
+
+    priv.get<{ Params: { id: string; v: string } }>('/api/admin/surveys/:id/versions/:v', async (req, reply) => {
+      const def = await surveys.version(req.params.id, Number(req.params.v));
+      if (!def) return reply.code(404).send({ error: 'Версия не найдена' });
+      return def;
+    });
+
+    priv.post<{ Params: { id: string; v: string } }>('/api/admin/surveys/:id/versions/:v/restore', async (req, reply) => {
+      const def = await surveys.version(req.params.id, Number(req.params.v));
+      if (!def) return reply.code(404).send({ error: 'Версия не найдена' });
+      await surveys.saveDraft(req.params.id, def);
       return { ok: true };
     });
 

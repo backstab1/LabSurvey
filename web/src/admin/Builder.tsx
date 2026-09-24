@@ -72,6 +72,9 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
   const [drag, setDrag] = useState<Pos | null>(null);
   const [drop, setDrop] = useState<Pos | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // Выделенные вопросы для массовых действий; lastPick — опора для выделения диапазона с Shift
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const lastPick = useRef<string | null>(null);
 
   const mutate = (fn: (d: Survey) => void) => {
     const next = structuredClone(def);
@@ -152,6 +155,64 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
     setTimeout(() => setFlash(null), 1200);
   }
 
+  // ---- Выделение и массовые действия ----
+  const flatIds = def.blocks.flatMap((b) => b.questions.map((x) => x.id));
+  const selected = flatIds.filter((id) => sel.has(id));
+  // Карточки не перерисовываются при каждой правке, поэтому порядок берём из ref
+  const flatRef = useRef(flatIds);
+  flatRef.current = flatIds;
+  const pick = (id: string, range: boolean) => setSel((prev) => {
+    const next = new Set(prev);
+    const ids = flatRef.current;
+    if (range && lastPick.current && ids.includes(lastPick.current)) {
+      const [a, b] = [ids.indexOf(lastPick.current), ids.indexOf(id)].sort((x, y) => x - y);
+      for (const x of ids.slice(a, b + 1)) next.add(x);
+    } else if (next.has(id)) next.delete(id);
+    else next.add(id);
+    lastPick.current = id;
+    return next;
+  });
+  const clearSel = () => setSel(new Set());
+  useEffect(() => {
+    if (!selected.length) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !open && !document.querySelector('.menu-list')) clearSel(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [selected.length, open]);
+
+  const bulk = {
+    required: (on: boolean) => mutate((d) => {
+      for (const b of d.blocks) for (const x of b.questions) {
+        if (sel.has(x.id) && x.type !== 'info' && x.type !== 'hidden') { if (on) delete x.required; else x.required = false; }
+      }
+    }),
+    duplicate: () => mutate((d) => {
+      for (const b of d.blocks) {
+        for (let i = b.questions.length - 1; i >= 0; i--) {
+          if (!sel.has(b.questions[i].id)) continue;
+          const copy = structuredClone(b.questions[i]);
+          copy.id = nextId(allIds(d), copy.type === 'hidden' ? 'H' : 'Q');
+          b.questions.splice(i + 1, 0, copy);
+        }
+      }
+    }),
+    moveTo: (bi: number) => mutate((d) => {
+      const moved = d.blocks.flatMap((b) => b.questions.filter((x) => sel.has(x.id)));
+      for (const b of d.blocks) b.questions = b.questions.filter((x) => !sel.has(x.id));
+      d.blocks[bi].questions.push(...moved);
+    }),
+    copy: () => {
+      const list = def.blocks.flatMap((b) => b.questions.filter((x) => sel.has(x.id)));
+      navigator.clipboard.writeText(JSON.stringify(list, null, 2));
+      toast(`Скопировано вопросов: ${list.length} — вставьте через «+» в любой анкете`);
+    },
+    remove: () => {
+      if (!window.confirm(`Удалить выделенные вопросы (${selected.length})?`)) return;
+      mutate((d) => { for (const b of d.blocks) b.questions = b.questions.filter((x) => !sel.has(x.id)); });
+      clearSel();
+    },
+  };
+
   const endDrag = () => { setDrag(null); setDrop(null); };
   const dropAt = (to: Pos) => { if (drag) moveQuestion(drag, to); endDrag(); };
 
@@ -184,6 +245,22 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
       </nav>
 
       <div className="canvas">
+        {selected.length > 0 && (
+          <div className="bulk-bar">
+            <strong>Выбрано: {selected.length}</strong>
+            <button className="btn-link" onClick={() => setSel(new Set(flatIds))}>выбрать все</button>
+            <span className="grow" />
+            <button className="btn btn-secondary btn-sm" onClick={() => bulk.required(true)}>Обязательные</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => bulk.required(false)}>Необязательные</button>
+            <Menu className="btn btn-secondary btn-sm" label="В блок ▾" title="Перенести в конец блока" items={
+              def.blocks.map((b, bi) => ({ label: b.title || `Блок ${bi + 1} (${b.id})`, onClick: () => bulk.moveTo(bi) }))
+            } />
+            <button className="btn btn-secondary btn-sm" onClick={bulk.duplicate}>Дублировать</button>
+            <button className="btn btn-secondary btn-sm" onClick={bulk.copy}>Копировать</button>
+            <button className="btn btn-danger btn-sm" onClick={bulk.remove}>Удалить</button>
+            <button className="icon-btn" title="Снять выделение (Esc)" onClick={clearSel}>✕</button>
+          </div>
+        )}
         {def.blocks.map((b, bi) => (
           <section key={bi} className="page-block" id={`card-${b.id}`}>
             <header className={`page-head${flash === b.id ? ' flash' : ''}`}>
@@ -223,6 +300,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                     dropping={!!drag && drop?.bi === bi && drop.qi === qi}
                     onDragOver={() => drag && setDrop({ bi, qi })} onDrop={() => dropAt({ bi, qi })} />
                   <QuestionCard def={def} q={q} n={n} error={issueFor(q.id)?.message} flash={flash === q.id}
+                    selected={sel.has(q.id)} onSelect={(range) => pick(q.id, range)}
                     dragging={drag?.bi === bi && drag.qi === qi}
                     onOpen={() => setOpen({ bi, qi })}
                     onDragStart={() => setDrag({ bi, qi })} onDragEnd={endDrag}
@@ -286,8 +364,9 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
   );
 }
 
-const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragging, onOpen, onDragStart, onDragEnd, onDragOverHalf, onDropHere, onDuplicate, onDelete, onPreview, onCopy }: {
+const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragging, selected, onSelect, onOpen, onDragStart, onDragEnd, onDragOverHalf, onDropHere, onDuplicate, onDelete, onPreview, onCopy }: {
   def: Survey; q: Question; n: number | null; error?: string; flash: boolean; dragging: boolean;
+  selected: boolean; onSelect: (range: boolean) => void;
   onOpen: () => void; onDragStart: () => void; onDragEnd: () => void;
   onDragOverHalf: (after: boolean) => void; onDropHere: () => void;
   onDuplicate: () => void; onDelete: () => void; onPreview: () => void; onCopy: () => void;
@@ -301,7 +380,7 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragg
   if (after) chips.push({ text: `после ответа: ${after}`, kind: 'act' });
   if (q.scripts) chips.push({ text: 'JS', kind: 'plain' });
   return (
-    <div id={`card-${q.id}`} className={`qcard${error ? ' has-error' : ''}${flash ? ' flash' : ''}${dragging ? ' dragging' : ''}${q.type === 'hidden' ? ' hidden-card' : ''}`}
+    <div id={`card-${q.id}`} className={`qcard${error ? ' has-error' : ''}${flash ? ' flash' : ''}${dragging ? ' dragging' : ''}${q.type === 'hidden' ? ' hidden-card' : ''}${selected ? ' selected' : ''}`}
       onClick={onOpen}
       onDragOver={(e) => {
         e.preventDefault();
@@ -310,6 +389,8 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragg
       }}
       onDrop={(e) => { e.preventDefault(); onDropHere(); }}>
       <div className="qcard-head">
+        <input type="checkbox" className="q-select" checked={selected} title="Выделить (Shift — диапазон)" aria-label={`Выделить ${q.id}`}
+          onClick={(e) => { e.stopPropagation(); onSelect(e.shiftKey); }} onChange={() => {}} />
         <span className="drag-handle" draggable title="Перетащите, чтобы переместить"
           onClick={(e) => e.stopPropagation()}
           onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', q.id); onDragStart(); }}
@@ -338,7 +419,7 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragg
         : <div className="muted empty-q">Пустой вопрос — нажмите, чтобы заполнить</div>}
     </div>
   );
-}, (a, b) => a.q === b.q && a.n === b.n && a.error === b.error && a.flash === b.flash && a.dragging === b.dragging
+}, (a, b) => a.q === b.q && a.n === b.n && a.error === b.error && a.flash === b.flash && a.dragging === b.dragging && a.selected === b.selected
   && a.def.blocks.length === b.def.blocks.length);
 
 /** Полоска между карточками: «+» добавляет вопрос в это место, сюда же можно бросить перетаскиваемую карточку */

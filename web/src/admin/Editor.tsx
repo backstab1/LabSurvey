@@ -5,7 +5,7 @@ import { JsonTab } from './JsonTab.tsx';
 import { DataTab } from './DataTab.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
 import { LogicTab } from './LogicTab.tsx';
-import { IssuesList, Menu, Toaster, toast } from './common.tsx';
+import { IssuesList, Menu, Modal, Toaster, toast } from './common.tsx';
 import { navigate } from './AdminApp.tsx';
 import { STATUS_TEXT } from './SurveyList.tsx';
 import { validateSurvey } from '../../../shared/validate.ts';
@@ -19,6 +19,7 @@ export interface SurveyInfo {
   published: Survey | null;
   version: number;
   status: 'draft' | 'active' | 'closed';
+  archived: boolean;
   sheets: any;
   counts: { real: Record<string, number>; test: number };
   sheetsAccount: { configured: boolean; email: string | null };
@@ -41,6 +42,7 @@ export function Editor({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).get('tab') as Tab) || 'builder');
   const [save, setSave] = useState<SaveState>('saved');
   const [showIssues, setShowIssues] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
   const [focus, setFocus] = useState<{ where: string; n: number }>();
   const latest = useRef<Survey | null>(null);
   // История для отмены: правки, сделанные подряд быстрее чем за 0,7 с, объединяются в один шаг
@@ -191,7 +193,7 @@ export function Editor({ id }: { id: string }) {
         <button className="icon-btn back" title="Все анкеты" onClick={() => navigate('/admin')}>←</button>
         <input className="title-input" value={def.title} placeholder="Название анкеты" aria-label="Название анкеты"
           onChange={(e) => update({ ...def, title: e.target.value })} />
-        <span className={`badge ${info.status}`}>{STATUS_TEXT[info.status]}</span>
+        {info.archived ? <span className="badge">В архиве</span> : <span className={`badge ${info.status}`}>{STATUS_TEXT[info.status]}</span>}
         <span className={`save-state ${save}`} onClick={save === 'error' ? () => flush() : undefined}>{SAVE_TEXT[save]}</span>
         <span className="grow" />
         <span className="undo-group">
@@ -207,9 +209,15 @@ export function Editor({ id }: { id: string }) {
           { label: 'Скопировать ссылку на опрос', onClick: () => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); } },
           { label: 'Скопировать тестовую ссылку', onClick: () => { navigator.clipboard.writeText(`${link}?test=${info.testToken}`); toast('Тестовая ссылка скопирована: черновик, без входа, ответы тестовые'); } },
           info.status === 'active' && { label: 'Закрыть сбор ответов', onClick: () => setStatus('closed') },
-          info.status === 'closed' && { label: 'Возобновить сбор', onClick: () => setStatus('active') },
+          info.status === 'closed' && !info.archived && { label: 'Возобновить сбор', onClick: () => setStatus('active') },
+          { label: 'Печатная версия анкеты', onClick: async () => { await saveNow(); window.open(`/admin/s/${id}/print`, '_blank'); } },
+          { label: 'История версий', onClick: () => setShowVersions(true), disabled: !info.published },
           { label: 'Дублировать анкету', onClick: async () => { const r = await api('POST', `/api/admin/surveys/${id}/duplicate`); navigate(`/admin/s/${r.id}`); } },
           { label: 'Скачать JSON', onClick: () => { window.location.href = `/api/admin/surveys/${id}/export.json`; } },
+          {
+            label: info.archived ? 'Вернуть из архива' : 'Перенести в архив',
+            onClick: async () => { await api('POST', `/api/admin/surveys/${id}/archive`, { archived: !info.archived }); await reload(); },
+          },
           {
             label: 'Удалить анкету', danger: true, onClick: async () => {
               const n = Object.values(info.counts.real).reduce((a, b) => a + b, 0);
@@ -250,7 +258,45 @@ export function Editor({ id }: { id: string }) {
       {tab === 'json' && <JsonTab def={def} onChange={update} />}
       {tab === 'settings' && <SettingsTab def={def} onChange={update} surveyId={id} testToken={info.testToken} completed={info.counts.real.completed ?? 0} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
+      {showVersions && (
+        <VersionsModal id={id} current={info.version} onClose={() => setShowVersions(false)}
+          onRestore={(v, restored) => { update(restored); setShowVersions(false); changeTab('builder'); toast(`Черновик заменён версией ${v}. Отменить — Ctrl+Z`); }} />
+      )}
       <Toaster />
     </div>
+  );
+}
+
+interface VersionRow { version: number; publishedAt: string; questions: number }
+
+/** Опубликованные версии: скачать или вернуть в черновик (возврат можно отменить через Ctrl+Z) */
+function VersionsModal({ id, current, onClose, onRestore }: {
+  id: string; current: number; onClose: () => void; onRestore: (v: number, def: Survey) => void;
+}) {
+  const [rows, setRows] = useState<VersionRow[] | null>(null);
+  useEffect(() => { api<VersionRow[]>('GET', `/api/admin/surveys/${id}/versions`).then(setRows); }, [id]);
+  return (
+    <Modal onClose={onClose} title="История версий">
+      {!rows ? <p className="muted">Загрузка…</p> : rows.length === 0 ? <p className="muted">Опубликованных версий пока нет.</p> : (
+        <table className="table versions">
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.version}>
+                <td><strong>Версия {r.version}</strong>{r.version === current && <span className="badge active" style={{ marginLeft: 8 }}>сейчас в опросе</span>}</td>
+                <td className="muted">{new Date(r.publishedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                <td className="muted">вопросов: {r.questions}</td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <a className="btn-link" href={`/api/admin/surveys/${id}/versions/${r.version}`} download={`version-${r.version}.json`}>JSON</a>
+                  <button className="btn btn-secondary btn-sm" onClick={async () => {
+                    if (!window.confirm(`Заменить черновик версией ${r.version}? Текущий черновик можно будет вернуть через Ctrl+Z.`)) return;
+                    onRestore(r.version, await api<Survey>('GET', `/api/admin/surveys/${id}/versions/${r.version}`));
+                  }}>В черновик</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Modal>
   );
 }

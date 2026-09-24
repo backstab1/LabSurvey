@@ -186,7 +186,7 @@ function TextInput({ q, noPaste, answer, onChange }: { q: TextQuestion; noPaste:
   if (q.inputType === 'email') return <input className="input" type="email" inputMode="email" autoComplete="email" {...common} />;
   return (
     <div>
-      {q.multiline ? <textarea className="input" rows={4} {...common} /> : <input className="input" {...common} />}
+      {q.multiline ? <textarea className="input" rows={q.rows ?? 4} {...common} /> : <input className="input" {...common} />}
       {q.maxLength && <div className="counter">{value.length} / {q.maxLength}</div>}
     </div>
   );

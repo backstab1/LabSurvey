@@ -355,6 +355,7 @@ function validateQuestion(
       if (q.maxLength !== undefined && (!isInt(q.maxLength) || q.maxLength < 1)) err(w, 'maxLength: целое ≥ 1');
       if (q.inputType !== undefined && !['text', 'email', 'time'].includes(q.inputType)) err(w, 'inputType: text, email или time');
       if (q.minLength !== undefined && (!isInt(q.minLength) || q.minLength < 1)) err(w, 'minLength: целое ≥ 1');
+      if (q.rows !== undefined && (!isInt(q.rows) || q.rows < 2 || q.rows > 20)) err(w, 'rows: от 2 до 20');
       if (isInt(q.minLength) && isInt(q.maxLength) && q.minLength > q.maxLength) err(w, 'minLength больше maxLength');
       if (q.pattern !== undefined) {
         if (typeof q.pattern !== 'string' || !q.pattern) err(w, 'pattern: регулярное выражение');

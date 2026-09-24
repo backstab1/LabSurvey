@@ -51,6 +51,9 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS responses_survey ON responses(survey_id, is_test, status);
 `);
+// Добавленные позже столбцы
+const surveyCols = (db.prepare('PRAGMA table_info(surveys)').all() as { name: string }[]).map((c) => c.name);
+if (!surveyCols.includes('archived')) db.exec('ALTER TABLE surveys ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
 
 export type SurveyStatus = 'draft' | 'active' | 'closed';
 
@@ -73,8 +76,16 @@ export interface SurveyRow {
   version: number;
   status: SurveyStatus;
   sheets: SheetsConfig | null;
+  /** В архиве: скрыта из основного списка, сбор закрыт */
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SurveyVersion {
+  version: number;
+  publishedAt: string;
+  questions: number;
 }
 
 export interface StoredResponse extends ResponseRecord {
@@ -105,6 +116,7 @@ function toSurvey(r: Row): SurveyRow {
     version: r.version as number,
     status: r.status as SurveyStatus,
     sheets: r.sheets ? JSON.parse(r.sheets as string) : null,
+    archived: r.archived === 1,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -132,7 +144,7 @@ function toResponse(r: Row): StoredResponse {
 
 export const surveys = {
   async list(): Promise<(Omit<SurveyRow, 'draft' | 'published'> & { counts: Record<string, number> })[]> {
-    const rows = db.prepare('SELECT id, title, version, status, sheets, created_at, updated_at FROM surveys ORDER BY updated_at DESC').all() as Row[];
+    const rows = db.prepare('SELECT id, title, version, status, sheets, archived, created_at, updated_at FROM surveys ORDER BY updated_at DESC').all() as Row[];
     const counts = db.prepare(
       'SELECT survey_id, status, COUNT(*) AS n FROM responses WHERE is_test = 0 GROUP BY survey_id, status',
     ).all() as Row[];
@@ -141,7 +153,7 @@ export const surveys = {
       for (const x of counts) if (x.survey_id === r.id) c[x.status as string] = x.n as number;
       return {
         id: r.id as string, title: r.title as string, version: r.version as number, status: r.status as SurveyStatus,
-        sheets: r.sheets ? JSON.parse(r.sheets as string) : null,
+        sheets: r.sheets ? JSON.parse(r.sheets as string) : null, archived: r.archived === 1,
         createdAt: r.created_at as string, updatedAt: r.updated_at as string, counts: c,
       };
     });
@@ -184,6 +196,25 @@ export const surveys = {
 
   async setStatus(id: string, status: SurveyStatus): Promise<void> {
     db.prepare('UPDATE surveys SET status = ?, updated_at = ? WHERE id = ?').run(status, now(), id);
+  },
+
+  async setArchived(id: string, archived: boolean): Promise<void> {
+    // Архивная анкета не собирает ответы
+    db.prepare(`UPDATE surveys SET archived = ?, status = CASE WHEN ? = 1 AND status = 'active' THEN 'closed' ELSE status END WHERE id = ?`)
+      .run(archived ? 1 : 0, archived ? 1 : 0, id);
+  },
+
+  async versions(id: string): Promise<SurveyVersion[]> {
+    const rows = db.prepare('SELECT version, definition, published_at FROM survey_versions WHERE survey_id = ? ORDER BY version DESC').all(id) as Row[];
+    return rows.map((r) => {
+      const def = migrateSurvey(JSON.parse(r.definition as string)) as Survey;
+      return { version: r.version as number, publishedAt: r.published_at as string, questions: def.blocks.reduce((n, b) => n + b.questions.length, 0) };
+    });
+  },
+
+  async version(id: string, version: number): Promise<Survey | null> {
+    const r = db.prepare('SELECT definition FROM survey_versions WHERE survey_id = ? AND version = ?').get(id, version) as Row | undefined;
+    return r ? (migrateSurvey(JSON.parse(r.definition as string)) as Survey) : null;
   },
 
   async setSheets(id: string, sheets: SheetsConfig | null): Promise<void> {

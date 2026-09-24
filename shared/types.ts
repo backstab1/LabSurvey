@@ -159,6 +159,8 @@ export interface RankingQuestion extends ChoiceBase {
 export interface TextQuestion extends QuestionBase {
   type: 'text';
   multiline?: boolean;
+  /** Высота большого поля в строках (по умолчанию 4) */
+  rows?: number;
   maxLength?: number;
   /** text — обычный текст, email — адрес почты, time — время ЧЧ:ММ */
   inputType?: 'text' | 'email' | 'time';
