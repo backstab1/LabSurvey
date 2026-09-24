@@ -56,6 +56,10 @@ const surveyCols = (db.prepare('PRAGMA table_info(surveys)').all() as { name: st
 if (!surveyCols.includes('archived')) db.exec('ALTER TABLE surveys ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
 if (!surveyCols.includes('notify')) db.exec('ALTER TABLE surveys ADD COLUMN notify TEXT');
 const versionCols = (db.prepare('PRAGMA table_info(survey_versions)').all() as { name: string }[]).map((c) => c.name);
+const responseCols = (db.prepare('PRAGMA table_info(responses)').all() as { name: string }[]).map((c) => c.name);
+if (!responseCols.includes('ending')) db.exec('ALTER TABLE responses ADD COLUMN ending TEXT');
+if (!responseCols.includes('timings')) db.exec('ALTER TABLE responses ADD COLUMN timings TEXT');
+if (!responseCols.includes('rejected')) db.exec('ALTER TABLE responses ADD COLUMN rejected INTEGER NOT NULL DEFAULT 0');
 if (!versionCols.includes('published_by')) db.exec('ALTER TABLE survey_versions ADD COLUMN published_by TEXT');
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -122,6 +126,8 @@ export interface SurveyVersion {
 
 export interface StoredResponse extends ResponseRecord {
   surveyId: string;
+  /** Своё сообщение / редирект из сработавшего действия «Завершить» или «Отсеять» */
+  ending?: { message?: string; redirect?: string } | null;
   history: string[];
   currentPage: string | null;
   updatedAt: string;
@@ -172,6 +178,9 @@ function toResponse(r: Row): StoredResponse {
     updatedAt: r.updated_at as string,
     completedAt: (r.completed_at as string) ?? null,
     durationSec: (r.duration_sec as number) ?? null,
+    ending: r.ending ? JSON.parse(r.ending as string) : null,
+    timings: r.timings ? JSON.parse(r.timings as string) : {},
+    rejected: r.rejected === 1,
   };
 }
 
@@ -287,6 +296,8 @@ export const responses = {
   async update(id: string, patch: {
     answers?: Answers; history?: string[]; currentPage?: string | null; status?: ResponseStatus;
     completedAt?: string | null; durationSec?: number | null; version?: number;
+    ending?: { message?: string; redirect?: string } | null;
+    timings?: Record<string, number>; rejected?: boolean;
   }): Promise<void> {
     const sets: string[] = ['updated_at = ?'];
     const vals: (string | number | null)[] = [now()];
@@ -297,14 +308,23 @@ export const responses = {
     if (patch.completedAt !== undefined) { sets.push('completed_at = ?'); vals.push(patch.completedAt); }
     if (patch.durationSec !== undefined) { sets.push('duration_sec = ?'); vals.push(patch.durationSec); }
     if (patch.version !== undefined) { sets.push('version = ?'); vals.push(patch.version); }
+    if (patch.timings !== undefined) { sets.push('timings = ?'); vals.push(JSON.stringify(patch.timings)); }
+    if (patch.rejected !== undefined) { sets.push('rejected = ?'); vals.push(patch.rejected ? 1 : 0); }
+    if (patch.ending !== undefined) { sets.push('ending = ?'); vals.push(patch.ending ? JSON.stringify(patch.ending) : null); }
     vals.push(id);
     db.prepare(`UPDATE responses SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
   },
 
-  async list(surveyId: string, opts: { includeTest?: boolean; statuses?: ResponseStatus[] } = {}): Promise<StoredResponse[]> {
+  /** Ответы анкеты; бракованные — только с includeRejected, from / to — по времени начала (ISO) */
+  async list(surveyId: string, opts: {
+    includeTest?: boolean; statuses?: ResponseStatus[]; includeRejected?: boolean; from?: string; to?: string;
+  } = {}): Promise<StoredResponse[]> {
     let sql = 'SELECT * FROM responses WHERE survey_id = ?';
     const vals: (string | number)[] = [surveyId];
     if (!opts.includeTest) sql += ' AND is_test = 0';
+    if (!opts.includeRejected) sql += ' AND rejected = 0';
+    if (opts.from) { sql += ' AND started_at >= ?'; vals.push(opts.from); }
+    if (opts.to) { sql += ' AND started_at < ?'; vals.push(opts.to); }
     if (opts.statuses?.length) {
       sql += ` AND status IN (${opts.statuses.map(() => '?').join(',')})`;
       vals.push(...opts.statuses);
@@ -328,16 +348,19 @@ export const responses = {
     return r.n as number;
   },
 
-  async counts(surveyId: string): Promise<{ real: Record<string, number>; test: number }> {
-    const rows = db.prepare('SELECT is_test, status, COUNT(*) AS n FROM responses WHERE survey_id = ? GROUP BY is_test, status')
+  /** Счётчики по статусам; бракованные анкеты считаются отдельно (rejected) и в статусы не входят */
+  async counts(surveyId: string): Promise<{ real: Record<string, number>; test: number; rejected: number }> {
+    const rows = db.prepare('SELECT is_test, status, rejected, COUNT(*) AS n FROM responses WHERE survey_id = ? GROUP BY is_test, status, rejected')
       .all(surveyId) as Row[];
     const real: Record<string, number> = {};
     let test = 0;
+    let rejected = 0;
     for (const r of rows) {
       if (r.is_test === 1) test += r.n as number;
-      else real[r.status as string] = r.n as number;
+      else if (r.rejected === 1) rejected += r.n as number;
+      else real[r.status as string] = (real[r.status as string] ?? 0) + (r.n as number);
     }
-    return { real, test };
+    return { real, test, rejected };
   },
 
   async remove(id: string): Promise<void> {

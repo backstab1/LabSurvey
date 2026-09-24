@@ -240,6 +240,13 @@ export function validateSurvey(input: unknown): ValidationResult {
             else if (t <= pi) warn(where, 'Переход назад — возможен бесконечный цикл');
             break;
           }
+          case 'end':
+          case 'screenout':
+            if (a.message !== undefined && typeof a.message !== 'string') err(where, 'message: строка');
+            if (a.redirect !== undefined && (typeof a.redirect !== 'string' || !/^https?:\/\/\S+$/i.test(a.redirect))) {
+              err(where, 'redirect: адрес должен начинаться с http:// или https://');
+            }
+            break;
           case 'error':
             if (a.message !== undefined && typeof a.message !== 'string') err(where, 'message: строка');
             if (a.if === undefined) warn(where, 'Ошибка без условия не даст пройти вопрос');

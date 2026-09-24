@@ -396,6 +396,21 @@ export function nextPage(ctx: RespondentContext, pageId: string, onScan?: (p: Pa
   return firstVisibleFrom(ctx, idx + 1, onScan);
 }
 
+/** Действие «Завершить» / «Отсеять», которое сработало на экране (для своего сообщения и редиректа) */
+export function endingAction(ctx: RespondentContext, pageId: string): Action | null {
+  const page = findPage(ctx.survey, pageId);
+  if (!page) return null;
+  for (const q of page.questions) {
+    if (!isQuestionVisible(ctx, q)) continue;
+    for (const a of q.actions?.after ?? []) {
+      if ((a.do === 'goTo' || a.do === 'end' || a.do === 'screenout') && evalCondition(a.if, ctx)) {
+        return a.do === 'goTo' ? null : a;
+      }
+    }
+  }
+  return null;
+}
+
 /** Маршрут респондента с текущими ответами (для прогресса и очистки данных) */
 export function computePath(ctx: RespondentContext): { pages: string[]; end: string } {
   const seen = new Set<string>();

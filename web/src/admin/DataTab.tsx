@@ -10,7 +10,7 @@ import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts
 const EXPORT_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
 
 interface RespRow {
-  id: string; status: ResponseStatus; isTest: boolean; startedAt: string; completedAt: string | null;
+  id: string; status: ResponseStatus; isTest: boolean; rejected: boolean; startedAt: string; completedAt: string | null;
   durationSec: number | null; answered: number; params: Record<string, string>;
 }
 
@@ -32,8 +32,16 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
 
   useEffect(() => { api<RespRow[]>('GET', `/api/admin/surveys/${info.id}/responses`).then(setRecent); }, [info.id, info.counts]);
 
-  const exportUrl = (format: string, test = false) =>
-    `/api/admin/surveys/${info.id}/export.${format}?statuses=${statuses.join(',')}${test ? '&test=1' : ''}`;
+  const [opts, setOpts] = useState({ from: '', to: '', timings: false, rejected: false });
+  const exportUrl = (format: string, test = false) => {
+    const q = new URLSearchParams({ statuses: statuses.join(',') });
+    if (test) q.set('test', '1');
+    if (opts.from) q.set('from', opts.from);
+    if (opts.to) q.set('to', opts.to);
+    if (opts.timings) q.set('timings', '1');
+    if (opts.rejected) q.set('rejected', '1');
+    return `/api/admin/surveys/${info.id}/export.${format}?${q}`;
+  };
 
   return (
     <div className="stack">
@@ -43,6 +51,7 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
         {(info.counts.real.overquota ?? 0) > 0 && <div className="card"><div className="stat">{info.counts.real.overquota}</div><div className="stat-label">Сверх квоты</div></div>}
         <div className="card"><div className="stat">{info.counts.real.terminated ?? 0}</div><div className="stat-label">Досрочно</div></div>
         <div className="card"><div className="stat">{info.counts.real.in_progress ?? 0}</div><div className="stat-label">В процессе / бросили</div></div>
+        {info.counts.rejected > 0 && <div className="card"><div className="stat">{info.counts.rejected}</div><div className="stat-label">Брак</div></div>}
         <div className="card"><div className="stat">{total}</div><div className="stat-label">Всего начали</div></div>
       </div>
 
@@ -76,9 +85,20 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
             </label>
           ))}
         </div>
+        <div className="row export-opts">
+          <label className="row" style={{ gap: 6 }}><span className="muted small">начало с</span>
+            <input className="input" type="date" value={opts.from} onChange={(e) => setOpts({ ...opts, from: e.target.value })} /></label>
+          <label className="row" style={{ gap: 6 }}><span className="muted small">по</span>
+            <input className="input" type="date" value={opts.to} onChange={(e) => setOpts({ ...opts, to: e.target.value })} /></label>
+          <label className="check"><input type="checkbox" checked={opts.timings} onChange={(e) => setOpts({ ...opts, timings: e.target.checked })} />Время на каждом вопросе (t_Q1…)</label>
+          {info.counts.rejected > 0 && (
+            <label className="check"><input type="checkbox" checked={opts.rejected} onChange={(e) => setOpts({ ...opts, rejected: e.target.checked })} />Включая брак</label>
+          )}
+        </div>
         <div className="row">
           <a className="btn btn-primary" href={exportUrl('xlsx')}>Excel (.xlsx)</a>
           <a className="btn btn-primary" href={exportUrl('sav')}>SPSS (.sav)</a>
+          <a className="btn btn-secondary" href={exportUrl('csv')}>CSV</a>
           <a className="btn btn-secondary" href={`/api/admin/surveys/${info.id}/export.json`}>Анкета (.json)</a>
         </div>
         <p className="muted" style={{ margin: 0, fontSize: 14 }}>
@@ -131,9 +151,9 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
             <thead><tr><th>ID</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Время</th><th>Ответов</th><th>Параметры</th></tr></thead>
             <tbody>
               {recent.filter((r) => showTest || !r.isTest).slice(0, 100).map((r) => (
-                <tr key={r.id} className="clickable" onClick={() => setViewing(r.id)} title="Открыть ответ">
+                <tr key={r.id} className={`clickable${r.rejected ? ' muted' : ''}`} onClick={() => setViewing(r.id)} title="Открыть ответ">
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{r.id}</td>
-                  <td>{STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}</td>
+                  <td>{STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}{r.rejected && <span className="badge closed">брак</span>}</td>
                   <td>{fmt(r.startedAt)}</td>
                   <td>{fmt(r.completedAt)}</td>
                   <td>
@@ -149,15 +169,18 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
           </table>
         )}
       </div>
-      {viewing && <ResponseModal surveyId={info.id} rid={viewing} onClose={() => setViewing(null)} onDeleted={() => { setViewing(null); refresh(); }} />}
+      {viewing && <ResponseModal surveyId={info.id} rid={viewing} onClose={() => setViewing(null)} onDeleted={() => { setViewing(null); refresh(); }} onChanged={refresh} />}
     </div>
   );
 }
 
 /** Просмотр одного ответа: вопросы, которые видел респондент, и его ответы */
-function ResponseModal({ surveyId, rid, onClose, onDeleted }: { surveyId: string; rid: string; onClose: () => void; onDeleted: () => void }) {
-  const [data, setData] = useState<{ response: RespRow & { answers: Answers; history: string[] }; survey: Survey } | null>(null);
-  useEffect(() => { api('GET', `/api/admin/surveys/${surveyId}/responses/${rid}`).then(setData); }, [surveyId, rid]);
+function ResponseModal({ surveyId, rid, onClose, onDeleted, onChanged }: {
+  surveyId: string; rid: string; onClose: () => void; onDeleted: () => void; onChanged: () => void;
+}) {
+  const [data, setData] = useState<{ response: RespRow & { answers: Answers; history: string[]; timings?: Record<string, number> }; survey: Survey } | null>(null);
+  const load = () => api('GET', `/api/admin/surveys/${surveyId}/responses/${rid}`).then(setData);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [surveyId, rid]);
   if (!data) return <Modal onClose={onClose} title="Ответ">Загрузка…</Modal>;
   const { response: r, survey } = data;
   const ctx = { survey, answers: r.answers, params: r.params, seed: r.id };
@@ -165,6 +188,13 @@ function ResponseModal({ surveyId, rid, onClose, onDeleted }: { surveyId: string
   return (
     <Modal onClose={onClose} title={<>Ответ <span className="mono muted" style={{ fontWeight: 400, fontSize: 14 }}>{r.id}</span></>}
       actions={<>
+        <button className="btn btn-secondary btn-sm" title="Бракованная анкета не считается в квотах, лимите, отчёте и выгрузке (выгрузить можно отдельно)"
+          onClick={async () => {
+            await api('POST', `/api/admin/surveys/${surveyId}/responses/${rid}/reject`, { rejected: !r.rejected });
+            await load();
+            onChanged();
+            toast(r.rejected ? 'Брак снят' : 'Анкета помечена как брак');
+          }}>{r.rejected ? 'Снять брак' : 'Забраковать'}</button>
         <button className="btn btn-danger btn-sm" onClick={async () => {
           if (!window.confirm('Удалить этот ответ? Это нельзя отменить.')) return;
           await api('DELETE', `/api/admin/surveys/${surveyId}/responses/${rid}`);
@@ -189,6 +219,9 @@ function ResponseModal({ surveyId, rid, onClose, onDeleted }: { surveyId: string
                   <td style={{ verticalAlign: 'top' }}>
                     <div className="muted small">{rich(pipe(q.text, ctx))}</div>
                     <div>{answerText(ctx, q) || '—'}</div>
+                  </td>
+                  <td className="muted small" style={{ width: 60, textAlign: 'right', verticalAlign: 'top' }} title="Время на вопросе">
+                    {r.timings?.[q.id] !== undefined ? `${r.timings[q.id]} с` : ''}
                   </td>
                 </tr>
               ))}

@@ -199,6 +199,14 @@ function ActionRow({ def, q, a, kinds, onChange, onCreateVar, tools }: {
           </select>
         </div>
       )}
+      {(a.do === 'end' || a.do === 'screenout') && (
+        <div className="action-params ending-params">
+          <input className="input" placeholder="Своё сообщение (необязательно, иначе — из настроек)" value={a.message ?? ''}
+            onChange={(e) => set({ message: e.target.value || undefined })} />
+          <input className="input mono" placeholder="или адрес перехода: https://…?pid={{param.pid}}" value={a.redirect ?? ''}
+            onChange={(e) => set({ redirect: e.target.value.trim() || undefined })} />
+        </div>
+      )}
       {a.do === 'error' && (
         <div className="action-params">
           <input className="input" placeholder="Текст ошибки для респондента" value={a.message ?? ''} onChange={(e) => set({ message: e.target.value || undefined })} />

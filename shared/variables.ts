@@ -32,6 +32,10 @@ export interface ResponseRecord {
   userAgent: string | null;
   isTest: boolean;
   version: number;
+  /** Секунды на каждом вопросе (экране) */
+  timings?: Record<string, number>;
+  /** Анкета забракована командой */
+  rejected?: boolean;
 }
 
 export type Cell = number | string | Date | null;
@@ -67,7 +71,7 @@ function toDate(iso: string | null): Date | null {
   return iso ? new Date(iso) : null;
 }
 
-export function buildVariables(survey: Survey, responses: ResponseRecord[]): VarDef[] {
+export function buildVariables(survey: Survey, responses: ResponseRecord[], opts: { timings?: boolean } = {}): VarDef[] {
   const vars: VarDef[] = [];
   const used = new Set<string>();
   const add = (v: VarDef) => {
@@ -97,6 +101,12 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[]): Var
   add({ name: 'ip', label: 'IP-адрес', kind: 'string', measure: 'nominal', get: (r) => r.ip });
   add({ name: 'user_agent', label: 'Браузер (User-Agent)', kind: 'string', measure: 'nominal', get: (r) => r.userAgent });
   add({ name: 'version', label: 'Версия анкеты', kind: 'numeric', measure: 'nominal', get: (r) => r.version });
+  if (responses.some((r) => r.rejected)) {
+    add({
+      name: 'rejected', label: 'Брак', kind: 'numeric', measure: 'nominal',
+      valueLabels: [{ value: 0, label: 'Нет' }, { value: 1, label: 'Да' }], get: (r) => (r.rejected ? 1 : 0),
+    });
+  }
 
   // Параметры ссылки (utm_source, src, ...) — по всем ответам
   const paramKeys = [...new Set(responses.flatMap((r) => Object.keys(r.params ?? {})))].sort();
@@ -245,6 +255,16 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[]): Var
         case 'info':
           break;
       }
+    }
+  }
+  // Тайминги: секунды на каждом экране (t_Q1), по желанию при выгрузке
+  if (opts.timings) {
+    for (const q of survey.blocks.flatMap((b) => b.questions)) {
+      if (q.type === 'hidden') continue;
+      add({
+        name: `t_${q.id}`, label: `Время на ${q.id}, сек`, kind: 'numeric', measure: 'scale',
+        get: (r) => r.timings?.[q.id] ?? null,
+      });
     }
   }
   return vars;

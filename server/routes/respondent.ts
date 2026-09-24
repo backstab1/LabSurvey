@@ -7,7 +7,7 @@ import { queueResponseSync } from '../sheets.ts';
 import { fullQuota, noteCompleted } from '../quotas.ts';
 import { afterComplete } from '../notify.ts';
 import {
-  actionError, allQuestions, cleanAnswers, findPage, firstPage, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
+  actionError, allQuestions, cleanAnswers, endingAction, findPage, firstPage, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
 } from '../../shared/logic.ts';
 import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
 import { END, SCREENOUT, settingsOf, type Answer, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
@@ -58,10 +58,13 @@ export function publicSurvey(survey: Survey): Survey {
 
 function finished(survey: Survey, r: StoredResponse): { message: string; redirect?: string } {
   const st = settingsOf(survey);
-  const [message, redirect] = r.status === 'screened_out' ? [st.screenoutMessage, st.redirectScreenout]
+  let [message, redirect] = r.status === 'screened_out' ? [st.screenoutMessage, st.redirectScreenout]
     : r.status === 'terminated' ? [st.earlyFinishMessage, st.redirectEarlyFinish]
       : r.status === 'overquota' ? [st.overquotaMessage, st.redirectOverquota]
       : [st.completeMessage, st.redirectComplete];
+  // Своё сообщение и адрес у сработавшего действия важнее общих
+  if (r.ending?.message) message = r.ending.message;
+  if (r.ending?.redirect) redirect = r.ending.redirect;
   const ctx = ctxOf(survey, r, r.answers);
   return { message: pipe(message, ctx), redirect: redirect ? pipeUrl(redirect, ctx, r.id) : undefined };
 }
@@ -156,11 +159,14 @@ function mergePage(stored: Answers, page: { questions: { id: string; type: strin
   return { ...out, ...pageAnswers };
 }
 
-async function finalize(survey: Survey, r: StoredResponse, answers: Answers, visited: string[], status: ResponseStatus) {
+async function finalize(
+  survey: Survey, r: StoredResponse, answers: Answers, visited: string[], status: ResponseStatus,
+  ending: { message?: string; redirect?: string } | null = null,
+) {
   const completedAt = new Date();
   const final = cleanAnswers(ctxOf(survey, r, answers), visited);
   await responses.update(r.id, {
-    answers: final, history: visited, currentPage: null, status,
+    answers: final, history: visited, currentPage: null, status, ending,
     completedAt: completedAt.toISOString(),
     durationSec: Math.round((completedAt.getTime() - new Date(r.startedAt).getTime()) / 1000),
   });
@@ -294,6 +300,10 @@ export async function respondentRoutes(app: FastifyInstance) {
 
       const answers = mergePage(r.answers, page, pageAnswers);
       const visited = [...r.history, page.id];
+      // Время на экране: с момента его показа (последнее обновление сессии), при возврате — суммируется
+      const spent = Math.min(3600, Math.max(0, Math.round((Date.now() - Date.parse(r.updatedAt)) / 1000)));
+      const timings = { ...r.timings, [page.id]: (r.timings?.[page.id] ?? 0) + spent };
+      await responses.update(r.id, { timings });
       // Навигация — по ответам с учётом действий «после ответа» (переменные)
       const nav = ctxOf(survey, r, cleanAnswers(ctxOf(survey, r, answers), visited));
       const next = nextPage(nav, page.id);
@@ -301,7 +311,9 @@ export async function respondentRoutes(app: FastifyInstance) {
       if (next !== SCREENOUT && (await fullQuota(r.surveyId, survey, r.isTest, nav))) {
         await finalize(survey, r, answers, visited, 'overquota');
       } else if (next === END || next === SCREENOUT) {
-        await finalize(survey, r, answers, visited, next === END ? 'completed' : 'screened_out');
+        const act = endingAction(nav, page.id);
+        const ending = act && (act.message || act.redirect) ? { message: act.message, redirect: act.redirect } : null;
+        await finalize(survey, r, answers, visited, next === END ? 'completed' : 'screened_out', ending);
       } else {
         await responses.update(r.id, { answers, history: visited, currentPage: next });
       }

@@ -4,7 +4,7 @@ import {
   requireAdminRole, requireUser, setSession, testToken,
 } from '../auth.ts';
 import { responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig, type SurveyStatus } from '../db.ts';
-import { buildTable } from '../export/table.ts';
+import { buildTable, cellToText } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
 import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
@@ -242,6 +242,14 @@ export async function adminRoutes(app: FastifyInstance) {
       return { response: r, survey: r.isTest ? s.draft : s.published ?? s.draft };
     });
 
+    priv.post<{ Params: { id: string; rid: string }; Body: { rejected: boolean } }>('/api/admin/surveys/:id/responses/:rid/reject', async (req, reply) => {
+      const r = await responses.get(req.params.rid);
+      if (!r || r.surveyId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
+      await responses.update(r.id, { rejected: !!req.body?.rejected });
+      resetQuotas(r.surveyId);
+      return { ok: true };
+    });
+
     priv.delete<{ Params: { id: string; rid: string } }>('/api/admin/surveys/:id/responses/:rid', async (req, reply) => {
       const r = await responses.get(req.params.rid);
       if (!r || r.surveyId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
@@ -251,9 +259,9 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     priv.get<{ Params: { id: string } }>('/api/admin/surveys/:id/responses', async (req) => {
-      const list = await responses.list(req.params.id, { includeTest: true });
+      const list = await responses.list(req.params.id, { includeTest: true, includeRejected: true });
       return list.slice(-200).reverse().map((r) => ({
-        id: r.id, status: r.status, isTest: r.isTest, startedAt: r.startedAt, completedAt: r.completedAt,
+        id: r.id, status: r.status, isTest: r.isTest, rejected: r.rejected, startedAt: r.startedAt, completedAt: r.completedAt,
         durationSec: r.durationSec, answered: Object.keys(r.answers).length, params: r.params,
       }));
     });
@@ -279,16 +287,21 @@ export async function adminRoutes(app: FastifyInstance) {
       return buildReport(def, all.filter((r) => statuses.includes(r.status)), unfinished);
     });
 
-    priv.get<{ Params: { id: string; format: string }; Querystring: { statuses?: string; test?: string } }>(
+    priv.get<{ Params: { id: string; format: string }; Querystring: { statuses?: string; test?: string; from?: string; to?: string; timings?: string; rejected?: string } }>(
       '/api/admin/surveys/:id/export.:format',
       async (req, reply) => {
         const s = await surveys.get(req.params.id);
         if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
         const def = req.query.test === '1' ? s.draft : s.published ?? s.draft;
         const statuses = (req.query.statuses?.split(',').filter((x) => ALL_STATUSES.includes(x as ResponseStatus)) ?? ['completed']) as ResponseStatus[];
-        const list = (await responses.list(s.id, { includeTest: req.query.test === '1', statuses }))
-          .filter((r) => (req.query.test === '1' ? r.isTest : !r.isTest));
-        const table = buildTable(def, list);
+        // Даты — дни в формате YYYY-MM-DD (по UTC-границам суток сервера); to — включительно
+        const day = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined);
+        const from = day(req.query.from) ? `${req.query.from}T00:00:00` : undefined;
+        const to = day(req.query.to) ? new Date(Date.parse(`${req.query.to}T00:00:00Z`) + 86400_000).toISOString().slice(0, 19) : undefined;
+        const list = (await responses.list(s.id, {
+          includeTest: req.query.test === '1', statuses, includeRejected: req.query.rejected === '1', from, to,
+        })).filter((r) => (req.query.test === '1' ? r.isTest : !r.isTest));
+        const table = buildTable(def, list, { timings: req.query.timings === '1' });
         const date = new Date().toISOString().slice(0, 10);
         const base = `${def.title.slice(0, 60)}_${date}${req.query.test === '1' ? '_test' : ''}`;
         if (req.params.format === 'xlsx') {
@@ -301,11 +314,20 @@ export async function adminRoutes(app: FastifyInstance) {
           reply.header('Content-Disposition', attachment(`${base}.sav`));
           return reply.send(writeSav(table.vars, table.rows, def.title));
         }
+        if (req.params.format === 'csv') {
+          // Для русского Excel: разделитель «;» и BOM, значения — коды
+          const esc = (x: string) => (/[;"\n\r]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x);
+          const lines = [table.vars.map((v) => v.name), ...table.rows.map((row) => row.map((c, i) => cellToText(table.vars[i], c)))]
+            .map((row) => row.map((x) => esc(String(x ?? ''))).join(';'));
+          reply.header('Content-Type', 'text/csv; charset=utf-8');
+          reply.header('Content-Disposition', attachment(`${base}.csv`));
+          return reply.send('\ufeff' + lines.join('\r\n'));
+        }
         if (req.params.format === 'json') {
           reply.header('Content-Disposition', attachment(`${def.title.slice(0, 60)}.json`));
           return reply.send(JSON.stringify(s.draft, null, 2));
         }
-        return reply.code(400).send({ error: 'Формат: xlsx, sav или json' });
+        return reply.code(400).send({ error: 'Формат: xlsx, sav, csv или json' });
       },
     );
 

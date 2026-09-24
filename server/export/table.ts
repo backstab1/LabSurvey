@@ -20,8 +20,8 @@ export interface Table {
   rows: Cell[][];
 }
 
-export function buildTable(survey: Survey, responses: ResponseRecord[]): Table {
-  const vars = buildVariables(survey, responses);
+export function buildTable(survey: Survey, responses: ResponseRecord[], opts: { timings?: boolean } = {}): Table {
+  const vars = buildVariables(survey, responses, opts);
   const rows = responses.map((r) =>
     vars.map((v) => {
       const cell = v.get(r);

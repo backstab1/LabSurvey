@@ -60,3 +60,46 @@ test('roles: admin manages users, editor edits, viewer only reads', async () => 
   assert.equal((await anna2('PUT', '/api/admin/users/anna', { role: 'viewer' })).status, 400);
   assert.equal((await anna2('DELETE', '/api/admin/users/vova')).status, 200);
 });
+
+test('timings, reject, CSV and date filter in exports; per-branch endings', async () => {
+  const admin = as(await login('admin', 'secret'));
+  const def = {
+    formatVersion: 2, title: 'Данные',
+    blocks: [{ id: 'B1', questions: [
+      { id: 'A', type: 'single', text: 'Возраст', options: [{ code: 1, text: 'до 18' }, { code: 2, text: '18+' }],
+        actions: { after: [{ if: { q: 'A', op: 'eq', value: 1 }, do: 'screenout', message: 'Опрос для взрослых', redirect: 'https://p.example/young' }] } },
+      { id: 'B', type: 'text', text: 'Комментарий; с разделителем' },
+    ] }],
+  };
+  const sid = (await admin('POST', '/api/admin/surveys', { definition: def })).json.id;
+  await admin('POST', `/api/admin/surveys/${sid}/publish`);
+  const resp = as('');
+  let st = (await resp('POST', `/api/s/${sid}/start`, {})).json;
+  st = (await resp('POST', `/api/s/${sid}/submit`, { rid: st.rid, page: 'A', answers: { A: { v: 1 } } })).json;
+  assert.equal(st.status, 'screened_out');
+  assert.equal(st.message, 'Опрос для взрослых');
+  assert.equal(st.redirect, 'https://p.example/young');
+
+  const ok = (await resp('POST', `/api/s/${sid}/start`, {})).json;
+  await resp('POST', `/api/s/${sid}/submit`, { rid: ok.rid, page: 'A', answers: { A: { v: 2 } } });
+  await resp('POST', `/api/s/${sid}/submit`, { rid: ok.rid, page: 'B', answers: { B: { v: 'да; "нет"' } } });
+
+  const csv = await app.inject({ method: 'GET', url: `/api/admin/surveys/${sid}/export.csv?timings=1`, headers: { cookie: (await login('admin', 'secret')) } });
+  const text = csv.body.replace(/^\ufeff/, '');
+  const [head, row] = text.split('\r\n');
+  assert.ok(head.split(';').includes('t_A'));
+  assert.ok(row.includes('"да; ""нет"""'));
+
+  // Брак: не считается и не выгружается по умолчанию
+  await admin('POST', `/api/admin/surveys/${sid}/responses/${ok.rid}/reject`, { rejected: true });
+  const info = (await admin('GET', `/api/admin/surveys/${sid}`)).json;
+  assert.equal(info.counts.real.completed, undefined);
+  assert.equal(info.counts.rejected, 1);
+  const cookie = await login('admin', 'secret');
+  const without = await app.inject({ method: 'GET', url: `/api/admin/surveys/${sid}/export.csv`, headers: { cookie } });
+  assert.equal(without.body.split('\r\n').length, 1);
+  const withRejected = await app.inject({ method: 'GET', url: `/api/admin/surveys/${sid}/export.csv?rejected=1`, headers: { cookie } });
+  assert.equal(withRejected.body.split('\r\n').length, 2);
+  const future = await app.inject({ method: 'GET', url: `/api/admin/surveys/${sid}/export.csv?rejected=1&from=2099-01-01`, headers: { cookie } });
+  assert.equal(future.body.split('\r\n').length, 1);
+});

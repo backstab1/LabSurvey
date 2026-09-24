@@ -6,7 +6,7 @@ const REF_KEYS = new Set(['q', 'question', 'target', 'goTo']);
 /** Поля с текстом, где могут быть подстановки {{ID}} */
 const TEXT_KEYS = new Set([
   'text', 'hint', 'title', 'value', 'message', 'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'overquotaMessage',
-  'redirectComplete', 'redirectScreenout', 'redirectEarlyFinish', 'redirectOverquota',
+  'redirectComplete', 'redirectScreenout', 'redirectEarlyFinish', 'redirectOverquota', 'redirect',
 ]);
 /** Поля со скриптами: там ID встречается в кавычках — sl.get('Q1') */
 const SCRIPT_KEYS = new Set(['init', 'onShow', 'onChange', 'validate']);

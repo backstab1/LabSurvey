@@ -94,7 +94,10 @@ export interface Action {
   target?: string;
   /** Для setValue строка может содержать подстановки {{Q1}} */
   value?: number | string | number[];
+  /** error — текст ошибки; end / screenout — своё финальное сообщение для этой ветки */
   message?: string;
+  /** end / screenout — свой адрес перехода для этой ветки (вместо общего из настроек) */
+  redirect?: string;
 }
 
 export interface QuestionActions {

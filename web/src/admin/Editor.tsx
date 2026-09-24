@@ -22,7 +22,7 @@ export interface SurveyInfo {
   status: 'draft' | 'active' | 'closed';
   archived: boolean;
   sheets: any;
-  counts: { real: Record<string, number>; test: number };
+  counts: { real: Record<string, number>; test: number; rejected: number };
   sheetsAccount: { configured: boolean; email: string | null };
   testToken: string;
   quotas: { id: string; title?: string; limit: number; count: number }[];
