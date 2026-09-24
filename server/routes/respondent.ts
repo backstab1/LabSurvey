@@ -5,6 +5,7 @@ import { config } from '../config.ts';
 import { responses, surveys, type StoredResponse, type SurveyRow } from '../db.ts';
 import { queueResponseSync } from '../sheets.ts';
 import { fullQuota, noteCompleted } from '../quotas.ts';
+import { afterComplete } from '../notify.ts';
 import {
   actionError, allQuestions, cleanAnswers, findPage, firstPage, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
 } from '../../shared/logic.ts';
@@ -163,7 +164,15 @@ async function finalize(survey: Survey, r: StoredResponse, answers: Answers, vis
     completedAt: completedAt.toISOString(),
     durationSec: Math.round((completedAt.getTime() - new Date(r.startedAt).getTime()) / 1000),
   });
-  if (status === 'completed') noteCompleted(r.surveyId, survey, r.isTest, ctxOf(survey, r, final));
+  if (status === 'completed') {
+    noteCompleted(r.surveyId, survey, r.isTest, ctxOf(survey, r, final));
+    // Уведомления — в фоне, респондент не ждёт
+    if (!r.isTest) {
+      responses.get(r.id)
+        .then((saved) => saved && afterComplete(r.surveyId, survey, saved, ctxOf(survey, saved, final)))
+        .catch((e) => console.error('Уведомление не отправлено:', e));
+    }
+  }
   if (!r.isTest) queueResponseSync(r.surveyId, r.id);
 }
 

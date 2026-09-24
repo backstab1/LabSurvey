@@ -54,6 +54,7 @@ db.exec(`
 // Добавленные позже столбцы
 const surveyCols = (db.prepare('PRAGMA table_info(surveys)').all() as { name: string }[]).map((c) => c.name);
 if (!surveyCols.includes('archived')) db.exec('ALTER TABLE surveys ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
+if (!surveyCols.includes('notify')) db.exec('ALTER TABLE surveys ADD COLUMN notify TEXT');
 
 export type SurveyStatus = 'draft' | 'active' | 'closed';
 
@@ -68,6 +69,18 @@ export interface SheetsConfig {
   lastError?: string | null;
 }
 
+/** Уведомления о ходе сбора: вебхук и/или Telegram */
+export interface NotifyConfig {
+  webhookUrl?: string;
+  telegramChatId?: string;
+  /** Сообщать о каждой N-й завершённой анкете (1 — о каждой); 0 или пусто — нет */
+  everyN?: number;
+  quotaFull?: boolean;
+  limitReached?: boolean;
+  lastError?: string | null;
+  lastSentAt?: string;
+}
+
 export interface SurveyRow {
   id: string;
   title: string;
@@ -78,6 +91,7 @@ export interface SurveyRow {
   sheets: SheetsConfig | null;
   /** В архиве: скрыта из основного списка, сбор закрыт */
   archived: boolean;
+  notify: NotifyConfig | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,6 +131,7 @@ function toSurvey(r: Row): SurveyRow {
     status: r.status as SurveyStatus,
     sheets: r.sheets ? JSON.parse(r.sheets as string) : null,
     archived: r.archived === 1,
+    notify: r.notify ? JSON.parse(r.notify as string) : null,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -143,7 +158,7 @@ function toResponse(r: Row): StoredResponse {
 }
 
 export const surveys = {
-  async list(): Promise<(Omit<SurveyRow, 'draft' | 'published'> & { counts: Record<string, number> })[]> {
+  async list(): Promise<(Omit<SurveyRow, 'draft' | 'published' | 'notify'> & { counts: Record<string, number> })[]> {
     const rows = db.prepare('SELECT id, title, version, status, sheets, archived, created_at, updated_at FROM surveys ORDER BY updated_at DESC').all() as Row[];
     const counts = db.prepare(
       'SELECT survey_id, status, COUNT(*) AS n FROM responses WHERE is_test = 0 GROUP BY survey_id, status',
@@ -215,6 +230,10 @@ export const surveys = {
   async version(id: string, version: number): Promise<Survey | null> {
     const r = db.prepare('SELECT definition FROM survey_versions WHERE survey_id = ? AND version = ?').get(id, version) as Row | undefined;
     return r ? (migrateSurvey(JSON.parse(r.definition as string)) as Survey) : null;
+  },
+
+  async setNotify(id: string, notify: NotifyConfig | null): Promise<void> {
+    db.prepare('UPDATE surveys SET notify = ? WHERE id = ?').run(notify ? JSON.stringify(notify) : null, id);
   },
 
   async setSheets(id: string, sheets: SheetsConfig | null): Promise<void> {

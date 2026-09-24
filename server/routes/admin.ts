@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { checkPassword, clearSession, isAdmin, loginBlocked, loginFailed, requireAdmin, setSession, testToken } from '../auth.ts';
-import { responses, surveys, type SheetsConfig, type SurveyStatus } from '../db.ts';
+import { responses, surveys, type NotifyConfig, type SheetsConfig, type SurveyStatus } from '../db.ts';
 import { buildTable } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
 import { writeSav } from '../export/sav.ts';
@@ -8,6 +8,7 @@ import { queueFullSync, sheetsStatus } from '../sheets.ts';
 import { simulate } from '../simulate.ts';
 import { quotaCounts, resetQuotas } from '../quotas.ts';
 import { buildReport } from '../../shared/report.ts';
+import { send, telegramConfigured } from '../notify.ts';
 import { validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
 import type { Condition, Survey } from '../../shared/types.ts';
@@ -78,7 +79,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const live = s.published;
       const counts = live?.quotas?.length ? await quotaCounts(s.id, live, false) : null;
       const quotas = (live?.quotas ?? []).map((q) => ({ id: q.id, title: q.title, limit: q.limit, count: counts?.get(q.id) ?? 0 }));
-      return { ...s, counts: await responses.counts(s.id), sheetsAccount: sheetsStatus(), testToken: testToken(s.id), quotas };
+      return { ...s, counts: await responses.counts(s.id), sheetsAccount: sheetsStatus(), testToken: testToken(s.id), quotas, telegramConfigured: telegramConfigured() };
     });
 
     priv.put<{ Params: { id: string }; Body: { definition: unknown } }>('/api/admin/surveys/:id', async (req, reply) => {
@@ -234,6 +235,29 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'Формат: xlsx, sav или json' });
       },
     );
+
+    priv.put<{ Params: { id: string }; Body: Partial<NotifyConfig> | null }>('/api/admin/surveys/:id/notify', async (req, reply) => {
+      const s = await surveys.get(req.params.id);
+      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
+      const b = req.body ?? {};
+      const webhookUrl = String(b.webhookUrl ?? '').trim() || undefined;
+      if (webhookUrl && !/^https?:\/\/\S+$/i.test(webhookUrl)) return reply.code(400).send({ error: 'Адрес вебхука должен начинаться с http:// или https://' });
+      const telegramChatId = String(b.telegramChatId ?? '').trim() || undefined;
+      if (telegramChatId && !/^(-?\d+|@\w{4,})$/.test(telegramChatId)) return reply.code(400).send({ error: 'ID чата Telegram: число (например, -1001234567890) или @имя_канала' });
+      const everyN = Math.max(0, Math.round(Number(b.everyN) || 0)) || undefined;
+      const cfg: NotifyConfig | null = webhookUrl || telegramChatId
+        ? { webhookUrl, telegramChatId, everyN, quotaFull: !!b.quotaFull, limitReached: !!b.limitReached, lastError: s.notify?.lastError ?? null, lastSentAt: s.notify?.lastSentAt }
+        : null;
+      await surveys.setNotify(s.id, cfg);
+      return { ok: true, notify: cfg };
+    });
+
+    priv.post<{ Params: { id: string } }>('/api/admin/surveys/:id/notify/test', async (req, reply) => {
+      const s = await surveys.get(req.params.id);
+      if (!s?.notify) return reply.code(400).send({ error: 'Сначала сохраните вебхук или чат Telegram' });
+      const error = await send(s.id, s.published?.title ?? s.title, s.notify, { kind: 'test' });
+      return error ? reply.code(502).send({ error }) : { ok: true };
+    });
 
     priv.put<{ Params: { id: string }; Body: Partial<SheetsConfig> | null }>('/api/admin/surveys/:id/sheets', async (req, reply) => {
       const s = await surveys.get(req.params.id);

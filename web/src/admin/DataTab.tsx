@@ -87,6 +87,7 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
       </div>
 
       <SheetsCard info={info} reload={reload} />
+      <NotifyCard info={info} reload={reload} />
 
       <div className="card stack">
         <div className="row">
@@ -275,6 +276,80 @@ function SheetsCard({ info, reload }: { info: SurveyInfo; reload: () => Promise<
             await reload();
           }
         }}>{busy ? 'Выгрузка…' : 'Полная синхронизация'}</button>
+      </div>
+    </div>
+  );
+}
+
+/** Уведомления: вебхук (JSON) и Telegram — о завершённых анкетах, набранных квотах и лимите */
+function NotifyCard({ info, reload }: { info: SurveyInfo; reload: () => Promise<unknown> }) {
+  const cfg = info.notify;
+  const [form, setForm] = useState({
+    webhookUrl: cfg?.webhookUrl ?? '', telegramChatId: cfg?.telegramChatId ?? '',
+    everyN: cfg?.everyN ?? 0, quotaFull: cfg?.quotaFull ?? true, limitReached: cfg?.limitReached ?? true,
+  });
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    try {
+      await api('PUT', `/api/admin/surveys/${info.id}/notify`, form);
+      await reload();
+      toast('Уведомления сохранены');
+      return true;
+    } catch (e) {
+      toast((e as Error).message);
+      return false;
+    }
+  };
+  return (
+    <div className="card stack">
+      <h2>Уведомления</h2>
+      <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+        Сообщения о ходе сбора. Вебхук получает JSON (для завершённых анкет — с ответами); в Telegram приходит короткий текст.
+      </p>
+      <div className="grid2">
+        <label className="field"><span>Вебхук (POST JSON)</span>
+          <input className="input mono" placeholder="https://…" value={form.webhookUrl} onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })} />
+        </label>
+        <label className="field"><span>Чат Telegram</span>
+          <input className="input mono" placeholder="-1001234567890 или @channel" value={form.telegramChatId}
+            disabled={!info.telegramConfigured} onChange={(e) => setForm({ ...form, telegramChatId: e.target.value })} />
+          <span className="field-help">
+            {info.telegramConfigured
+              ? 'Добавьте бота в чат или канал; ID чата покажет, например, @userinfobot'
+              : 'Чтобы включить, задайте TELEGRAM_BOT_TOKEN в .env и перезапустите сервер'}
+          </span>
+        </label>
+      </div>
+      <div className="row" style={{ flexWrap: 'wrap' }}>
+        <label className="check">
+          <input type="checkbox" checked={form.everyN > 0} onChange={(e) => setForm({ ...form, everyN: e.target.checked ? 1 : 0 })} />
+          Завершённые анкеты: каждая
+        </label>
+        {form.everyN > 0 && (
+          <label className="row" style={{ gap: 6 }}><span className="muted small">или каждая N-я:</span>
+            <input className="input mini" type="number" min={1} value={form.everyN} onChange={(e) => setForm({ ...form, everyN: Math.max(1, Number(e.target.value) || 1) })} />
+          </label>
+        )}
+        <label className="check"><input type="checkbox" checked={form.quotaFull} onChange={(e) => setForm({ ...form, quotaFull: e.target.checked })} />Квота набрана</label>
+        <label className="check"><input type="checkbox" checked={form.limitReached} onChange={(e) => setForm({ ...form, limitReached: e.target.checked })} />Лимит анкет набран</label>
+      </div>
+      {cfg?.lastError && <div className="error-box">Последняя ошибка: {cfg.lastError}</div>}
+      <div className="row">
+        <button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>Сохранить</button>
+        <button className="btn btn-secondary btn-sm" disabled={busy || (!form.webhookUrl && !form.telegramChatId)} onClick={async () => {
+          setBusy(true);
+          try {
+            if (!(await save())) return;
+            await api('POST', `/api/admin/surveys/${info.id}/notify/test`);
+            toast('Тестовое уведомление отправлено');
+          } catch (e) {
+            toast((e as Error).message);
+          } finally {
+            setBusy(false);
+            await reload();
+          }
+        }}>Отправить тест</button>
+        {cfg?.lastSentAt && <span className="muted small">последнее: {fmt(cfg.lastSentAt)}</span>}
       </div>
     </div>
   );

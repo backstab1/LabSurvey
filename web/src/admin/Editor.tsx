@@ -26,6 +26,11 @@ export interface SurveyInfo {
   sheetsAccount: { configured: boolean; email: string | null };
   testToken: string;
   quotas: { id: string; title?: string; limit: number; count: number }[];
+  notify: {
+    webhookUrl?: string; telegramChatId?: string; everyN?: number; quotaFull?: boolean; limitReached?: boolean;
+    lastError?: string | null; lastSentAt?: string;
+  } | null;
+  telegramConfigured: boolean;
 }
 
 type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'report' | 'data';
