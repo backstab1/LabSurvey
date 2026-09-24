@@ -24,6 +24,7 @@ export interface SurveyInfo {
   counts: { real: Record<string, number>; test: number };
   sheetsAccount: { configured: boolean; email: string | null };
   testToken: string;
+  quotas: { id: string; title?: string; limit: number; count: number }[];
 }
 
 type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'data';
@@ -256,7 +257,7 @@ export function Editor({ id }: { id: string }) {
       {tab === 'builder' && <Builder def={def} onChange={update} issues={validation} focus={focus} onPreview={preview} />}
       {tab === 'logic' && <LogicTab def={def} onOpen={(qid) => { changeTab('builder'); setFocus({ where: qid, n: Date.now() }); }} />}
       {tab === 'json' && <JsonTab def={def} onChange={update} />}
-      {tab === 'settings' && <SettingsTab def={def} onChange={update} surveyId={id} testToken={info.testToken} completed={info.counts.real.completed ?? 0} />}
+      {tab === 'settings' && <SettingsTab def={def} onChange={update} surveyId={id} testToken={info.testToken} completed={info.counts.real.completed ?? 0} quotaProgress={info.quotas} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
       {showVersions && (
         <VersionsModal id={id} current={info.version} onClose={() => setShowVersions(false)}

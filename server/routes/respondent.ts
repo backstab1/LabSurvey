@@ -4,6 +4,7 @@ import { checkTestToken, isAdmin } from '../auth.ts';
 import { config } from '../config.ts';
 import { responses, surveys, type StoredResponse, type SurveyRow } from '../db.ts';
 import { queueResponseSync } from '../sheets.ts';
+import { fullQuota, noteCompleted } from '../quotas.ts';
 import {
   actionError, allQuestions, cleanAnswers, findPage, firstPage, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
 } from '../../shared/logic.ts';
@@ -58,6 +59,7 @@ function finished(survey: Survey, r: StoredResponse): { message: string; redirec
   const st = settingsOf(survey);
   const [message, redirect] = r.status === 'screened_out' ? [st.screenoutMessage, st.redirectScreenout]
     : r.status === 'terminated' ? [st.earlyFinishMessage, st.redirectEarlyFinish]
+      : r.status === 'overquota' ? [st.overquotaMessage, st.redirectOverquota]
       : [st.completeMessage, st.redirectComplete];
   const ctx = ctxOf(survey, r, r.answers);
   return { message: pipe(message, ctx), redirect: redirect ? pipeUrl(redirect, ctx, r.id) : undefined };
@@ -161,6 +163,7 @@ async function finalize(survey: Survey, r: StoredResponse, answers: Answers, vis
     completedAt: completedAt.toISOString(),
     durationSec: Math.round((completedAt.getTime() - new Date(r.startedAt).getTime()) / 1000),
   });
+  if (status === 'completed') noteCompleted(r.surveyId, survey, r.isTest, ctxOf(survey, r, final));
   if (!r.isTest) queueResponseSync(r.surveyId, r.id);
 }
 
@@ -254,8 +257,12 @@ export async function respondentRoutes(app: FastifyInstance) {
         currentPage: null, params, ip: req.ip ?? null, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 500) || null,
         startedAt: new Date().toISOString(),
       });
-      const first = startAt ?? firstPage(ctxOf(survey, created, cleanAnswers(ctxOf(survey, created, initial), [])));
-      if (first === END || first === SCREENOUT) {
+      const startCtx = ctxOf(survey, created, cleanAnswers(ctxOf(survey, created, initial), []));
+      const first = startAt ?? firstPage(startCtx);
+      // Квоты по параметрам ссылки проверяются сразу
+      if (!startAt && first !== SCREENOUT && (await fullQuota(s.id, survey, preview, startCtx))) {
+        await finalize(survey, created, initial, [], 'overquota');
+      } else if (first === END || first === SCREENOUT) {
         await finalize(survey, created, initial, [], first === END ? 'completed' : 'screened_out');
       } else {
         await responses.update(created.id, { currentPage: first });
@@ -279,8 +286,12 @@ export async function respondentRoutes(app: FastifyInstance) {
       const answers = mergePage(r.answers, page, pageAnswers);
       const visited = [...r.history, page.id];
       // Навигация — по ответам с учётом действий «после ответа» (переменные)
-      const next = nextPage(ctxOf(survey, r, cleanAnswers(ctxOf(survey, r, answers), visited)), page.id);
-      if (next === END || next === SCREENOUT) {
+      const nav = ctxOf(survey, r, cleanAnswers(ctxOf(survey, r, answers), visited));
+      const next = nextPage(nav, page.id);
+      // Респондент подошёл под квоту, которая уже набрана (отсев важнее квоты)
+      if (next !== SCREENOUT && (await fullQuota(r.surveyId, survey, r.isTest, nav))) {
+        await finalize(survey, r, answers, visited, 'overquota');
+      } else if (next === END || next === SCREENOUT) {
         await finalize(survey, r, answers, visited, next === END ? 'completed' : 'screened_out');
       } else {
         await responses.update(r.id, { answers, history: visited, currentPage: next });

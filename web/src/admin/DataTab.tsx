@@ -7,7 +7,7 @@ import type { Answers, Survey } from '../../../shared/types.ts';
 import type { SurveyInfo } from './Editor.tsx';
 import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
 
-const EXPORT_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'terminated', 'in_progress'];
+const EXPORT_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
 
 interface RespRow {
   id: string; status: ResponseStatus; isTest: boolean; startedAt: string; completedAt: string | null;
@@ -40,10 +40,30 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
       <div className="stats">
         <div className="card"><div className="stat">{info.counts.real.completed ?? 0}</div><div className="stat-label">Завершили</div></div>
         <div className="card"><div className="stat">{info.counts.real.screened_out ?? 0}</div><div className="stat-label">Отсеяны</div></div>
+        {(info.counts.real.overquota ?? 0) > 0 && <div className="card"><div className="stat">{info.counts.real.overquota}</div><div className="stat-label">Сверх квоты</div></div>}
         <div className="card"><div className="stat">{info.counts.real.terminated ?? 0}</div><div className="stat-label">Досрочно</div></div>
         <div className="card"><div className="stat">{info.counts.real.in_progress ?? 0}</div><div className="stat-label">В процессе / бросили</div></div>
         <div className="card"><div className="stat">{total}</div><div className="stat-label">Всего начали</div></div>
       </div>
+
+      {info.quotas.length > 0 && (
+        <div className="card stack">
+          <h2>Квоты</h2>
+          <table className="table">
+            <tbody>
+              {info.quotas.map((q) => (
+                <tr key={q.id}>
+                  <td style={{ width: '40%' }}><strong>{q.title || q.id}</strong> <span className="muted small mono">{q.id}</span></td>
+                  <td>
+                    <div className="quota-bar"><div style={{ width: `${q.limit ? Math.min(100, (q.count / q.limit) * 100) : 100}%` }} className={q.count >= q.limit ? 'full' : ''} /></div>
+                  </td>
+                  <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>{q.count} из {q.limit}{q.count >= q.limit ? ' ✓' : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="card stack">
         <h2>Выгрузка</h2>
@@ -78,7 +98,7 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
               setSimBusy(true);
               try {
                 const r = await api('POST', `/api/admin/surveys/${info.id}/simulate`, { count: simCount });
-                toast(`Заполнено: ${r.count} (завершили ${r.stats.completed ?? 0}, отсеяно ${r.stats.screened_out ?? 0})`);
+                toast(`Заполнено: ${r.count} (завершили ${r.stats.completed ?? 0}, отсеяно ${r.stats.screened_out ?? 0}${r.stats.overquota ? `, сверх квоты ${r.stats.overquota}` : ''})`);
                 await refresh();
               } catch (e) {
                 toast((e as Error).message);

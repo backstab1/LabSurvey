@@ -319,10 +319,12 @@ export interface SurveySettings {
   screenoutMessage?: string;
   earlyFinishMessage?: string;
   closedMessage?: string;
+  overquotaMessage?: string;
   /** Редиректы после завершения / отсева / досрочного выхода. Подстановки: {{param.pid}}, {{Q1}}, {{resp_id}} */
   redirectComplete?: string;
   redirectScreenout?: string;
   redirectEarlyFinish?: string;
+  redirectOverquota?: string;
 
   // ---- Доступ и сбор ----
   /** Пароль для входа в опрос (не отдаётся в браузер) */
@@ -354,11 +356,23 @@ export interface SurveySettings {
   earlyFinishLabel?: string;
 }
 
+/**
+ * Квота: сколько завершённых анкет с таким профилем нужно. Когда лимит набран, следующий респондент,
+ * подходящий под условие, завершает опрос со статусом «Сверх квоты».
+ */
+export interface Quota {
+  id: string;
+  title?: string;
+  if: Condition;
+  limit: number;
+}
+
 export interface Survey {
   formatVersion: 2;
   title: string;
   description?: string;
   settings?: SurveySettings;
+  quotas?: Quota[];
   /** Свои стили для страницы опроса */
   css?: string;
   scripts?: SurveyScripts;
@@ -387,7 +401,7 @@ export interface RespondentContext {
 
 /** Настройки, у которых есть значение по умолчанию; остальные по умолчанию не заданы */
 type DefaultedSettings = 'showProgress' | 'allowBack' | 'allowEarlyFinish' | 'showQuestionNumbers' | 'enterSubmits' | 'autoNext' | 'noPaste'
-  | 'allowRetake' | 'completeMessage' | 'screenoutMessage' | 'earlyFinishMessage' | 'closedMessage'
+  | 'allowRetake' | 'completeMessage' | 'screenoutMessage' | 'earlyFinishMessage' | 'closedMessage' | 'overquotaMessage'
   | 'nextLabel' | 'backLabel' | 'submitLabel' | 'earlyFinishLabel';
 
 export const DEFAULT_SETTINGS: Required<Pick<SurveySettings, DefaultedSettings>> & SurveySettings = {
@@ -403,6 +417,7 @@ export const DEFAULT_SETTINGS: Required<Pick<SurveySettings, DefaultedSettings>>
   screenoutMessage: 'Спасибо за интерес! К сожалению, вы не подходите под условия этого опроса.',
   earlyFinishMessage: 'Опрос завершён. Спасибо за уделённое время!',
   closedMessage: 'Опрос закрыт.',
+  overquotaMessage: 'Спасибо за интерес! Участники с похожим профилем уже набраны.',
   nextLabel: 'Далее',
   backLabel: 'Назад',
   submitLabel: 'Отправить',

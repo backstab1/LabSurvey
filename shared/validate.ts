@@ -180,6 +180,25 @@ export function validateSurvey(input: unknown): ValidationResult {
     }
   }
 
+  // Квоты: условия могут ссылаться на любые вопросы и параметры ссылки
+  if (s.quotas !== undefined) {
+    if (!Array.isArray(s.quotas)) err('quotas', 'Ожидается массив');
+    else {
+      const seen = new Set<string>();
+      s.quotas.forEach((qt, i) => {
+        const w = `квота ${isObj(qt) && typeof qt.id === 'string' ? qt.id : i + 1}`;
+        if (!isObj(qt)) return err(w, 'Ожидается объект {id, if, limit}');
+        if (typeof qt.id !== 'string' || !ID_RE.test(qt.id)) err(w, 'id: латиница, цифры и _, начинается с буквы');
+        else if (seen.has(qt.id.toLowerCase())) err(w, 'id квоты повторяется');
+        else seen.add(qt.id.toLowerCase());
+        if (qt.title !== undefined && typeof qt.title !== 'string') err(w, 'title: строка');
+        if (!isInt(qt.limit) || qt.limit < 0) err(w, 'limit: целое ≥ 0');
+        if (qt.if === undefined) err(w, 'Укажите условие if');
+        else checkCondition(qt.if, w, null, true);
+      });
+    }
+  }
+
   function checkActions(q: Question, info: { page: number; pos: number }, pi: number) {
     const acts = (q as { actions?: unknown }).actions;
     if (acts === undefined) return;
@@ -272,10 +291,10 @@ function checkRandomBlocks(s: Survey, err: (w: string, m: string) => void, warn:
 
 const BOOL_SETTINGS = ['showProgress', 'allowBack', 'allowEarlyFinish', 'showQuestionNumbers', 'enterSubmits', 'autoNext', 'noPaste', 'allowRetake'];
 const TEXT_SETTINGS = [
-  'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'closedMessage', 'password', 'footerText',
+  'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'closedMessage', 'overquotaMessage', 'password', 'footerText',
   'nextLabel', 'backLabel', 'submitLabel', 'earlyFinishLabel',
 ];
-const URL_SETTINGS = ['redirectComplete', 'redirectScreenout', 'redirectEarlyFinish', 'logoUrl'];
+const URL_SETTINGS = ['redirectComplete', 'redirectScreenout', 'redirectEarlyFinish', 'redirectOverquota', 'logoUrl'];
 
 function validateSettings(st: Record<string, unknown>, err: (w: string, m: string) => void, warn: (w: string, m: string) => void) {
   const w = (k: string) => `settings.${k}`;

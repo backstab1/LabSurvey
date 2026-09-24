@@ -2,13 +2,14 @@
 import { allOptions, allRows } from './logic.ts';
 import type { Answers, Survey } from './types.ts';
 
-export type ResponseStatus = 'in_progress' | 'completed' | 'screened_out' | 'terminated';
+export type ResponseStatus = 'in_progress' | 'completed' | 'screened_out' | 'terminated' | 'overquota';
 
 export const STATUS_CODES: Record<ResponseStatus, number> = {
   in_progress: 0,
   completed: 1,
   screened_out: 2,
   terminated: 3,
+  overquota: 4,
 };
 
 export const STATUS_LABELS: Record<ResponseStatus, string> = {
@@ -16,6 +17,7 @@ export const STATUS_LABELS: Record<ResponseStatus, string> = {
   completed: 'Завершён',
   screened_out: 'Отсеян',
   terminated: 'Завершён досрочно',
+  overquota: 'Сверх квоты',
 };
 
 export interface ResponseRecord {

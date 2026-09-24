@@ -469,3 +469,10 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
   box-shadow: 0 4px 14px rgba(20, 40, 90, .12);
 }
 .bulk-bar .btn-link { padding: 4px; }
+
+/* Квоты */
+.quota { border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.quota-progress { display: flex; align-items: center; gap: 10px; }
+.quota-bar { flex: 1; min-width: 80px; height: 8px; border-radius: 4px; background: #e3e6ea; overflow: hidden; }
+.quota-bar > div { height: 100%; background: var(--accent); }
+.quota-bar > div.full { background: var(--ok); }

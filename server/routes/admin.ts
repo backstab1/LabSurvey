@@ -6,6 +6,7 @@ import { writeXlsx } from '../export/xlsx.ts';
 import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
 import { simulate } from '../simulate.ts';
+import { quotaCounts, resetQuotas } from '../quotas.ts';
 import { validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
 import type { Survey } from '../../shared/types.ts';
@@ -18,7 +19,7 @@ function draftShapeOk(def: unknown): boolean {
     && d.blocks.every((b) => b && typeof b === 'object' && Array.isArray(b.questions));
 }
 
-const ALL_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'terminated', 'in_progress'];
+const ALL_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'terminated', 'overquota', 'in_progress'];
 
 export function blankSurvey(title = 'Новая анкета'): Survey {
   return {
@@ -71,7 +72,11 @@ export async function adminRoutes(app: FastifyInstance) {
     priv.get<{ Params: { id: string } }>('/api/admin/surveys/:id', async (req, reply) => {
       const s = await surveys.get(req.params.id);
       if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
-      return { ...s, counts: await responses.counts(s.id), sheetsAccount: sheetsStatus(), testToken: testToken(s.id) };
+      // Прогресс квот опубликованной версии
+      const live = s.published;
+      const counts = live?.quotas?.length ? await quotaCounts(s.id, live, false) : null;
+      const quotas = (live?.quotas ?? []).map((q) => ({ id: q.id, title: q.title, limit: q.limit, count: counts?.get(q.id) ?? 0 }));
+      return { ...s, counts: await responses.counts(s.id), sheetsAccount: sheetsStatus(), testToken: testToken(s.id), quotas };
     });
 
     priv.put<{ Params: { id: string }; Body: { definition: unknown } }>('/api/admin/surveys/:id', async (req, reply) => {
@@ -139,9 +144,10 @@ export async function adminRoutes(app: FastifyInstance) {
       return { ok: true };
     });
 
-    priv.delete<{ Params: { id: string } }>('/api/admin/surveys/:id/test-responses', async (req) => ({
-      deleted: await responses.deleteTest(req.params.id),
-    }));
+    priv.delete<{ Params: { id: string } }>('/api/admin/surveys/:id/test-responses', async (req) => {
+      resetQuotas(req.params.id);
+      return { deleted: await responses.deleteTest(req.params.id) };
+    });
 
     // Тестовое заполнение черновика случайными ответами по логике анкеты
     priv.post<{ Params: { id: string }; Body: { count?: number } }>('/api/admin/surveys/:id/simulate', async (req, reply) => {
@@ -164,6 +170,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const r = await responses.get(req.params.rid);
       if (!r || r.surveyId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
       await responses.remove(r.id);
+      resetQuotas(r.surveyId);
       return { ok: true };
     });
 

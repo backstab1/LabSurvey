@@ -1,7 +1,11 @@
 import type { ReactNode } from 'react';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
 import { compact, toast } from './common.tsx';
-import { DEFAULT_SETTINGS, settingsOf, type Survey, type SurveySettings } from '../../../shared/types.ts';
+import { ConditionEditor, defaultCondition } from './ConditionEditor.tsx';
+import { nextId } from '../../../shared/refactor.ts';
+import { DEFAULT_SETTINGS, settingsOf, type Quota, type Survey, type SurveySettings } from '../../../shared/types.ts';
+
+export interface QuotaProgress { id: string; limit: number; count: number }
 
 type Key = keyof SurveySettings;
 
@@ -13,8 +17,8 @@ const toLocal = (iso?: string) => {
 };
 const fromLocal = (v: string) => (v ? new Date(v).toISOString() : undefined);
 
-export function SettingsTab({ def, onChange, surveyId, testToken, completed }: {
-  def: Survey; onChange: (d: Survey) => void; surveyId: string; testToken: string; completed: number;
+export function SettingsTab({ def, onChange, surveyId, testToken, completed, quotaProgress }: {
+  def: Survey; onChange: (d: Survey) => void; surveyId: string; testToken: string; completed: number; quotaProgress: QuotaProgress[];
 }) {
   const st = settingsOf(def);
   const setSettings = (patch: Partial<SurveySettings>) => {
@@ -113,6 +117,8 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed }: {
         </div>
       </div>
 
+      <QuotasCard def={def} progress={quotaProgress} onChange={(quotas) => onChange(compact({ ...def, quotas: quotas.length ? quotas : undefined }))} />
+
       <div className="card stack">
         <h2>Интерфейс респондента</h2>
         {check('showProgress', 'Полоса прогресса')}
@@ -159,6 +165,8 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed }: {
           redirect={text('redirectComplete', 'Перейти по адресу', { placeholder: 'https://panel.example/complete?pid={{param.pid}}', mono: true })} />
         <Finish title="Отсев (скринаут)" message={text('screenoutMessage', 'Сообщение', { area: true })}
           redirect={text('redirectScreenout', 'Перейти по адресу', { placeholder: 'https://panel.example/screenout?pid={{param.pid}}', mono: true })} />
+        <Finish title="Сверх квоты" message={text('overquotaMessage', 'Сообщение', { area: true })}
+          redirect={text('redirectOverquota', 'Перейти по адресу', { placeholder: 'https://panel.example/quotafull?pid={{param.pid}}', mono: true })} />
         <Finish title="Досрочное завершение" message={text('earlyFinishMessage', 'Сообщение', { area: true })}
           redirect={text('redirectEarlyFinish', 'Перейти по адресу', { placeholder: 'необязательно', mono: true })} />
         {text('closedMessage', 'Когда опрос закрыт, срок вышел или набран лимит', { area: true })}
@@ -188,6 +196,53 @@ function Finish({ title, message, redirect }: { title: string; message: ReactNod
     <div className="finish-group">
       <div className="sub-title">{title}</div>
       <div className="grid2">{message}{redirect}</div>
+    </div>
+  );
+}
+
+/** Квоты: условие профиля + сколько завершённых анкет нужно */
+function QuotasCard({ def, progress, onChange }: { def: Survey; progress: QuotaProgress[]; onChange: (q: Quota[]) => void }) {
+  const quotas = def.quotas ?? [];
+  const setAt = (i: number, patch: Partial<Quota>) => onChange(quotas.map((q, k) => (k === i ? compact({ ...q, ...patch }) : q)));
+  const add = () => {
+    const cond = defaultCondition(def);
+    if (!cond) return toast('Сначала добавьте вопросы');
+    onChange([...quotas, { id: nextId(quotas.map((q) => q.id), 'QT'), if: cond, limit: 100 }]);
+  };
+  return (
+    <div className="card stack">
+      <h2>Квоты</h2>
+      <p className="muted small" style={{ margin: 0 }}>
+        Когда набрано нужное число завершённых анкет с профилем из условия, следующие подходящие респонденты заканчивают опрос
+        со статусом «Сверх квоты» (сообщение и переход — в «Завершении»). Проверка — после каждого ответа, поэтому ставьте квотные
+        вопросы в начало. Условие может использовать и параметр ссылки.
+      </p>
+      {quotas.map((q, i) => {
+        const p = progress.find((x) => x.id === q.id);
+        const pct = p && q.limit ? Math.min(100, Math.round((p.count / q.limit) * 100)) : 0;
+        return (
+          <div key={i} className="quota">
+            <div className="row" style={{ gap: 8 }}>
+              <input className="input mono" style={{ width: 90 }} value={q.id} title="ID квоты"
+                onChange={(e) => setAt(i, { id: e.target.value.replace(/[^A-Za-z0-9_]/g, '') })} />
+              <input className="input grow" placeholder="Название, например «Мужчины 18–34»" value={q.title ?? ''}
+                onChange={(e) => setAt(i, { title: e.target.value || undefined })} />
+              <label className="row" style={{ gap: 6 }}><span className="muted small">нужно</span>
+                <input className="input mini" type="number" min={0} value={q.limit} onChange={(e) => setAt(i, { limit: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
+              </label>
+              <button className="icon-btn" title="Удалить квоту" onClick={() => onChange(quotas.filter((_, k) => k !== i))}>✕</button>
+            </div>
+            <ConditionEditor def={def} value={q.if} required onChange={(c) => c && setAt(i, { if: c })} />
+            {p && (
+              <div className="quota-progress" title="По опубликованной версии">
+                <div className="quota-bar"><div style={{ width: `${pct}%` }} className={p.count >= q.limit ? 'full' : ''} /></div>
+                <span className="small">{p.count} из {q.limit}{p.count >= q.limit ? ' — набрана' : ''}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <button className="btn-link" style={{ alignSelf: 'flex-start', padding: 0 }} onClick={add}>+ Квота</button>
     </div>
   );
 }
