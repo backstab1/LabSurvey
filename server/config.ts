@@ -27,6 +27,10 @@ export const config = {
   timezone: process.env.EXPORT_TIMEZONE ?? 'Europe/Moscow',
   /** Путь к JSON-ключу сервисного аккаунта Google */
   googleCredentials: process.env.GOOGLE_APPLICATION_CREDENTIALS ?? '',
+  /** Резервные копии базы: папка, интервал в часах (0 — выключено), сколько копий хранить */
+  backupDir: resolve(process.env.BACKUP_DIR ?? resolve(dataDir, 'backups')),
+  backupHours: Number(process.env.BACKUP_HOURS ?? 24),
+  backupKeep: Math.max(1, Number(process.env.BACKUP_KEEP ?? 14)),
   /** Токен Telegram-бота для уведомлений (@BotFather) */
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
   /** За прокси (nginx) — брать IP из X-Forwarded-For */

@@ -19,6 +19,7 @@ export const STATUS_TEXT = { draft: 'Черновик', active: 'Идёт сбо
 export function SurveyList() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [backupsOpen, setBackupsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | Row['status'] | 'archived'>('all');
 
@@ -34,6 +35,7 @@ export function SurveyList() {
     <div className="container">
       <div className="row" style={{ marginBottom: 16 }}>
         <h1 className="grow" style={{ margin: 0, fontSize: 24 }}>Анкеты</h1>
+        <button className="btn btn-secondary" onClick={() => setBackupsOpen(true)}>Резервные копии</button>
         <button className="btn btn-secondary" onClick={() => setImportOpen(true)}>Импорт JSON</button>
         <button className="btn btn-primary" onClick={createBlank}>+ Новая анкета</button>
       </div>
@@ -89,6 +91,7 @@ export function SurveyList() {
         )}
       </div>
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
+      {backupsOpen && <BackupsModal onClose={() => setBackupsOpen(false)} />}
     </div>
   );
 }
@@ -125,6 +128,51 @@ function ImportModal({ onClose }: { onClose: () => void }) {
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="btn btn-secondary" onClick={onClose}>Отмена</button>
           <button className="btn btn-primary" disabled={!text.trim()} onClick={submit}>Импортировать</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+interface Backups { list: { name: string; size: number; createdAt: string }[]; everyHours: number; keep: number }
+
+/** Копии базы: делаются по расписанию на сервере, здесь — список, скачать, сделать сейчас */
+function BackupsModal({ onClose }: { onClose: () => void }) {
+  const [data, setData] = useState<Backups | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => api<Backups>('GET', '/api/admin/backups').then(setData);
+  useEffect(() => { load(); }, []);
+  const size = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} МБ` : `${Math.ceil(b / 1024)} КБ`);
+  return (
+    <Modal onClose={onClose} title="Резервные копии базы">
+      <div className="stack">
+        {data && (
+          <p className="muted small" style={{ margin: 0 }}>
+            {data.everyHours > 0
+              ? `Копия делается автоматически каждые ${data.everyHours} ч, хранятся последние ${data.keep}.`
+              : 'Автоматические копии выключены (BACKUP_HOURS=0 в .env).'}
+            {' '}Копия — полный файл базы SQLite: все анкеты и ответы. Для восстановления остановите сервис и замените им data/surveylab.db.
+          </p>
+        )}
+        {!data ? <p className="muted">Загрузка…</p> : data.list.length === 0 ? <p className="muted">Копий пока нет.</p> : (
+          <table className="table">
+            <tbody>
+              {data.list.map((b) => (
+                <tr key={b.name}>
+                  <td className="mono small">{b.name}</td>
+                  <td className="muted">{new Date(b.createdAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                  <td className="muted">{size(b.size)}</td>
+                  <td style={{ textAlign: 'right' }}><a className="btn-link" href={`/api/admin/backups/${b.name}`}>Скачать</a></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn btn-primary" disabled={busy} onClick={async () => {
+            setBusy(true);
+            try { await api('POST', '/api/admin/backups'); await load(); } finally { setBusy(false); }
+          }}>Сделать копию сейчас</button>
         </div>
       </div>
     </Modal>

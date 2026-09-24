@@ -56,6 +56,11 @@ const surveyCols = (db.prepare('PRAGMA table_info(surveys)').all() as { name: st
 if (!surveyCols.includes('archived')) db.exec('ALTER TABLE surveys ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
 if (!surveyCols.includes('notify')) db.exec('ALTER TABLE surveys ADD COLUMN notify TEXT');
 
+/** Согласованная копия базы в файл (работает, пока сервис принимает ответы) */
+export function backupTo(file: string): void {
+  db.prepare('VACUUM INTO ?').run(file);
+}
+
 export type SurveyStatus = 'draft' | 'active' | 'closed';
 
 export interface SheetsConfig {

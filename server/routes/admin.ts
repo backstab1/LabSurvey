@@ -9,6 +9,9 @@ import { simulate } from '../simulate.ts';
 import { quotaCounts, resetQuotas } from '../quotas.ts';
 import { buildReport } from '../../shared/report.ts';
 import { send, telegramConfigured } from '../notify.ts';
+import { backupPath, listBackups, makeBackup } from '../backup.ts';
+import { createReadStream } from 'node:fs';
+import { config } from '../config.ts';
 import { validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
 import type { Condition, Survey } from '../../shared/types.ts';
@@ -63,6 +66,17 @@ export async function adminRoutes(app: FastifyInstance) {
     priv.addHook('preHandler', requireAdmin);
 
     priv.get('/api/admin/surveys', async () => surveys.list());
+
+    // Резервные копии базы
+    priv.get('/api/admin/backups', async () => ({ list: listBackups(), everyHours: config.backupHours, keep: config.backupKeep }));
+    priv.post('/api/admin/backups', async () => makeBackup());
+    priv.get<{ Params: { name: string } }>('/api/admin/backups/:name', async (req, reply) => {
+      const file = backupPath(req.params.name);
+      if (!file) return reply.code(404).send({ error: 'Копия не найдена' });
+      reply.header('Content-Type', 'application/octet-stream');
+      reply.header('Content-Disposition', attachment(req.params.name));
+      return reply.send(createReadStream(file));
+    });
 
     priv.post<{ Body: { definition?: unknown; title?: string } }>('/api/admin/surveys', async (req, reply) => {
       const def = req.body?.definition !== undefined ? migrateSurvey(req.body.definition) : blankSurvey(req.body?.title);

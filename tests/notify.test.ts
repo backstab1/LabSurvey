@@ -68,3 +68,16 @@ test('webhook gets completed, quota and limit events', async () => {
   assert.equal(done.response.answers.Q1.v, 'хорошо');
   assert.equal(done.survey.title, 'Уведомления');
 });
+
+test('database backups: create, list, download', async () => {
+  const lr = await app.inject({ method: 'POST', url: '/api/admin/login', payload: { login: 'admin', password: 'secret' } });
+  cookie = String(lr.headers['set-cookie']).split(';')[0];
+  const made = (await call('POST', '/api/admin/backups')).json;
+  assert.match(made.name, /^surveylab-.*\.db$/);
+  assert.ok(made.size > 0);
+  const list = (await call('GET', '/api/admin/backups')).json.list;
+  assert.equal(list[0].name, made.name);
+  const file = await app.inject({ method: 'GET', url: `/api/admin/backups/${made.name}`, headers: { cookie } });
+  assert.equal(file.rawPayload.subarray(0, 15).toString(), 'SQLite format 3');
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/backups/..%2F.session-secret', headers: { cookie } })).statusCode, 404);
+});
