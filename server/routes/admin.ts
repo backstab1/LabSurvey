@@ -7,6 +7,7 @@ import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
 import { simulate } from '../simulate.ts';
 import { quotaCounts, resetQuotas } from '../quotas.ts';
+import { buildReport } from '../../shared/report.ts';
 import { validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
 import type { Survey } from '../../shared/types.ts';
@@ -180,6 +181,20 @@ export async function adminRoutes(app: FastifyInstance) {
         id: r.id, status: r.status, isTest: r.isTest, startedAt: r.startedAt, completedAt: r.completedAt,
         durationSec: r.durationSec, answered: Object.keys(r.answers).length, params: r.params,
       }));
+    });
+
+    // Отчёт: распределения ответов и места, где бросают анкету
+    priv.get<{ Params: { id: string }; Querystring: { statuses?: string; test?: string } }>('/api/admin/surveys/:id/report', async (req, reply) => {
+      const s = await surveys.get(req.params.id);
+      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
+      const test = req.query.test === '1';
+      const def = test ? s.draft : s.published ?? s.draft;
+      const statuses = (req.query.statuses?.split(',').filter((x) => ALL_STATUSES.includes(x as ResponseStatus)) ?? ['completed']) as ResponseStatus[];
+      const all = (await responses.list(s.id, { includeTest: test })).filter((r) => r.isTest === test);
+      const unfinished = all
+        .filter((r) => r.status === 'in_progress' || r.status === 'terminated')
+        .map((r) => ({ ...r, lastPage: r.status === 'in_progress' ? r.currentPage : r.history[r.history.length - 1] ?? null }));
+      return buildReport(def, all.filter((r) => statuses.includes(r.status)), unfinished);
     });
 
     priv.get<{ Params: { id: string; format: string }; Querystring: { statuses?: string; test?: string } }>(

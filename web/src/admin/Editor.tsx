@@ -5,6 +5,7 @@ import { JsonTab } from './JsonTab.tsx';
 import { DataTab } from './DataTab.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
 import { LogicTab } from './LogicTab.tsx';
+import { ReportTab } from './ReportTab.tsx';
 import { IssuesList, Menu, Modal, Toaster, toast } from './common.tsx';
 import { navigate } from './AdminApp.tsx';
 import { STATUS_TEXT } from './SurveyList.tsx';
@@ -27,7 +28,7 @@ export interface SurveyInfo {
   quotas: { id: string; title?: string; limit: number; count: number }[];
 }
 
-type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'data';
+type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'report' | 'data';
 type SaveState = 'saved' | 'pending' | 'saving' | 'error';
 
 const SAVE_TEXT: Record<SaveState, string> = {
@@ -232,7 +233,7 @@ export function Editor({ id }: { id: string }) {
 
       <div className="tabs-row">
         <div className="tabs">
-          {([['builder', 'Конструктор'], ['logic', 'Логика'], ['json', 'JSON'], ['settings', 'Настройки'], ['data', 'Данные']] as [Tab, string][]).map(([t, label]) => (
+          {([['builder', 'Конструктор'], ['logic', 'Логика'], ['json', 'JSON'], ['settings', 'Настройки'], ['report', 'Отчёт'], ['data', 'Данные']] as [Tab, string][]).map(([t, label]) => (
             <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => changeTab(t)}>{label}</button>
           ))}
         </div>
@@ -258,6 +259,7 @@ export function Editor({ id }: { id: string }) {
       {tab === 'logic' && <LogicTab def={def} onOpen={(qid) => { changeTab('builder'); setFocus({ where: qid, n: Date.now() }); }} />}
       {tab === 'json' && <JsonTab def={def} onChange={update} />}
       {tab === 'settings' && <SettingsTab def={def} onChange={update} surveyId={id} testToken={info.testToken} completed={info.counts.real.completed ?? 0} quotaProgress={info.quotas} />}
+      {tab === 'report' && <ReportTab info={info} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
       {showVersions && (
         <VersionsModal id={id} current={info.version} onClose={() => setShowVersions(false)}

@@ -1,0 +1,135 @@
+import { useEffect, useState } from 'react';
+import { api } from '../api.ts';
+import { QUESTION_TYPE_LABELS } from '../../../shared/types.ts';
+import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
+import type { QuestionReport, Report, ReportRow } from '../../../shared/report.ts';
+import type { SurveyInfo } from './Editor.tsx';
+
+const STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
+
+/** Топлайн: распределения по каждому вопросу — чтобы видеть результаты, не выгружая данные */
+export function ReportTab({ info }: { info: SurveyInfo }) {
+  const [statuses, setStatuses] = useState<ResponseStatus[]>(['completed']);
+  const [test, setTest] = useState(!info.published);
+  const [report, setReport] = useState<Report | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setError('');
+    api<Report>('GET', `/api/admin/surveys/${info.id}/report?statuses=${statuses.join(',')}${test ? '&test=1' : ''}`)
+      .then(setReport).catch((e) => setError((e as Error).message));
+  }, [info.id, statuses, test, info.counts]);
+
+  return (
+    <div className="stack report">
+      <div className="card row report-filters">
+        {STATUSES.map((s) => (
+          <label key={s} className="check">
+            <input type="checkbox" checked={statuses.includes(s)}
+              onChange={(e) => setStatuses(e.target.checked ? [...statuses, s] : statuses.filter((x) => x !== s))} />
+            {STATUS_LABELS[s]}
+          </label>
+        ))}
+        <span className="grow" />
+        <label className="check" title="Отчёт по тестовым ответам черновика (предпросмотр, тестовое заполнение)">
+          <input type="checkbox" checked={test} onChange={(e) => setTest(e.target.checked)} />Тестовые ответы
+        </label>
+      </div>
+      {error && <div className="error-box">{error}</div>}
+      {report && (
+        report.total === 0 ? (
+          <div className="card muted">Нет ответов с выбранными статусами{test ? ' среди тестовых' : ''}.</div>
+        ) : (
+          <>
+            <div className="muted small">Анкет в отчёте: <strong>{report.total}</strong>. Проценты — от ответивших на вопрос.</div>
+            {report.questions.map((q) => <QuestionBlock key={q.id} q={q} />)}
+          </>
+        )
+      )}
+      {report && report.dropOff.length > 0 && (
+        <div className="card stack">
+          <h2>Где остановились незавершённые</h2>
+          <p className="muted small" style={{ margin: 0 }}>Не дошедшие до конца и завершившие досрочно — по вопросу, на котором остановились.</p>
+          <Bars rows={report.dropOff.map((d) => ({ label: `${d.id} · ${d.text}`, count: d.count, pct: 0 }))} counts />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuestionBlock({ q }: { q: QuestionReport }) {
+  return (
+    <div className="card stack report-q">
+      <div className="report-q-head">
+        <span className="qid">{q.id}</span>
+        <span className="muted small">{QUESTION_TYPE_LABELS[q.type]}</span>
+        <span className="grow" />
+        <span className="muted small">ответили: {q.n}</span>
+      </div>
+      {q.text && <div className="report-q-text">{q.text}</div>}
+      {q.nps && (
+        <div className="nps">
+          <strong>NPS {q.nps.score > 0 ? '+' : ''}{q.nps.score}</strong>
+          <span className="muted small">сторонники {q.nps.promoters}% · нейтральные {q.nps.passives}% · критики {q.nps.detractors}%</span>
+        </div>
+      )}
+      {q.stats && (
+        <div className="report-stats">
+          <span>Среднее <strong>{q.stats.mean}</strong></span>
+          {q.stats.median !== undefined && <span>Медиана <strong>{q.stats.median}</strong></span>}
+          {q.stats.min !== undefined && <span>Мин <strong>{q.stats.min}</strong></span>}
+          {q.stats.max !== undefined && <span>Макс <strong>{q.stats.max}</strong></span>}
+        </div>
+      )}
+      {q.rows && <Bars rows={q.rows} note={q.type === 'multi' ? 'Можно было выбрать несколько — сумма больше 100%' : undefined} />}
+      {q.ranks && (
+        <table className="table report-table">
+          <thead><tr><th>Вариант</th><th>Средний ранг</th><th>На 1-м месте</th><th>Ранжировали</th></tr></thead>
+          <tbody>{q.ranks.map((r) => <tr key={r.label}><td>{r.label}</td><td>{r.n ? r.mean : '—'}</td><td>{r.first}</td><td>{r.n}</td></tr>)}</tbody>
+        </table>
+      )}
+      {q.matrix && (
+        <div className="matrix-wrap">
+          <table className="table report-table">
+            <thead><tr><th />{q.matrix[0]?.cells.map((c) => <th key={c.code}>{c.label}</th>)}<th>n</th></tr></thead>
+            <tbody>
+              {q.matrix.map((row) => (
+                <tr key={row.label}>
+                  <td>{row.label}</td>
+                  {row.cells.map((c) => (
+                    <td key={c.code} className="heat" style={{ background: `color-mix(in srgb, var(--accent) ${Math.round(c.pct * 0.6)}%, transparent)` }}>
+                      {row.n ? `${c.pct}%` : '—'}
+                    </td>
+                  ))}
+                  <td className="muted">{row.n}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {q.texts && q.texts.length > 0 && (
+        <details className="report-texts">
+          <summary>{q.rows || q.matrix ? 'Ответы «Другое»' : 'Последние ответы'} ({q.texts.length}{q.texts.length >= 30 ? '+' : ''})</summary>
+          <ul>{q.texts.map((t, i) => <li key={i}>{t}</li>)}</ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function Bars({ rows, note, counts }: { rows: ReportRow[]; note?: string; counts?: boolean }) {
+  const max = Math.max(1, ...rows.map((r) => (counts ? r.count : r.pct)));
+  return (
+    <div className="bars">
+      {rows.map((r, i) => (
+        <div key={i} className="bar-row">
+          <span className="bar-label" title={r.label}>{r.code !== undefined && !r.label.startsWith(String(r.code)) && <span className="muted mono">{r.code} </span>}{r.label}</span>
+          <span className="bar-track"><span className="bar-fill" style={{ width: `${((counts ? r.count : r.pct) / max) * 100}%` }} /></span>
+          <span className="bar-value">{counts ? r.count : `${r.pct}%`}{!counts && <span className="muted"> ({r.count})</span>}</span>
+        </div>
+      ))}
+      {note && <div className="muted small">{note}</div>}
+    </div>
+  );
+}
