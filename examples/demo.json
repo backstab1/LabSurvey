@@ -1,0 +1,144 @@
+{
+  "formatVersion": 1,
+  "title": "Демо: опрос о кофейнях",
+  "description": "Пример анкеты со всеми типами вопросов, логикой, переносом и подстановками",
+  "settings": {
+    "showProgress": true,
+    "allowBack": true,
+    "allowEarlyFinish": false
+  },
+  "pages": [
+    {
+      "id": "P_intro",
+      "questions": [
+        {
+          "id": "INTRO",
+          "type": "info",
+          "text": "Здравствуйте! Опрос займёт около 3 минут. Все ответы анонимны."
+        },
+        {
+          "id": "S1",
+          "type": "number",
+          "text": "Сколько вам полных лет?",
+          "min": 14,
+          "max": 99
+        },
+        {
+          "id": "S2",
+          "type": "single",
+          "text": "Как часто вы бываете в кофейнях?",
+          "options": [
+            { "code": 1, "text": "Каждый день" },
+            { "code": 2, "text": "Несколько раз в неделю" },
+            { "code": 3, "text": "Несколько раз в месяц" },
+            { "code": 4, "text": "Реже" },
+            { "code": 5, "text": "Не бываю" }
+          ]
+        }
+      ],
+      "jumps": [
+        { "if": { "q": "S1", "op": "lt", "value": 18 }, "goTo": "SCREENOUT" },
+        { "if": { "q": "S2", "op": "eq", "value": 5 }, "goTo": "SCREENOUT" }
+      ]
+    },
+    {
+      "id": "P_brands",
+      "title": "Кофейни",
+      "questions": [
+        {
+          "id": "Q1",
+          "type": "multi",
+          "text": "Какие сети кофеен вы знаете?",
+          "randomize": true,
+          "options": [
+            { "code": 1, "text": "Шоколадница" },
+            { "code": 2, "text": "Coffee Like" },
+            { "code": 3, "text": "Cofix" },
+            { "code": 4, "text": "Surf Coffee" },
+            { "code": 97, "text": "Другое", "other": true },
+            { "code": 99, "text": "Ничего из перечисленного", "exclusive": true }
+          ]
+        },
+        {
+          "id": "Q2",
+          "type": "single",
+          "text": "Какую из них вы посещаете чаще всего?",
+          "optionsFrom": { "question": "Q1", "filter": "selected" },
+          "options": []
+        }
+      ]
+    },
+    {
+      "id": "P_eval",
+      "showIf": { "q": "Q2", "op": "answered" },
+      "questions": [
+        {
+          "id": "Q3",
+          "type": "matrix",
+          "mode": "single",
+          "text": "Оцените «{{Q2}}» по параметрам",
+          "requiredRows": "all",
+          "rows": [
+            { "code": 1, "text": "Вкус кофе" },
+            { "code": 2, "text": "Цены" },
+            { "code": 3, "text": "Скорость обслуживания" },
+            { "code": 9, "text": "Другое", "other": true }
+          ],
+          "columns": [
+            { "code": 1, "text": "Плохо" },
+            { "code": 2, "text": "Средне" },
+            { "code": 3, "text": "Хорошо" },
+            { "code": 4, "text": "Отлично" }
+          ]
+        },
+        {
+          "id": "Q4",
+          "type": "scale",
+          "text": "Насколько вероятно, что вы порекомендуете «{{Q2}}» друзьям?",
+          "from": 0,
+          "to": 10,
+          "labels": { "0": "Точно нет", "10": "Точно да" },
+          "extraOptions": [{ "code": 99, "text": "Затрудняюсь ответить" }]
+        },
+        {
+          "id": "Q4a",
+          "type": "text",
+          "text": "Что стоит улучшить?",
+          "multiline": true,
+          "required": false,
+          "showIf": { "q": "Q4", "op": "lte", "value": 6 }
+        }
+      ]
+    },
+    {
+      "id": "P_profile",
+      "title": "О вас",
+      "questions": [
+        {
+          "id": "D1",
+          "type": "dropdown",
+          "text": "Ваш город",
+          "options": [
+            { "code": 1, "text": "Москва" },
+            { "code": 2, "text": "Санкт-Петербург" },
+            { "code": 3, "text": "Новосибирск" },
+            { "code": 4, "text": "Екатеринбург" },
+            { "code": 97, "text": "Другой город", "other": true }
+          ]
+        },
+        {
+          "id": "D2",
+          "type": "date",
+          "text": "Когда вы в последний раз были в кофейне?",
+          "min": "2020-01-01"
+        },
+        {
+          "id": "D3",
+          "type": "phone",
+          "text": "Оставьте телефон, если готовы участвовать в следующих опросах",
+          "required": false
+        }
+      ]
+    }
+  ]
+}
