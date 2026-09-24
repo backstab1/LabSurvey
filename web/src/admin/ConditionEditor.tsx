@@ -14,7 +14,8 @@ const NO_VALUE: ConditionOp[] = ['answered', 'notAnswered'];
 function opsFor(q: Question | undefined, isParam: boolean): ConditionOp[] {
   if (isParam) return ['eq', 'neq', 'in', 'notIn', 'answered', 'notAnswered'];
   switch (q?.type) {
-    case 'multi': return ['contains', 'notContains', 'containsAny', 'containsAll', 'answered', 'notAnswered'];
+    case 'multi':
+    case 'ranking': return ['contains', 'notContains', 'containsAny', 'containsAll', 'answered', 'notAnswered'];
     case 'single': case 'dropdown': return ['eq', 'neq', 'in', 'notIn', 'answered', 'notAnswered'];
     case 'matrix': return ['eq', 'neq', 'in', 'notIn', 'gt', 'gte', 'lt', 'lte', 'answered', 'notAnswered'];
     case 'text': case 'phone': return ['eq', 'neq', 'answered', 'notAnswered'];
@@ -25,7 +26,7 @@ function opsFor(q: Question | undefined, isParam: boolean): ConditionOp[] {
 /** Варианты значений для выбора из списка (если они есть) */
 function valueChoices(def: Survey, q: Question | undefined, row: number | undefined): Option[] | null {
   if (!q) return null;
-  if (q.type === 'single' || q.type === 'multi' || q.type === 'dropdown') return allOptions(def, q);
+  if (q.type === 'single' || q.type === 'multi' || q.type === 'dropdown' || q.type === 'ranking') return allOptions(def, q);
   if (q.type === 'matrix') return row !== undefined ? q.columns : null;
   if (q.type === 'scale') {
     const pts = Array.from({ length: q.to - q.from + 1 }, (_, i) => q.from + i);
@@ -51,6 +52,24 @@ function fromVisual(v: Visual): Condition | undefined {
   return v.mode === 'all' ? { all: v.items } : { any: v.items };
 }
 
+/** Условие ещё не дозаполнено (нет значения) — его редактор держим открытым */
+export function isIncomplete(c: Condition | undefined): boolean {
+  if (!c) return false;
+  if ('all' in c) return c.all.some(isIncomplete);
+  if ('any' in c) return c.any.some(isIncomplete);
+  if ('not' in c) return isIncomplete(c.not);
+  if (NO_VALUE.includes(c.op)) return false;
+  return c.value === undefined || c.value === '' || (Array.isArray(c.value) && c.value.length === 0);
+}
+
+/** Простое условие по вопросу — стартовая точка, которую пользователь потом уточняет */
+export function defaultCondition(def: Survey, questionId?: string): SimpleCondition | undefined {
+  const q = (questionId && findQuestion(def, questionId)) || allQuestions(def).find((x) => x.type !== 'info');
+  if (!q) return undefined;
+  const op = opsFor(q, false)[0];
+  return { q: q.id, ...(q.type === 'matrix' ? { row: allRows(def, q)[0]?.code } : {}), op, ...(NO_VALUE.includes(op) ? {} : { value: '' }) };
+}
+
 export function ConditionEditor({ def, value, onChange, required, suggest }: {
   def: Survey; value: Condition | undefined; onChange: (c: Condition | undefined) => void; required?: boolean;
   /** ID вопроса, который подставляется в новое условие (обычно — предыдущий вопрос) */
@@ -65,16 +84,19 @@ export function ConditionEditor({ def, value, onChange, required, suggest }: {
 
   if (jsonMode || !visual) {
     return (
-      <div className="cond stack">
-        <textarea className="input" rows={6} spellCheck={false} style={{ fontFamily: 'var(--mono)', fontSize: 13 }} value={jsonText}
+      <div className="cond cond-json">
+        <textarea className="input" rows={5} spellCheck={false} value={jsonText}
           placeholder='{"all": [{"q": "Q1", "op": "eq", "value": 1}, {"not": {"q": "Q2", "op": "answered"}}]}'
           onChange={(e) => {
             setJsonText(e.target.value);
             if (!e.target.value.trim()) { setJsonError(''); if (!required) onChange(undefined); return; }
             try { onChange(JSON.parse(e.target.value)); setJsonError(''); } catch (err) { setJsonError((err as Error).message); }
           }} />
-        {jsonError && <span style={{ color: 'var(--danger)', fontSize: 13 }}>JSON: {jsonError}</span>}
-        {toVisual(value) && <button className="btn-link" style={{ alignSelf: 'flex-start' }} onClick={() => setJsonMode(false)}>Визуальный режим</button>}
+        <div className="cond-foot">
+          {jsonError && <span className="field-error">JSON: {jsonError}</span>}
+          <span className="grow" />
+          {toVisual(value) && <button className="btn-link" onClick={() => setJsonMode(false)}>обычный вид</button>}
+        </div>
       </div>
     );
   }
@@ -86,41 +108,42 @@ export function ConditionEditor({ def, value, onChange, required, suggest }: {
   };
 
   const addItem = () => {
-    const q = (suggest && findQuestion(def, suggest)) || questions[0];
-    setItems([...visual.items, q ? { q: q.id, op: opsFor(q, false)[0], ...(NO_VALUE.includes(opsFor(q, false)[0]) ? {} : { value: '' }) } : { param: 'src', op: 'eq', value: '' }]);
+    const last = visual.items[visual.items.length - 1];
+    const q = (last?.q && findQuestion(def, last.q)) || (suggest && findQuestion(def, suggest)) || questions[0];
+    const op = opsFor(q, false)[0];
+    setItems([...visual.items, q
+      ? { q: q.id, ...(q.type === 'matrix' ? { row: allRows(def, q)[0]?.code } : {}), op, ...(NO_VALUE.includes(op) ? {} : { value: '' }) }
+      : { param: 'src', op: 'eq', value: '' }]);
   };
 
   return (
     <div className="cond">
-      {visual.items.length === 0 && <div className="muted small" style={{ marginBottom: 6 }}>{required ? 'Добавьте условие' : 'Показывается всегда. Добавьте условие, чтобы показывать выборочно.'}</div>}
-      {visual.items.length > 1 && (
-        <select className="input" style={{ width: 'auto', minHeight: 32, marginBottom: 8 }} value={visual.mode}
-          onChange={(e) => setItems(visual.items, e.target.value as 'all' | 'any')}>
-          <option value="all">Выполнены все условия (И)</option>
-          <option value="any">Выполнено любое условие (ИЛИ)</option>
-        </select>
-      )}
       {visual.items.map((c, i) => (
         <CondRow key={i} def={def} c={c} questions={questions}
+          label={i === 0 ? 'если' : visual.mode === 'all' ? 'и' : 'или'}
+          onToggleMode={i > 0 ? () => setItems(visual.items, visual.mode === 'all' ? 'any' : 'all') : undefined}
           onChange={(nc) => setItems(visual.items.map((x, k) => (k === i ? nc : x)))}
           onRemove={() => setItems(visual.items.filter((_, k) => k !== i))} />
       ))}
-      <div className="row" style={{ gap: 8 }}>
-        <button className="btn btn-secondary btn-sm" onClick={addItem}>+ условие</button>
-        <button className="btn-link" onClick={() => { setJsonText(value ? JSON.stringify(value, null, 2) : ''); setJsonMode(true); }}>в виде JSON</button>
+      <div className="cond-foot">
+        <button className="btn-link add-link" onClick={addItem}>{visual.items.length ? '+ ещё условие' : '+ условие'}</button>
+        <span className="grow" />
+        <button className="btn-link json-link" title="Сложное условие с вложенными И / ИЛИ / НЕ — в виде JSON"
+          onClick={() => { setJsonText(value ? JSON.stringify(value, null, 2) : ''); setJsonMode(true); }}>{'{ }'}</button>
       </div>
     </div>
   );
 }
 
-function CondRow({ def, c, questions, onChange, onRemove }: {
-  def: Survey; c: SimpleCondition; questions: Question[]; onChange: (c: SimpleCondition) => void; onRemove: () => void;
+function CondRow({ def, c, questions, label, onToggleMode, onChange, onRemove }: {
+  def: Survey; c: SimpleCondition; questions: Question[]; label: string; onToggleMode?: () => void;
+  onChange: (c: SimpleCondition) => void; onRemove: () => void;
 }) {
   const isParam = c.param !== undefined;
   const q = !isParam && c.q ? findQuestion(def, c.q) : undefined;
   const ops = opsFor(q, isParam);
   const choices = valueChoices(def, q, c.row);
-  const numeric = q && ['number', 'scale', 'matrix', 'single', 'multi', 'dropdown'].includes(q.type)
+  const numeric = q && ['number', 'scale', 'matrix', 'single', 'multi', 'dropdown', 'ranking'].includes(q.type)
     || (q?.type === 'hidden' && q.valueType === 'number');
 
   const setSource = (src: string) => {
@@ -138,57 +161,61 @@ function CondRow({ def, c, questions, onChange, onRemove }: {
     onChange(next);
   };
   const parse = (s: string) => (numeric && s.trim() !== '' && !isNaN(Number(s)) ? Number(s) : s);
+  const short = (t: string, n = 28) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
 
   return (
     <div className="cond-row">
-      <div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
-        <select className="input" value={isParam ? '__param' : c.q ?? ''} onChange={(e) => setSource(e.target.value)}>
+      {onToggleMode
+        ? <button type="button" className="cond-label toggle" title="Переключить И / ИЛИ для всех условий" onClick={onToggleMode}>{label}</button>
+        : <span className="cond-label">{label}</span>}
+      <div className="cond-fields">
+        <select className="input cond-source" value={isParam ? '__param' : c.q ?? ''} onChange={(e) => setSource(e.target.value)}>
           {!isParam && c.q && !q && <option value={c.q}>{c.q} (нет такого)</option>}
-          {questions.map((x) => <option key={x.id} value={x.id}>{x.id}{x.text ? ` · ${x.text.slice(0, 40)}` : ''}</option>)}
-          <option value="__param">Параметр ссылки…</option>
+          {questions.map((x) => <option key={x.id} value={x.id}>{x.id}{x.text ? ` · ${short(x.text, 40)}` : ''}</option>)}
+          <option value="__param">параметр ссылки…</option>
         </select>
-        {isParam && <input className="input" placeholder="utm_source" value={c.param} onChange={(e) => onChange({ ...c, param: e.target.value.trim() })} />}
+        {isParam && <input className="input cond-param" placeholder="utm_source" value={c.param} onChange={(e) => onChange({ ...c, param: e.target.value.trim() })} />}
+        {q?.type === 'matrix' && (
+          <select className="input cond-rowsel" value={c.row ?? ''} title="Строка матрицы" onChange={(e) => {
+            const next = { ...c };
+            if (e.target.value === '') delete next.row; else next.row = Number(e.target.value);
+            onChange(next);
+          }}>
+            <option value="">строка…</option>
+            {allRows(def, q).map((r) => <option key={r.code} value={r.code}>{short(r.text)}</option>)}
+          </select>
+        )}
+        <select className="input cond-op" value={c.op} onChange={(e) => setOp(e.target.value as ConditionOp)}>
+          {ops.map((o) => <option key={o} value={o}>{OP_LABELS[o]}</option>)}
+        </select>
+        {NO_VALUE.includes(c.op) ? null : choices && ARRAY_OPS.includes(c.op) ? (
+          <div className="multi-pick cond-value">
+            {choices.map((o) => {
+              const arr = Array.isArray(c.value) ? (c.value as unknown[]) : [];
+              const on = arr.includes(o.code);
+              return (
+                <label key={o.code} className={on ? 'on' : ''} title={`${o.code} · ${o.text}`}>
+                  <input type="checkbox" checked={on} style={{ display: 'none' }}
+                    onChange={() => onChange({ ...c, value: on ? arr.filter((x) => x !== o.code) : [...arr, o.code] })} />
+                  {short(o.text, 18)}
+                </label>
+              );
+            })}
+          </div>
+        ) : choices ? (
+          <select className="input cond-value" value={String(c.value ?? '')} onChange={(e) => onChange({ ...c, value: e.target.value === '' ? '' : Number(e.target.value) })}>
+            <option value="">выберите…</option>
+            {choices.map((o) => <option key={o.code} value={o.code}>{short(o.text, 40)}</option>)}
+          </select>
+        ) : ARRAY_OPS.includes(c.op) ? (
+          <input className="input cond-value" placeholder="через запятую" value={Array.isArray(c.value) ? c.value.join(', ') : ''}
+            onChange={(e) => onChange({ ...c, value: e.target.value.split(',').map((s) => s.trim()).filter(Boolean).map(parse) })} />
+        ) : (
+          <input className="input cond-value" value={String(c.value ?? '')} placeholder={q?.type === 'date' ? 'ГГГГ-ММ-ДД' : 'значение'}
+            onChange={(e) => onChange({ ...c, value: parse(e.target.value) })} />
+        )}
       </div>
-      {q?.type === 'matrix' ? (
-        <select className="input" value={c.row ?? ''} onChange={(e) => {
-          const next = { ...c };
-          if (e.target.value === '') delete next.row; else next.row = Number(e.target.value);
-          onChange(next);
-        }}>
-          <option value="">(любая строка)</option>
-          {allRows(def, q).map((r) => <option key={r.code} value={r.code}>{r.code} · {r.text}</option>)}
-        </select>
-      ) : <span />}
-      <select className="input" value={c.op} onChange={(e) => setOp(e.target.value as ConditionOp)}>
-        {ops.map((o) => <option key={o} value={o}>{OP_LABELS[o]}</option>)}
-      </select>
-      {NO_VALUE.includes(c.op) ? <span /> : choices && ARRAY_OPS.includes(c.op) ? (
-        <div className="multi-pick">
-          {choices.map((o) => {
-            const arr = Array.isArray(c.value) ? (c.value as unknown[]) : [];
-            const on = arr.includes(o.code);
-            return (
-              <label key={o.code} className={on ? 'on' : ''} title={o.text}>
-                <input type="checkbox" checked={on} style={{ display: 'none' }}
-                  onChange={() => onChange({ ...c, value: on ? arr.filter((x) => x !== o.code) : [...arr, o.code] })} />
-                {o.code}
-              </label>
-            );
-          })}
-        </div>
-      ) : choices ? (
-        <select className="input" value={String(c.value ?? '')} onChange={(e) => onChange({ ...c, value: e.target.value === '' ? '' : Number(e.target.value) })}>
-          <option value="">— значение —</option>
-          {choices.map((o) => <option key={o.code} value={o.code}>{o.code} · {o.text}</option>)}
-        </select>
-      ) : ARRAY_OPS.includes(c.op) ? (
-        <input className="input" placeholder="через запятую" value={Array.isArray(c.value) ? c.value.join(', ') : ''}
-          onChange={(e) => onChange({ ...c, value: e.target.value.split(',').map((s) => s.trim()).filter(Boolean).map(parse) })} />
-      ) : (
-        <input className="input" value={String(c.value ?? '')} placeholder={q?.type === 'date' ? 'ГГГГ-ММ-ДД' : 'значение'}
-          onChange={(e) => onChange({ ...c, value: parse(e.target.value) })} />
-      )}
-      <button className="icon-btn" title="Убрать условие" onClick={onRemove}>✕</button>
+      <button className="icon-btn cond-remove" title="Убрать условие" onClick={onRemove}>✕</button>
     </div>
   );
 }

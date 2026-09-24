@@ -139,6 +139,13 @@ export interface MultiQuestion extends ChoiceBase {
   maxSelected?: number;
 }
 
+/** Ранжирование: респондент расставляет варианты по местам (1 — самое важное) */
+export interface RankingQuestion extends ChoiceBase {
+  type: 'ranking';
+  /** Сколько мест нужно заполнить; по умолчанию — все варианты */
+  rankCount?: number;
+}
+
 export interface TextQuestion extends QuestionBase {
   type: 'text';
   multiline?: boolean;
@@ -222,6 +229,7 @@ export interface HiddenQuestion extends QuestionBase {
 export type Question =
   | ChoiceQuestion
   | MultiQuestion
+  | RankingQuestion
   | TextQuestion
   | NumberQuestion
   | ScaleQuestion
@@ -232,6 +240,11 @@ export type Question =
   | HiddenQuestion;
 
 export type QuestionType = Question['type'];
+
+/** Типы со списком вариантов options */
+export const CHOICE_TYPES: QuestionType[] = ['single', 'multi', 'dropdown', 'ranking'];
+/** Типы, у которых есть варианты или строки (для переноса и действий с вариантами) */
+export const OPTION_TYPES: QuestionType[] = [...CHOICE_TYPES, 'matrix'];
 
 export const END = 'END';
 export const SCREENOUT = 'SCREENOUT';
@@ -318,6 +331,7 @@ export const DEFAULT_SETTINGS: Required<SurveySettings> = {
 export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   single: 'Один ответ',
   multi: 'Несколько ответов',
+  ranking: 'Ранжирование',
   dropdown: 'Выпадающий список',
   text: 'Открытый текст',
   number: 'Число',

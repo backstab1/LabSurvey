@@ -91,6 +91,14 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
       }
       return null;
     }
+    case 'ranking': {
+      if (!Array.isArray(v) || v.some((x) => typeof x !== 'number') || new Set(v).size !== v.length) return 'Некорректный ответ';
+      const opts = resolveOptions(ctx, q, 0, false);
+      if (v.some((c) => !opts.some((o) => o.code === c))) return 'Выберите варианты из списка';
+      const need = Math.min(q.rankCount ?? opts.length, opts.length);
+      if (v.length !== need) return need === opts.length ? 'Расставьте все варианты по порядку' : `Выберите ${need} первых мест`;
+      return null;
+    }
     case 'text': {
       if (typeof v !== 'string') return 'Некорректный ответ';
       if (required && !v.trim()) return 'Пожалуйста, ответьте на вопрос';

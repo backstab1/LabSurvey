@@ -1,14 +1,16 @@
 import { useState, type ReactNode } from 'react';
-import { ConditionEditor, describeCondition } from './ConditionEditor.tsx';
-import { ActionsEditor, describeActions } from './ActionsEditor.tsx';
+import { ConditionEditor, defaultCondition, describeCondition } from './ConditionEditor.tsx';
+import { ActionsEditor, actionKinds, describeActions, newAction } from './ActionsEditor.tsx';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
 import { OptionsEditor } from './OptionsEditor.tsx';
 import { QuestionPreview } from './preview.tsx';
 import { allQuestions } from '../../../shared/logic.ts';
+import { allIds } from '../../../shared/refactor.ts';
+import { ID_RE, RESERVED_IDS } from '../../../shared/validate.ts';
 import { Flag, Menu, Modal, NumField, Section, Segmented, compact } from './common.tsx';
 import { newQuestion, TYPE_ICONS } from './Builder.tsx';
 import {
-  QUESTION_TYPE_LABELS, type MatrixQuestion, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
+  CHOICE_TYPES, OPTION_TYPES, QUESTION_TYPE_LABELS, type Action, type MatrixQuestion, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
 } from '../../../shared/types.ts';
 
 /** Смена типа с сохранением всего, что можно перенести */
@@ -20,10 +22,10 @@ function convert(q: Question, type: QuestionType): Question {
     hideBack: q.hideBack, hideFinish: q.hideFinish,
   };
   const opts: Option[] | undefined = old.options ?? old.rows;
-  if (['single', 'multi', 'dropdown'].includes(type) && opts?.length) {
+  if (CHOICE_TYPES.includes(type) && opts?.length) {
     return compact({
       ...fresh, ...keep, order: old.order ?? old.rowOrder, optionsFrom: old.optionsFrom ?? old.rowsFrom,
-      options: opts.map((o) => compact({ ...o, exclusive: type === 'multi' ? o.exclusive : undefined })),
+      options: opts.map((o) => compact({ ...o, exclusive: type === 'multi' ? o.exclusive : undefined, other: type === 'ranking' ? undefined : o.other })),
     }) as Question;
   }
   if (type === 'matrix' && opts?.length) {
@@ -47,11 +49,25 @@ interface Props {
   hasPrev: boolean;
   hasNext: boolean;
   onCreateVar: () => string;
+  /** Смена ID с обновлением всех ссылок на вопрос */
+  onRename: (newId: string) => void;
+  onPreview: () => void;
 }
 
-export function QuestionDialog({ def, q, prevId, position, onChange, onClose, onDelete, onDuplicate, onNav, hasPrev, hasNext, onCreateVar }: Props) {
+export function QuestionDialog({ def, q, prevId, position, onChange, onClose, onDelete, onDuplicate, onNav, hasPrev, hasNext, onCreateVar, onRename, onPreview }: Props) {
   const set = (patch: Patch) => onChange(compact({ ...q, ...patch } as Question));
   const [showHint, setShowHint] = useState(!!q.hint);
+  const [idDraft, setIdDraft] = useState(q.id);
+  const [idError, setIdError] = useState('');
+  const commitId = () => {
+    const next = idDraft.trim();
+    if (next === q.id) return setIdError('');
+    if (!ID_RE.test(next)) return setIdError('Латиница, цифры и _, начинается с буквы');
+    if (RESERVED_IDS.has(next.toLowerCase())) return setIdError('Зарезервированное имя');
+    if (allIds(def).some((x) => x !== q.id && x.toLowerCase() === next.toLowerCase())) return setIdError('Такой ID уже есть');
+    setIdError('');
+    onRename(next);
+  };
   const answerable = q.type !== 'info' && q.type !== 'hidden';
 
   return (
@@ -61,7 +77,9 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
         <button className="icon-btn" title="Предыдущий вопрос" disabled={!hasPrev} onClick={() => onNav(-1)}>‹</button>
         <button className="icon-btn" title="Следующий вопрос" disabled={!hasNext} onClick={() => onNav(1)}>›</button>
         <Menu items={[
+          { label: 'Предпросмотр с этого вопроса', onClick: onPreview },
           { label: 'Дублировать', onClick: onDuplicate },
+          { label: 'Копировать (JSON)', onClick: () => navigator.clipboard.writeText(JSON.stringify(q, null, 2)) },
           { label: 'Удалить вопрос', onClick: onDelete, danger: true },
         ]} />
         <button className="btn btn-primary btn-sm" onClick={onClose}>Готово</button>
@@ -77,7 +95,10 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
               </select>
             </label>
             <label className="field" style={{ width: 130 }}><span>ID / переменная</span>
-              <input className="input mono" value={q.id} onChange={(e) => set({ id: e.target.value.trim() })} />
+              <input className={`input mono${idError ? ' invalid' : ''}`} value={idDraft} title="Все ссылки на вопрос обновятся автоматически"
+                onChange={(e) => setIdDraft(e.target.value)} onBlur={commitId}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitId(); } if (e.key === 'Escape') { setIdDraft(q.id); setIdError(''); } }} />
+              {idError && <span className="field-error">{idError}</span>}
             </label>
             {answerable && (
               <label className="switch" title="Без ответа нельзя перейти дальше">
@@ -92,6 +113,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
             <textarea className="input autogrow" rows={Math.min(8, Math.max(2, q.text.split('\n').length))} value={q.text} autoFocus={!q.text}
               placeholder={q.type === 'hidden' ? 'Например: ID панелиста' : 'Введите вопрос. Подставить ответ: {{Q1}}'}
               onChange={(e) => set({ text: e.target.value })} />
+            {q.type !== 'hidden' && <span className="field-help">**жирный**, *курсив*, [ссылка](https://…), ![картинка](https://…), ответ на вопрос — {'{{Q1}}'}</span>}
           </label>
           {answerable && (showHint ? (
             <label className="field"><span>Подсказка под вопросом</span>
@@ -118,55 +140,106 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
   );
 }
 
-/** «Действия»: всё, что происходит перед показом вопроса и после ответа на него */
+/** Одно правило в блоке «Действия»: заголовок, крестик и содержимое */
+function Rule({ title, onRemove, children }: { title: string; onRemove: () => void; children: ReactNode }) {
+  return (
+    <div className="rule">
+      <div className="rule-head">
+        <span className="rule-title">{title}</span>
+        <button className="icon-btn" title="Убрать" onClick={onRemove}>✕</button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * «Действия»: что происходит перед показом вопроса и после ответа.
+ * Показывается только то, что настроено; всё остальное — в меню «+ Добавить».
+ */
 function ActionsBlock({ def, q, prevId, set, onCreateVar }: {
   def: Survey; q: Question; prevId?: string; set: (p: Patch) => void; onCreateVar: () => string;
 }) {
   const before = q.actions?.before;
   const after = q.actions?.after;
   const scripts = (q.scripts ?? {}) as Record<string, string | undefined>;
+  const [jsBefore, setJsBefore] = useState(!!scripts.onShow);
+  const [jsAfter, setJsAfter] = useState(!!(scripts.onChange || scripts.validate));
   const setActions = (phase: 'before' | 'after', list: typeof before) => {
     const next = compact({ ...q.actions, [phase]: list });
     set({ actions: Object.keys(next).length ? next : undefined });
   };
+  const addAction = (phase: 'before' | 'after', kind: Action['do']) =>
+    setActions(phase, [...(q.actions?.[phase] ?? []), newAction(def, q, phase, kind)]);
+  const clearScripts = (keys: string[]) => {
+    const next = { ...scripts };
+    for (const k of keys) delete next[k];
+    set({ scripts: Object.values(next).some(Boolean) ? next : undefined });
+  };
+
   const from = q.type === 'matrix' ? q.rowsFrom : 'optionsFrom' in q ? q.optionsFrom : undefined;
   const fromKey = q.type === 'matrix' ? 'rowsFrom' : 'optionsFrom';
-  const canCarry = ['single', 'multi', 'dropdown', 'matrix'].includes(q.type);
+  const idx = allQuestions(def).findIndex((x) => x.id === q.id);
+  const sources = allQuestions(def).slice(0, Math.max(0, idx)).filter((x) => OPTION_TYPES.includes(x.type));
+  const canCarry = OPTION_TYPES.includes(q.type);
+  const what = q.type === 'matrix' ? 'Строки' : 'Варианты';
+
   const beforeParts = [
     q.showIf && `показывать, если ${describeCondition(def, q.showIf)}`,
-    from && `${q.type === 'matrix' ? 'строки' : 'варианты'} из ${from.question} (${FILTER_LABELS[from.filter]})`,
+    from && `${what.toLowerCase()} из ${from.question}`,
     describeActions(def, q, before),
     scripts.onShow && 'JS',
   ].filter(Boolean);
   const afterParts = [describeActions(def, q, after), (scripts.onChange || scripts.validate) && 'JS'].filter(Boolean);
-  const answerable = q.type !== 'info';
+  const beforeEmpty = !q.showIf && !from && !before?.length && !jsBefore;
+  const afterEmpty = !after?.length && !jsAfter;
 
   return (
     <div className="actions-block">
       <div className="block-title">Действия</div>
       <Section title="Перед показом" active={beforeParts.length > 0} summary={beforeParts.length ? beforeParts.join(' · ') : 'показывать всегда'}>
-        <div className="sub-title">Показывать вопрос, если</div>
-        <ConditionEditor def={def} value={q.showIf} suggest={prevId} onChange={(c) => set({ showIf: c })} />
-        {canCarry && (
-          <>
-            <div className="sub-title">{q.type === 'matrix' ? 'Строки' : 'Варианты'} из другого вопроса</div>
-            <CarryForward def={def} self={q.id} value={from} onChange={(v) => set({ [fromKey]: v })} />
-          </>
+        {beforeEmpty && <p className="empty-rules">Вопрос показывается всегда.</p>}
+        {q.showIf && (
+          <Rule title="Показывать вопрос" onRemove={() => set({ showIf: undefined })}>
+            <ConditionEditor def={def} value={q.showIf} suggest={prevId} onChange={(c) => set({ showIf: c })} />
+          </Rule>
         )}
-        <div className="sub-title">Действия</div>
+        {from && (
+          <Rule title={`${what} из другого вопроса`} onRemove={() => set({ [fromKey]: undefined })}>
+            <CarryForward def={def} self={q.id} value={from} onChange={(v) => set({ [fromKey]: v })} />
+          </Rule>
+        )}
         <ActionsEditor def={def} q={q} phase="before" value={before} onChange={(v) => setActions('before', v)} onCreateVar={onCreateVar} />
-        <details className="js-details" open={!!scripts.onShow}>
-          <summary>JS-скрипт</summary>
-          <ScriptsEditor level="question" only={['onShow']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
-        </details>
+        {jsBefore && (
+          <Rule title="JS при показе" onRemove={() => { clearScripts(['onShow']); setJsBefore(false); }}>
+            <ScriptsEditor level="question" only={['onShow']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
+          </Rule>
+        )}
+        <Menu align="left" className="btn-link add-menu" label="+ Добавить" title="Добавить правило" items={[
+          !q.showIf && { label: 'Условие показа', onClick: () => set({ showIf: defaultCondition(def, prevId) }) },
+          canCarry && !from && { label: `${what} из другого вопроса`, disabled: !sources.length,
+            onClick: () => set({ [fromKey]: { question: sources[sources.length - 1].id, filter: 'selected' } }) },
+          { label: 'Действие', onClick: () => {}, group: true },
+          ...actionKinds('before', q).map(([k, l]) => ({ label: l, onClick: () => addAction('before', k) })),
+          !jsBefore && { label: 'Скрипт', onClick: () => {}, group: true },
+          !jsBefore && { label: 'JS-скрипт при показе', onClick: () => setJsBefore(true) },
+        ]} />
       </Section>
-      {answerable && (
+
+      {q.type !== 'info' && (
         <Section title="После ответа" active={afterParts.length > 0} summary={afterParts.length ? afterParts.join(' · ') : 'к следующему вопросу'}>
+          {afterEmpty && <p className="empty-rules">Дальше — следующий вопрос.</p>}
           <ActionsEditor def={def} q={q} phase="after" value={after} onChange={(v) => setActions('after', v)} onCreateVar={onCreateVar} />
-          <details className="js-details" open={!!(scripts.onChange || scripts.validate)}>
-            <summary>JS-скрипты</summary>
-            <ScriptsEditor level="question" only={['onChange', 'validate']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
-          </details>
+          {jsAfter && (
+            <Rule title="JS-скрипты" onRemove={() => { clearScripts(['onChange', 'validate']); setJsAfter(false); }}>
+              <ScriptsEditor level="question" only={['onChange', 'validate']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
+            </Rule>
+          )}
+          <Menu align="left" className="btn-link add-menu" label="+ Добавить" title="Добавить действие" items={[
+            ...actionKinds('after', q).map(([k, l]) => ({ label: l, onClick: () => addAction('after', k) })),
+            !jsAfter && { label: 'Скрипт', onClick: () => {}, group: true },
+            !jsAfter && { label: 'JS-проверка или реакция на ответ', onClick: () => setJsAfter(true) },
+          ]} />
         </Section>
       )}
     </div>
@@ -178,6 +251,12 @@ const FILTER_LABELS = { selected: 'выбранные', notSelected: 'невыб
 /** Главное содержимое по типу: варианты, строки и столбцы, шкала и т. п. */
 function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
   switch (q.type) {
+    case 'ranking':
+      return (
+        <Block title="Варианты для ранжирования" note={q.optionsFrom ? `+ варианты из ${q.optionsFrom.question}` : undefined}>
+          <OptionsEditor options={q.options} onChange={(options) => set({ options })} />
+        </Block>
+      );
     case 'single':
     case 'multi':
     case 'dropdown':
@@ -285,7 +364,7 @@ function SettingsSection({ q, set }: { q: Question; set: (p: Patch) => void }) {
   };
   const group = (title: string) => body.push(<div key={`g-${title}`} className="flag-group">{title}</div>);
   const answerable = q.type !== 'info' && q.type !== 'hidden';
-  const isChoice = q.type === 'single' || q.type === 'multi' || q.type === 'dropdown';
+  const isChoice = CHOICE_TYPES.includes(q.type);
 
   if (isChoice || q.type === 'matrix' || q.type === 'number' || q.type === 'text' || q.type === 'scale') group('Логика');
   if (isChoice || q.type === 'matrix') {
@@ -298,6 +377,16 @@ function SettingsSection({ q, set }: { q: Question; set: (p: Patch) => void }) {
         <span>{q.type === 'matrix' ? 'Порядок строк' : 'Порядок вариантов'}</span>
         <Segmented value={value} onChange={(v) => set({ [key]: v === 'fixed' ? undefined : v, randomize: undefined, randomizeRows: undefined })}
           options={[{ value: 'fixed', label: 'Как есть' }, { value: 'random', label: 'Случайный' }, { value: 'rotate', label: 'Ротация' }]} />
+      </div>,
+    );
+  }
+  if (q.type === 'ranking') {
+    if (q.rankCount) on.push(`Топ-${q.rankCount}`);
+    body.push(
+      <div key="rank" className="flag-line">
+        <span>Сколько мест заполнить<small className="muted"> (пусто — все варианты)</small></span>
+        <input className="input mini" type="number" min={1} placeholder="все" value={q.rankCount ?? ''}
+          onChange={(e) => set({ rankCount: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })} />
       </div>,
     );
   }
@@ -387,7 +476,7 @@ function CarryForward({ def, self, value, onChange }: {
   def: Survey; self: string; value: OptionsFrom | undefined; onChange: (v: OptionsFrom | undefined) => void;
 }) {
   const sources = allQuestions(def)
-    .filter((x) => x.id !== self && ['single', 'multi', 'dropdown', 'matrix'].includes(x.type));
+    .filter((x) => x.id !== self && OPTION_TYPES.includes(x.type));
   return (
     <div className="row">
       <label className="field grow"><span>Из вопроса</span>

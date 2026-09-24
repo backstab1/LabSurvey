@@ -254,6 +254,10 @@ export const responses = {
     return { real, test };
   },
 
+  async remove(id: string): Promise<void> {
+    db.prepare('DELETE FROM responses WHERE id = ?').run(id);
+  },
+
   async deleteTest(surveyId: string): Promise<number> {
     return Number(db.prepare('DELETE FROM responses WHERE survey_id = ? AND is_test = 1').run(surveyId).changes);
   },

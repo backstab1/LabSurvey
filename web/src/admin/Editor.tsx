@@ -40,6 +40,9 @@ export function Editor({ id }: { id: string }) {
   const [showIssues, setShowIssues] = useState(false);
   const [focus, setFocus] = useState<{ where: string; n: number }>();
   const latest = useRef<Survey | null>(null);
+  // История для отмены: правки, сделанные подряд быстрее чем за 0,7 с, объединяются в один шаг
+  const hist = useRef<{ past: Survey[]; future: Survey[]; last: number }>({ past: [], future: [], last: 0 });
+  const [, setHistTick] = useState(0);
 
   const reload = useCallback(async () => {
     const r = await api<SurveyInfo>('GET', `/api/admin/surveys/${id}`);
@@ -78,9 +81,58 @@ export function Editor({ id }: { id: string }) {
 
   const validation = useMemo(() => (def ? validateSurvey(def) : null), [def]);
 
+  const apply = (next: Survey) => { setDef(next); latest.current = next; setSave('pending'); };
+  const update = (next: Survey) => {
+    const h = hist.current;
+    const cur = latest.current;
+    if (cur && Date.now() - h.last > 700) {
+      h.past.push(cur);
+      if (h.past.length > 200) h.past.shift();
+    }
+    h.last = Date.now();
+    h.future = [];
+    apply(next);
+    setHistTick((n) => n + 1);
+  };
+  const undo = () => {
+    const h = hist.current;
+    const prev = h.past.pop();
+    if (!prev || !latest.current) return;
+    h.future.push(latest.current);
+    h.last = 0;
+    apply(prev);
+    setHistTick((n) => n + 1);
+  };
+  const redo = () => {
+    const h = hist.current;
+    const next = h.future.pop();
+    if (!next || !latest.current) return;
+    h.past.push(latest.current);
+    h.last = 0;
+    apply(next);
+    setHistTick((n) => n + 1);
+  };
+
+  // Горячие клавиши: Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y — отмена и повтор (в полях ввода работает родная отмена), Ctrl+S — сохранить
+  const keysRef = useRef({ undo, redo, flush });
+  keysRef.current = { undo, redo, flush };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      const el = e.target as HTMLElement;
+      const inField = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
+      if (k === 's' || k === 'ы') { e.preventDefault(); keysRef.current.flush(); return; }
+      if (inField) return;
+      if ((k === 'z' || k === 'я') && !e.shiftKey) { e.preventDefault(); keysRef.current.undo(); }
+      else if (((k === 'z' || k === 'я') && e.shiftKey) || k === 'y' || k === 'н') { e.preventDefault(); keysRef.current.redo(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   if (!info || !def || !validation) return <div className="container muted">Загрузка…</div>;
 
-  const update = (next: Survey) => { setDef(next); latest.current = next; setSave('pending'); };
   const saveNow = async () => (save === 'saved' ? true : flush());
 
   const publish = async () => {
@@ -96,9 +148,12 @@ export function Editor({ id }: { id: string }) {
     }
   };
 
-  const preview = async () => {
-    if (!(await saveNow())) return;
-    window.open(`/s/${id}?preview=1&new=1`, '_blank');
+  const preview = async (startAt?: string) => {
+    // Окно открываем сразу (иначе браузер заблокирует всплывающее окно), адрес — после сохранения
+    const w = window.open('about:blank', '_blank');
+    if (!(await saveNow())) { w?.close(); return; }
+    const url = `/s/${id}?preview=1&new=1${startAt ? `&start=${encodeURIComponent(startAt)}` : ''}`;
+    if (w) w.location.href = url; else window.open(url, '_blank');
   };
 
   const setStatus = async (status: 'active' | 'closed') => {
@@ -126,7 +181,11 @@ export function Editor({ id }: { id: string }) {
         <span className={`badge ${info.status}`}>{STATUS_TEXT[info.status]}</span>
         <span className={`save-state ${save}`} onClick={save === 'error' ? () => flush() : undefined}>{SAVE_TEXT[save]}</span>
         <span className="grow" />
-        <button className="btn btn-secondary" onClick={preview}>Предпросмотр</button>
+        <span className="undo-group">
+          <button className="icon-btn" title="Отменить (Ctrl+Z)" disabled={!hist.current.past.length} onClick={undo}>↶</button>
+          <button className="icon-btn" title="Повторить (Ctrl+Shift+Z)" disabled={!hist.current.future.length} onClick={redo}>↷</button>
+        </span>
+        <button className="btn btn-secondary" onClick={() => preview()}>Предпросмотр</button>
         <button className="btn btn-primary" disabled={!validation.ok || !unpublished} onClick={publish}
           title={!validation.ok ? 'Сначала исправьте ошибки' : !unpublished ? 'Опубликованная версия совпадает с черновиком' : ''}>
           {!info.published ? 'Опубликовать' : unpublished ? 'Опубликовать изменения' : 'Опубликовано'}
@@ -172,7 +231,7 @@ export function Editor({ id }: { id: string }) {
         </div>
       )}
 
-      {tab === 'builder' && <Builder def={def} onChange={update} issues={validation} focus={focus} />}
+      {tab === 'builder' && <Builder def={def} onChange={update} issues={validation} focus={focus} onPreview={preview} />}
       {tab === 'json' && <JsonTab def={def} onChange={update} />}
       {tab === 'settings' && <SettingsTab def={def} onChange={update} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
-import { toast } from './common.tsx';
+import { Modal, toast } from './common.tsx';
+import { rich } from '../runner/rich.tsx';
+import { allQuestions, answerText, pipe } from '../../../shared/logic.ts';
+import type { Answers, Survey } from '../../../shared/types.ts';
 import type { SurveyInfo } from './Editor.tsx';
 import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
 
@@ -16,6 +19,14 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU',
 export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Promise<unknown> }) {
   const [statuses, setStatuses] = useState<ResponseStatus[]>(['completed']);
   const [recent, setRecent] = useState<RespRow[] | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
+  const [showTest, setShowTest] = useState(true);
+  const [simCount, setSimCount] = useState(20);
+  const [simBusy, setSimBusy] = useState(false);
+  const refresh = async () => {
+    setRecent(await api<RespRow[]>('GET', `/api/admin/surveys/${info.id}/responses`));
+    await reload();
+  };
   const total = Object.values(info.counts.real).reduce((a, b) => a + b, 0);
 
   useEffect(() => { api<RespRow[]>('GET', `/api/admin/surveys/${info.id}/responses`).then(setRecent); }, [info.id, info.counts]);
@@ -58,25 +69,47 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
 
       <div className="card stack">
         <div className="row">
-          <h2 className="grow" style={{ margin: 0 }}>Тестовые ответы (предпросмотр): {info.counts.test}</h2>
+          <h2 className="grow" style={{ margin: 0 }}>Тестовые ответы: {info.counts.test}</h2>
+          <span className="row" style={{ gap: 6 }}>
+            <input className="input mini" type="number" min={1} max={500} value={simCount} title="Сколько анкет заполнить"
+              onChange={(e) => setSimCount(Math.max(1, Math.min(500, Number(e.target.value) || 1)))} />
+            <button className="btn btn-secondary btn-sm" disabled={simBusy} title="Боты пройдут черновик по логике со случайными ответами" onClick={async () => {
+              setSimBusy(true);
+              try {
+                const r = await api('POST', `/api/admin/surveys/${info.id}/simulate`, { count: simCount });
+                toast(`Заполнено: ${r.count} (завершили ${r.stats.completed ?? 0}, отсеяно ${r.stats.screened_out ?? 0})`);
+                await refresh();
+              } catch (e) {
+                toast((e as Error).message);
+              } finally {
+                setSimBusy(false);
+              }
+            }}>{simBusy ? 'Заполнение…' : 'Заполнить тестовыми'}</button>
+          </span>
           <a className="btn btn-secondary btn-sm" href={`/api/admin/surveys/${info.id}/export.xlsx?statuses=${EXPORT_STATUSES.join(',')}&test=1`}>Excel с тестовыми</a>
           <button className="btn btn-danger btn-sm" disabled={!info.counts.test} onClick={async () => {
             if (!window.confirm('Удалить все тестовые ответы?')) return;
             const r = await api('DELETE', `/api/admin/surveys/${info.id}/test-responses`);
             toast(`Удалено: ${r.deleted}`);
-            await reload();
+            await refresh();
           }}>Удалить тестовые</button>
         </div>
+        <p className="muted small" style={{ margin: 0 }}>
+          Тестовые ответы появляются из предпросмотра и тестового заполнения. В обычные выгрузки и Google Sheets они не попадают.
+        </p>
       </div>
 
       <div className="card" style={{ overflowX: 'auto' }}>
-        <h2>Последние ответы</h2>
+        <div className="row" style={{ marginBottom: 8 }}>
+          <h2 className="grow" style={{ margin: 0 }}>Последние ответы</h2>
+          <label className="check small"><input type="checkbox" checked={showTest} onChange={(e) => setShowTest(e.target.checked)} />показывать тестовые</label>
+        </div>
         {!recent ? <p className="muted">Загрузка…</p> : recent.length === 0 ? <p className="muted">Ответов пока нет</p> : (
           <table className="table">
             <thead><tr><th>ID</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Время</th><th>Ответов</th><th>Параметры</th></tr></thead>
             <tbody>
-              {recent.slice(0, 50).map((r) => (
-                <tr key={r.id}>
+              {recent.filter((r) => showTest || !r.isTest).slice(0, 100).map((r) => (
+                <tr key={r.id} className="clickable" onClick={() => setViewing(r.id)} title="Открыть ответ">
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{r.id}</td>
                   <td>{STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}</td>
                   <td>{fmt(r.startedAt)}</td>
@@ -90,7 +123,54 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
           </table>
         )}
       </div>
+      {viewing && <ResponseModal surveyId={info.id} rid={viewing} onClose={() => setViewing(null)} onDeleted={() => { setViewing(null); refresh(); }} />}
     </div>
+  );
+}
+
+/** Просмотр одного ответа: вопросы, которые видел респондент, и его ответы */
+function ResponseModal({ surveyId, rid, onClose, onDeleted }: { surveyId: string; rid: string; onClose: () => void; onDeleted: () => void }) {
+  const [data, setData] = useState<{ response: RespRow & { answers: Answers; history: string[] }; survey: Survey } | null>(null);
+  useEffect(() => { api('GET', `/api/admin/surveys/${surveyId}/responses/${rid}`).then(setData); }, [surveyId, rid]);
+  if (!data) return <Modal onClose={onClose} title="Ответ">Загрузка…</Modal>;
+  const { response: r, survey } = data;
+  const ctx = { survey, answers: r.answers, params: r.params, seed: r.id };
+  const qs = allQuestions(survey).filter((q) => q.type !== 'info' && r.answers[q.id] !== undefined);
+  return (
+    <Modal onClose={onClose} title={<>Ответ <span className="mono muted" style={{ fontWeight: 400, fontSize: 14 }}>{r.id}</span></>}
+      actions={<>
+        <button className="btn btn-danger btn-sm" onClick={async () => {
+          if (!window.confirm('Удалить этот ответ? Это нельзя отменить.')) return;
+          await api('DELETE', `/api/admin/surveys/${surveyId}/responses/${rid}`);
+          onDeleted();
+        }}>Удалить</button>
+        <button className="btn btn-primary btn-sm" onClick={onClose}>Закрыть</button>
+      </>}>
+      <div className="stack">
+        <div className="row small muted">
+          <span>{STATUS_LABELS[r.status]}{r.isTest ? ' · тест' : ''}</span>
+          <span>Начало: {fmt(r.startedAt)}</span>
+          <span>Окончание: {fmt(r.completedAt)}</span>
+          {r.durationSec !== null && <span>Время: {Math.floor(r.durationSec / 60)} мин {r.durationSec % 60} с</span>}
+          {Object.entries(r.params).map(([k, v]) => <span key={k} className="mono">{k}={v}</span>)}
+        </div>
+        {qs.length === 0 ? <p className="muted">Ответов нет</p> : (
+          <table className="table answers-table">
+            <tbody>
+              {qs.map((q) => (
+                <tr key={q.id}>
+                  <td className="mono" style={{ width: 70, verticalAlign: 'top' }}>{q.id}</td>
+                  <td style={{ verticalAlign: 'top' }}>
+                    <div className="muted small">{rich(pipe(q.text, ctx))}</div>
+                    <div>{answerText(ctx, q) || '—'}</div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </Modal>
   );
 }
 

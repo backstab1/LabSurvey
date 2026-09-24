@@ -139,6 +139,14 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, q
           <button type="button" className="btn-link" onClick={() => onChange([...options, compact({ code: 99, text: 'Затрудняюсь ответить', exclusive: allowExclusive || undefined })])}>+ «Затрудняюсь»</button>
         )}
         <button type="button" className="btn-link" onClick={() => setBulk(options.map((o) => `${o.code}. ${o.text}`).join('\n'))}>списком</button>
+        {options.filter((o) => o.code < 90).some((o, i) => o.code !== i + 1) && (
+          <button type="button" className="btn-link" title="Обычные варианты получат коды 1, 2, 3… по порядку; коды 90+ не меняются"
+            onClick={() => {
+              if (!window.confirm('Перенумеровать коды по порядку? Условия и действия, ссылающиеся на старые коды, нужно будет проверить.')) return;
+              let n = 0;
+              onChange(options.map((o) => (o.code < 90 ? { ...o, code: ++n } : o)));
+            }}>коды по порядку</button>
+        )}
       </div>
     </div>
   );

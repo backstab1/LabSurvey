@@ -38,7 +38,7 @@ export function blockOf(survey: Survey, questionId: string): Block | undefined {
 }
 
 export function hasOptions(q: Question): q is Extract<Question, { options: Option[] }> {
-  return q.type === 'single' || q.type === 'multi' || q.type === 'dropdown';
+  return q.type === 'single' || q.type === 'multi' || q.type === 'dropdown' || q.type === 'ranking';
 }
 
 // ---------- Рандомизация ----------
@@ -444,6 +444,7 @@ export function answerText(ctx: RespondentContext, q: Question, rowCode?: string
     case 'dropdown':
       return typeof a.v === 'number' ? label(resolveOptions(ctx, q, 0, false), a.v) : '';
     case 'multi':
+    case 'ranking':
       return Array.isArray(a.v) ? a.v.map((c) => label(resolveOptions(ctx, q, 0, false), c)).join(', ') : '';
     case 'scale': {
       if (typeof a.v !== 'number') return '';

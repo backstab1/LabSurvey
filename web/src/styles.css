@@ -133,3 +133,19 @@ textarea.input { resize: vertical; }
 .carousel .cell-label { display: inline; }
 .page-title { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 12px; }
 .page-error { margin: 0 0 12px; }
+
+/* Форматирование текста */
+.rich-img { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0; }
+.q-text a, .q-hint a, .final a { color: var(--accent); }
+
+/* Ранжирование */
+.ranked { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ranked li { display: flex; align-items: center; gap: 8px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius); padding: 6px 8px; }
+.rank-num { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+.rank-text { flex: 1; text-align: left; border: 0; background: none; padding: 4px 2px; cursor: pointer; }
+.rank-move { border: 0; background: none; width: 32px; height: 32px; border-radius: 6px; cursor: pointer; color: var(--accent); font-size: 16px; }
+.rank-move:disabled { opacity: .25; cursor: default; }
+.rank-move:hover:not(:disabled) { background: #d5e3fc; }
+.rank-option { width: 100%; text-align: left; align-items: center; }
+.rank-option:disabled { opacity: .5; cursor: default; }
+.rank-slot { width: 28px; height: 28px; border-radius: 50%; border: 1px dashed #aab4c2; color: #8a94a3; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }

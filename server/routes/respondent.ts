@@ -153,7 +153,7 @@ export async function respondentRoutes(app: FastifyInstance) {
     return { s, r, survey };
   }
 
-  app.post<{ Params: { id: string }; Body: { rid?: string; params?: unknown; preview?: boolean } }>(
+  app.post<{ Params: { id: string }; Body: { rid?: string; params?: unknown; preview?: boolean; startAt?: string } }>(
     '/api/s/:id/start',
     async (req, reply) => {
       const s = await surveys.get(req.params.id);
@@ -168,7 +168,10 @@ export async function respondentRoutes(app: FastifyInstance) {
         }
       }
 
-      if (req.body?.rid) {
+      // Предпросмотр с выбранного вопроса — всегда новая сессия
+      const startAt = preview && req.body?.startAt && findPage(s.draft, req.body.startAt) ? req.body.startAt : null;
+
+      if (req.body?.rid && !startAt) {
         const loaded = await load(s.id, req.body.rid);
         if (loaded && loaded.r.isTest === preview) {
           // В предпросмотре завершённую сессию не показываем — начинаем заново
@@ -191,7 +194,7 @@ export async function respondentRoutes(app: FastifyInstance) {
         currentPage: null, params, ip: req.ip ?? null, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 500) || null,
         startedAt: new Date().toISOString(),
       });
-      const first = firstPage(ctxOf(survey, created, cleanAnswers(ctxOf(survey, created, initial), [])));
+      const first = startAt ?? firstPage(ctxOf(survey, created, cleanAnswers(ctxOf(survey, created, initial), [])));
       if (first === END || first === SCREENOUT) {
         await finalize(survey, created, initial, [], first === END ? 'completed' : 'screened_out');
       } else {

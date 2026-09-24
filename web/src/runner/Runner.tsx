@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { QuestionView } from './QuestionView.tsx';
 import { runScript, type ScriptEnv } from './scripts.ts';
+import { rich } from './rich.tsx';
 import { actionError, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions } from '../../../shared/logic.ts';
 import { validateAnswer } from '../../../shared/answers.ts';
 import {
@@ -44,7 +45,8 @@ export function Runner({ surveyId }: { surveyId: string }) {
     try { rid = query.get('new') === '1' ? null : localStorage.getItem(storageKey); } catch { /* */ }
     const params: Record<string, string> = {};
     query.forEach((v, k) => { params[k] = v; });
-    api('POST', `/api/s/${surveyId}/start`, { rid, params, preview })
+    const startAt = preview ? query.get('start') ?? undefined : undefined;
+    api('POST', `/api/s/${surveyId}/start`, { rid, params, preview, startAt })
       .then((res) => (res.closed ? setLoaded({ kind: 'closed', title: res.title, message: res.message }) : applyState(res)))
       .catch((e) => setLoaded({ kind: 'error', message: e instanceof ApiError && e.status === 404 ? 'Опрос не найден' : e.message }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,7 +219,7 @@ function PageView({ state, page, surveyId, onState }: {
           send('submit');
         }
       }}>
-        {blockTitle && <div className="page-title">{pipe(blockTitle, ctx)}</div>}
+        {blockTitle && <div className="page-title">{rich(pipe(blockTitle, ctx))}</div>}
         {visible.map((q) => (
           <QuestionView key={q.id} q={q} ctx={ctx} answer={local[q.id]} error={errors[q.id]} onChange={(a) => setAnswer(q.id, a)} />
         ))}
@@ -242,7 +244,7 @@ function Final({ title, message, preview }: { title: string; message: string; pr
     <div className="runner">
       <div className="runner-card final">
         <h1>{title}</h1>
-        <p>{message}</p>
+        <p style={{ whiteSpace: 'pre-line' }}>{rich(message)}</p>
         {preview && (
           <button className="btn btn-secondary" onClick={() => {
             const u = new URL(window.location.href);

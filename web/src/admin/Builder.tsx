@@ -3,28 +3,20 @@ import { QuestionDialog } from './QuestionEditor.tsx';
 import { describeCondition } from './ConditionEditor.tsx';
 import { describeActions } from './ActionsEditor.tsx';
 import { QuestionPreview } from './preview.tsx';
-import { Menu } from './common.tsx';
+import { Menu, toast } from './common.tsx';
 import { QUESTION_TYPE_LABELS, type Question, type QuestionType, type Survey } from '../../../shared/types.ts';
+import { allIds, nextId, renameId } from '../../../shared/refactor.ts';
 import type { ValidationResult } from '../../../shared/validate.ts';
 
 export const TYPE_ICONS: Record<QuestionType, string> = {
-  single: '◉', multi: '☑', dropdown: '▾', text: '✎', number: '#', scale: '⋯',
+  single: '◉', multi: '☑', dropdown: '▾', ranking: '⇅', text: '✎', number: '#', scale: '⋯',
   matrix: '▦', date: '◷', phone: '☏', info: 'ℹ', hidden: '⊘',
 };
-
-export function nextId(existing: string[], prefix: string): string {
-  let max = 0;
-  for (const id of existing) {
-    const m = id.match(new RegExp(`^${prefix}(\\d+)$`));
-    if (m) max = Math.max(max, Number(m[1]));
-  }
-  return `${prefix}${max + 1}`;
-}
 
 export function newQuestion(type: QuestionType, id: string): Question {
   const base = { id, text: '' };
   switch (type) {
-    case 'single': case 'dropdown': case 'multi':
+    case 'single': case 'dropdown': case 'multi': case 'ranking':
       return { ...base, type, options: [{ code: 1, text: '' }] } as Question;
     case 'scale': return { ...base, type, from: 1, to: 5 };
     case 'matrix':
@@ -38,9 +30,6 @@ export function newQuestion(type: QuestionType, id: string): Question {
   }
 }
 
-/** ID вопросов и блоков — одно пространство имён (переход можно задать и к вопросу, и к блоку) */
-const allIds = (def: Survey) => [...def.blocks.map((b) => b.id), ...def.blocks.flatMap((b) => b.questions.map((q) => q.id))];
-
 type Pos = { bi: number; qi: number };
 
 /** Точечное обновление вопроса без пересоздания остальных объектов (карточки не перерисовываются) */
@@ -48,9 +37,36 @@ function withQuestion(def: Survey, { bi, qi }: Pos, q: Question): Survey {
   return { ...def, blocks: def.blocks.map((b, i) => (i === bi ? { ...b, questions: b.questions.map((x, j) => (j === qi ? q : x)) } : b)) };
 }
 
-export function Builder({ def, onChange, issues, focus }: {
+/** Вопросы из буфера обмена: вопрос, массив вопросов или анкета целиком. Конфликтующие ID получают новые */
+function questionsFromClipboard(text: string, def: Survey): Question[] | null {
+  let data: any;
+  try { data = JSON.parse(text); } catch { return null; }
+  let list: any[] = Array.isArray(data) ? data
+    : data?.blocks ? data.blocks.flatMap((b: any) => b.questions ?? [])
+    : data?.questions ? data.questions
+    : data?.type && data?.id ? [data] : [];
+  list = list.filter((q) => q && typeof q === 'object' && typeof q.id === 'string' && typeof q.type === 'string');
+  if (!list.length) return null;
+  // Переименование внутри вставляемого набора — ссылки между вставленными вопросами сохраняются
+  let tmp: Survey = { formatVersion: 2, title: '', blocks: [{ id: '__paste', questions: structuredClone(list) }] };
+  const taken = allIds(def);
+  for (const q of list) {
+    if (taken.some((x) => x.toLowerCase() === q.id.toLowerCase())) {
+      const prefix = q.id.match(/^[A-Za-z_]+/)?.[0] ?? 'Q';
+      const fresh = nextId([...taken, ...allIds(tmp)], prefix);
+      tmp = renameId(tmp, q.id, fresh);
+      taken.push(fresh);
+    } else taken.push(q.id);
+  }
+  return tmp.blocks[0].questions;
+}
+
+export function Builder({ def, onChange, issues, focus, onPreview }: {
   def: Survey; onChange: (d: Survey) => void; issues: ValidationResult; focus?: { where: string; n: number };
+  onPreview: (startAt?: string) => void;
 }) {
+  const [query, setQuery] = useState('');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<Pos | null>(null);
   const [picker, setPicker] = useState<Pos | null>(null);
   const [drag, setDrag] = useState<Pos | null>(null);
@@ -83,6 +99,25 @@ export function Builder({ def, onChange, issues, focus }: {
     setOpen(at);
   };
 
+  const pasteAt = async (at: Pos) => {
+    let text = '';
+    try { text = await navigator.clipboard.readText(); } catch { toast('Нет доступа к буферу обмена'); return; }
+    const qs = questionsFromClipboard(text, def);
+    if (!qs) { toast('В буфере нет вопросов в формате JSON'); setPicker(null); return; }
+    mutate((d) => { d.blocks[at.bi].questions.splice(at.qi, 0, ...qs); });
+    setPicker(null);
+    toast(`Вставлено вопросов: ${qs.length}`);
+  };
+
+  const toggleBlock = (id: string) => setCollapsed((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const q = query.trim().toLowerCase();
+  const matches = (x: Question) => !q || x.id.toLowerCase().includes(q) || x.text.toLowerCase().includes(q);
+
   const addBlock = (after: number) => {
     const id = nextId(allIds(def), 'B');
     mutate((d) => { d.blocks.splice(after + 1, 0, { id, title: 'Новый блок', questions: [] }); });
@@ -107,7 +142,9 @@ export function Builder({ def, onChange, issues, focus }: {
   const flat: Pos[] = def.blocks.flatMap((b, bi) => b.questions.map((_, qi) => ({ bi, qi })));
   const openIdx = open ? flat.findIndex((x) => x.bi === open.bi && x.qi === open.qi) : -1;
   const openQ = open ? def.blocks[open.bi]?.questions[open.qi] : undefined;
-  let counter = 0;
+  // Сквозная нумерация (скрытые переменные не нумеруются), не зависит от свёрнутых блоков
+  const numbers = new Map<string, number>();
+  for (const x of def.blocks.flatMap((b) => b.questions)) if (x.type !== 'hidden') numbers.set(x.id, numbers.size + 1);
 
   function jumpTo(id: string) {
     document.getElementById(`card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -121,30 +158,48 @@ export function Builder({ def, onChange, issues, focus }: {
   return (
     <div className="builder">
       <nav className="outline">
-        {def.blocks.map((b, bi) => (
-          <div key={bi}>
-            <button className={`outline-page${issueFor(b.id) ? ' has-issue' : ''}`} onClick={() => jumpTo(b.id)}>
-              {b.title || `Блок ${bi + 1}`}
-            </button>
-            {b.questions.map((q) => (
-              <button key={q.id} className={`outline-q${issueFor(q.id) ? ' has-issue' : ''}`} onClick={() => jumpTo(q.id)} title={q.text}>
-                <span className="qid">{q.id}</span><span className="qtext">{q.text || QUESTION_TYPE_LABELS[q.type]}</span>
+        <input className="input outline-search" type="search" placeholder="Найти вопрос…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        {def.blocks.map((b, bi) => {
+          const found = b.questions.filter(matches);
+          if (q && !found.length) return null;
+          return (
+            <div key={bi}>
+              <button className={`outline-page${issueFor(b.id) ? ' has-issue' : ''}`} onClick={() => {
+                if (collapsed.has(b.id)) toggleBlock(b.id);
+                jumpTo(b.id);
+              }}>
+                {b.title || `Блок ${bi + 1}`}
               </button>
-            ))}
-          </div>
-        ))}
+              {found.map((x) => (
+                <button key={x.id} className={`outline-q${issueFor(x.id) ? ' has-issue' : ''}`} title={x.text} onClick={() => {
+                  if (collapsed.has(b.id)) { toggleBlock(b.id); setTimeout(() => jumpTo(x.id), 50); } else jumpTo(x.id);
+                }}>
+                  <span className="qid">{x.id}</span><span className="qtext">{x.text || QUESTION_TYPE_LABELS[x.type]}</span>
+                </button>
+              ))}
+            </div>
+          );
+        })}
+        {q && !def.blocks.some((b) => b.questions.some(matches)) && <p className="muted small" style={{ padding: '4px 8px' }}>Ничего не найдено</p>}
       </nav>
 
       <div className="canvas">
         {def.blocks.map((b, bi) => (
           <section key={bi} className="page-block" id={`card-${b.id}`}>
             <header className={`page-head${flash === b.id ? ' flash' : ''}`}>
+              <button className="icon-btn chev-btn" title={collapsed.has(b.id) ? 'Развернуть блок' : 'Свернуть блок'}
+                onClick={() => toggleBlock(b.id)}>{collapsed.has(b.id) ? '▸' : '▾'}</button>
               <input className="block-title-input" value={b.title ?? ''} placeholder={`Блок ${bi + 1} (без заголовка)`}
                 title="Заголовок блока — респондент видит его над вопросами блока" onChange={(e) => setBlockTitle(bi, e.target.value)} />
               <span className="muted small mono" title="ID блока — для перехода «в начало блока»">{b.id}</span>
               {issueFor(b.id) && <span className="chip-error">{issueFor(b.id)!.message}</span>}
               <span className="grow" />
+              {collapsed.has(b.id) && <span className="muted small">вопросов: {b.questions.length}</span>}
               <Menu items={[
+                { label: collapsed.has(b.id) ? 'Развернуть' : 'Свернуть', onClick: () => toggleBlock(b.id) },
+                { label: 'Свернуть все блоки', onClick: () => setCollapsed(new Set(def.blocks.map((x) => x.id))) },
+                { label: 'Развернуть все', onClick: () => setCollapsed(new Set()) },
+                { label: 'Предпросмотр с начала блока', onClick: () => b.questions[0] && onPreview(b.questions[0].id), disabled: !b.questions.length },
                 { label: 'Добавить блок после', onClick: () => addBlock(bi) },
                 { label: 'Переместить выше', onClick: () => moveBlock(bi, -1), disabled: bi === 0 },
                 { label: 'Переместить ниже', onClick: () => moveBlock(bi, 1), disabled: bi === def.blocks.length - 1 },
@@ -159,12 +214,12 @@ export function Builder({ def, onChange, issues, focus }: {
               ]} />
             </header>
 
-            {b.questions.map((q, qi) => {
-              const n = q.type === 'hidden' ? null : ++counter;
+            {!collapsed.has(b.id) && b.questions.map((q, qi) => {
+              const n = numbers.get(q.id) ?? null;
               return (
                 <div key={`${bi}:${qi}:${q.id}`}>
                   <Inserter active={picker?.bi === bi && picker.qi === qi} onOpen={() => setPicker({ bi, qi })}
-                    onPick={(t) => addQuestion({ bi, qi }, t)} onClose={() => setPicker(null)}
+                    onPick={(t) => addQuestion({ bi, qi }, t)} onPaste={() => pasteAt({ bi, qi })} onClose={() => setPicker(null)}
                     dropping={!!drag && drop?.bi === bi && drop.qi === qi}
                     onDragOver={() => drag && setDrop({ bi, qi })} onDrop={() => dropAt({ bi, qi })} />
                   <QuestionCard def={def} q={q} n={n} error={issueFor(q.id)?.message} flash={flash === q.id}
@@ -178,15 +233,17 @@ export function Builder({ def, onChange, issues, focus }: {
                       copy.id = nextId(allIds(d), 'Q');
                       d.blocks[bi].questions.splice(qi + 1, 0, copy);
                     })}
-                    onDelete={() => { if (window.confirm(`Удалить ${q.id}?`)) mutate((d) => { d.blocks[bi].questions.splice(qi, 1); }); }} />
+                    onDelete={() => { if (window.confirm(`Удалить ${q.id}?`)) mutate((d) => { d.blocks[bi].questions.splice(qi, 1); }); }}
+                    onPreview={() => onPreview(q.id)}
+                    onCopy={() => { navigator.clipboard.writeText(JSON.stringify(q, null, 2)); toast(`${q.id} скопирован — вставьте через «+» в любой анкете`); }} />
                 </div>
               );
             })}
-            <Inserter last active={picker?.bi === bi && picker.qi === b.questions.length} onOpen={() => setPicker({ bi, qi: b.questions.length })}
-              onPick={(t) => addQuestion({ bi, qi: b.questions.length }, t)} onClose={() => setPicker(null)}
+            {!collapsed.has(b.id) && <Inserter last active={picker?.bi === bi && picker.qi === b.questions.length} onOpen={() => setPicker({ bi, qi: b.questions.length })}
+              onPick={(t) => addQuestion({ bi, qi: b.questions.length }, t)} onPaste={() => pasteAt({ bi, qi: b.questions.length })} onClose={() => setPicker(null)}
               dropping={!!drag && drop?.bi === bi && drop.qi === b.questions.length}
               onDragOver={() => drag && setDrop({ bi, qi: b.questions.length })}
-              onDrop={() => dropAt({ bi, qi: b.questions.length })} />
+              onDrop={() => dropAt({ bi, qi: b.questions.length })} />}
           </section>
         ))}
         <button className="add-page" onClick={() => addBlock(def.blocks.length - 1)}>+ Новый блок</button>
@@ -215,6 +272,8 @@ export function Builder({ def, onChange, issues, focus }: {
           hasPrev={openIdx > 0}
           hasNext={openIdx < flat.length - 1}
           onNav={(dir) => { const t = flat[openIdx + dir]; if (t) setOpen(t); }}
+          onRename={(newId) => onChange(renameId(def, openQ.id, newId))}
+          onPreview={() => onPreview(openQ.id)}
           onCreateVar={() => {
             // Скрытая переменная — в конец текущего блока, чтобы не сдвигать открытый вопрос
             const id = nextId(allIds(def), 'H');
@@ -227,11 +286,11 @@ export function Builder({ def, onChange, issues, focus }: {
   );
 }
 
-const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragging, onOpen, onDragStart, onDragEnd, onDragOverHalf, onDropHere, onDuplicate, onDelete }: {
+const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragging, onOpen, onDragStart, onDragEnd, onDragOverHalf, onDropHere, onDuplicate, onDelete, onPreview, onCopy }: {
   def: Survey; q: Question; n: number | null; error?: string; flash: boolean; dragging: boolean;
   onOpen: () => void; onDragStart: () => void; onDragEnd: () => void;
   onDragOverHalf: (after: boolean) => void; onDropHere: () => void;
-  onDuplicate: () => void; onDelete: () => void;
+  onDuplicate: () => void; onDelete: () => void; onPreview: () => void; onCopy: () => void;
 }) {
   const chips: { text: string; kind: 'cond' | 'act' | 'plain' }[] = [];
   if (q.type !== 'info' && q.type !== 'hidden' && q.required === false) chips.push({ text: 'необязательный', kind: 'plain' });
@@ -261,8 +320,15 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragg
         {chips.map((c, i) => <span key={i} className={`chip-info ${c.kind}`} title={c.text}>{c.text}</span>)}
         <span className="grow" />
         <span className="card-tools" onClick={(e) => e.stopPropagation()}>
+          <button className="icon-btn" title="Предпросмотр с этого вопроса" onClick={onPreview}>▶</button>
           <button className="icon-btn" title="Дублировать" onClick={onDuplicate}>⧉</button>
-          <button className="icon-btn" title="Удалить" onClick={onDelete}>✕</button>
+          <Menu items={[
+            { label: 'Открыть', onClick: onOpen },
+            { label: 'Предпросмотр с этого вопроса', onClick: onPreview },
+            { label: 'Дублировать', onClick: onDuplicate },
+            { label: 'Копировать (JSON)', onClick: onCopy },
+            { label: 'Удалить', onClick: onDelete, danger: true },
+          ]} />
         </span>
       </div>
       {error && <div className="card-error">{error}</div>}
@@ -275,9 +341,9 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragg
   && a.def.blocks.length === b.def.blocks.length);
 
 /** Полоска между карточками: «+» добавляет вопрос в это место, сюда же можно бросить перетаскиваемую карточку */
-function Inserter({ active, last, dropping, onOpen, onPick, onClose, onDragOver, onDrop }: {
+function Inserter({ active, last, dropping, onOpen, onPick, onPaste, onClose, onDragOver, onDrop }: {
   active: boolean; last?: boolean; dropping: boolean;
-  onOpen: () => void; onPick: (t: QuestionType) => void; onClose: () => void;
+  onOpen: () => void; onPick: (t: QuestionType) => void; onPaste: () => void; onClose: () => void;
   onDragOver: () => void; onDrop: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -302,6 +368,7 @@ function Inserter({ active, last, dropping, onOpen, onPick, onClose, onDragOver,
               <span className="type-icon">{TYPE_ICONS[t]}</span>{QUESTION_TYPE_LABELS[t]}
             </button>
           ))}
+          <button className="paste-btn" onClick={onPaste}><span className="type-icon">⎘</span>Вставить из буфера (JSON)</button>
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { END, SCREENOUT, type Condition, type Question, type Survey } from './types.ts';
+import { END, OPTION_TYPES, SCREENOUT, type Condition, type Question, type Survey } from './types.ts';
 
 export interface Issue {
   /** Где проблема: «Q3», «P2 → переход 1», «settings» */
@@ -19,7 +19,7 @@ export const RESERVED_IDS = new Set([
   'resp_id', 'status', 'started_at', 'completed_at', 'duration_sec', 'ip', 'user_agent', 'is_test', 'version',
 ].map((s) => s.toLowerCase()));
 
-const TYPES = new Set(['single', 'multi', 'dropdown', 'text', 'number', 'scale', 'matrix', 'date', 'phone', 'info', 'hidden']);
+const TYPES = new Set(['single', 'multi', 'dropdown', 'ranking', 'text', 'number', 'scale', 'matrix', 'date', 'phone', 'info', 'hidden']);
 const SCRIPT_KEYS = {
   survey: ['init'],
   question: ['onShow', 'onChange', 'validate'],
@@ -149,6 +149,7 @@ export function validateSurvey(input: unknown): ValidationResult {
     }
     const needsValue = c.op !== 'answered' && c.op !== 'notAnswered';
     if (needsValue && c.value === undefined) err(where, `Оператору «${c.op}» нужно value`);
+    else if (needsValue && (c.value === '' || (Array.isArray(c.value) && c.value.length === 0))) err(where, 'Укажите значение в условии');
     if (ARRAY_OPS.has(c.op) && !Array.isArray(c.value)) err(where, `Оператору «${c.op}» нужен массив в value`);
   };
 
@@ -164,7 +165,7 @@ export function validateSurvey(input: unknown): ValidationResult {
         if (!isObj(from) || typeof from.question !== 'string') err(q.id, 'optionsFrom/rowsFrom: укажите question');
         else {
           const src = checkRef(`${q.id} → перенос вариантов`, from.question, info, true);
-          if (src && !['single', 'multi', 'dropdown', 'matrix'].includes(src.type)) {
+          if (src && !OPTION_TYPES.includes(src.type)) {
             err(q.id, `Перенос возможен только из вопросов с вариантами, а «${src.id}» — ${src.type}`);
           }
           if (!['selected', 'notSelected', 'all'].includes(from.filter)) {
@@ -195,12 +196,12 @@ export function validateSurvey(input: unknown): ValidationResult {
           case 'hideOptions':
           case 'showOnlyOptions':
             if (!Array.isArray(a.codes) || !a.codes.every(isInt)) err(where, 'codes: массив кодов');
-            if (!['single', 'multi', 'dropdown', 'matrix'].includes(q.type)) err(where, 'У вопроса нет вариантов');
+            if (!OPTION_TYPES.includes(q.type)) err(where, 'У вопроса нет вариантов');
             break;
           case 'hideOptionsFrom':
             if (typeof a.question !== 'string') err(where, 'Укажите question');
             else checkRef(where, a.question, info, true);
-            if (!['single', 'multi', 'dropdown', 'matrix'].includes(q.type)) err(where, 'У вопроса нет вариантов');
+            if (!OPTION_TYPES.includes(q.type)) err(where, 'У вопроса нет вариантов');
             break;
           case 'skipIfFewer':
             if (!isInt(a.n) || a.n < 1) err(where, 'n: целое ≥ 1');
@@ -271,6 +272,12 @@ function validateQuestion(
       } else if (Array.isArray(q.options) && q.options.some((o) => o?.exclusive)) {
         warn(w, 'exclusive имеет смысл только в вопросах multi');
       }
+      break;
+    case 'ranking':
+      validateOptions(q.options, w, 'options', err, !!q.optionsFrom);
+      if (Array.isArray(q.options) && q.options.some((o) => o?.other || o?.exclusive)) warn(w, 'В ранжировании «другое» и «эксклюзив» не используются');
+      if (q.rankCount !== undefined && (!isInt(q.rankCount) || q.rankCount < 1)) err(w, 'rankCount: целое ≥ 1');
+      if (q.order !== undefined && q.order !== 'random' && q.order !== 'rotate') err(w, 'order: random или rotate');
       break;
     case 'scale':
       if (!isInt(q.from) || !isInt(q.to)) err(w, 'from и to — целые числа');

@@ -50,11 +50,12 @@ export function compact<T extends object>(obj: T): T {
 }
 
 /** Выпадающее меню «⋯» */
-export function Menu({ items, label = '⋯', title = 'Ещё', className = 'icon-btn menu-trigger' }: {
-  items: ({ label: string; onClick: () => void; danger?: boolean; disabled?: boolean } | null | false)[];
-  label?: ReactNode; title?: string; className?: string;
+export function Menu({ items, label = '⋯', title = 'Ещё', className = 'icon-btn menu-trigger', align = 'right' }: {
+  items: ({ label: string; onClick: () => void; danger?: boolean; disabled?: boolean; group?: boolean } | null | false)[];
+  label?: ReactNode; title?: string; className?: string; align?: 'left' | 'right';
 }) {
   const [open, setOpen] = useState(false);
+  const [up, setUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -67,11 +68,18 @@ export function Menu({ items, label = '⋯', title = 'Ещё', className = 'icon
   return (
     <div className="menu" ref={ref}>
       <button type="button" className={className} title={title} aria-haspopup="menu" aria-expanded={open}
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>{label}</button>
+        onClick={(e) => {
+          e.stopPropagation();
+          // Если снизу мало места — открываем список вверх
+          const r = e.currentTarget.getBoundingClientRect();
+          setUp(window.innerHeight - r.bottom < 320 && r.top > window.innerHeight - r.bottom);
+          setOpen(!open);
+        }}>{label}</button>
       {open && (
-        <div className="menu-list" role="menu">
+        <div className={`menu-list${align === 'left' ? ' left' : ''}${up ? ' up' : ''}`} role="menu">
           {items.filter(Boolean).map((it, k) => {
-            const item = it as { label: string; onClick: () => void; danger?: boolean; disabled?: boolean };
+            const item = it as { label: string; onClick: () => void; danger?: boolean; disabled?: boolean; group?: boolean };
+            if (item.group) return <div key={k} className="menu-group">{item.label}</div>;
             return (
               <button key={k} type="button" role="menuitem" disabled={item.disabled} className={item.danger ? 'danger' : ''}
                 onClick={(e) => { e.stopPropagation(); setOpen(false); item.onClick(); }}>{item.label}</button>

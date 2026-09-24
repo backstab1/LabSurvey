@@ -5,6 +5,7 @@ import { buildTable } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
 import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
+import { simulate } from '../simulate.ts';
 import { validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
 import type { Survey } from '../../shared/types.ts';
@@ -115,6 +116,30 @@ export async function adminRoutes(app: FastifyInstance) {
     priv.delete<{ Params: { id: string } }>('/api/admin/surveys/:id/test-responses', async (req) => ({
       deleted: await responses.deleteTest(req.params.id),
     }));
+
+    // Тестовое заполнение черновика случайными ответами по логике анкеты
+    priv.post<{ Params: { id: string }; Body: { count?: number } }>('/api/admin/surveys/:id/simulate', async (req, reply) => {
+      const s = await surveys.get(req.params.id);
+      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
+      const v = validateSurvey(s.draft);
+      if (!v.ok) return reply.code(422).send({ error: 'Сначала исправьте ошибки в анкете', ...v });
+      const count = Math.min(Math.max(Number(req.body?.count) || 20, 1), 500);
+      return { count, stats: await simulate(s.id, s.draft, s.version, count) };
+    });
+
+    priv.get<{ Params: { id: string; rid: string } }>('/api/admin/surveys/:id/responses/:rid', async (req, reply) => {
+      const s = await surveys.get(req.params.id);
+      const r = await responses.get(req.params.rid);
+      if (!s || !r || r.surveyId !== s.id) return reply.code(404).send({ error: 'Ответ не найден' });
+      return { response: r, survey: r.isTest ? s.draft : s.published ?? s.draft };
+    });
+
+    priv.delete<{ Params: { id: string; rid: string } }>('/api/admin/surveys/:id/responses/:rid', async (req, reply) => {
+      const r = await responses.get(req.params.rid);
+      if (!r || r.surveyId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
+      await responses.remove(r.id);
+      return { ok: true };
+    });
 
     priv.get<{ Params: { id: string } }>('/api/admin/surveys/:id/responses', async (req) => {
       const list = await responses.list(req.params.id, { includeTest: true });

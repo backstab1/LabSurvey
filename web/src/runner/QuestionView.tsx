@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { pipe, resolveOptions, resolveRows } from '../../../shared/logic.ts';
 import { isRequired } from '../../../shared/answers.ts';
-import type { Answer, MatrixQuestion, Option, Question, RespondentContext, ScaleQuestion, TextQuestion } from '../../../shared/types.ts';
+import { rich } from './rich.tsx';
+import type { Answer, MatrixQuestion, Option, Question, RankingQuestion, RespondentContext, ScaleQuestion, TextQuestion } from '../../../shared/types.ts';
 
 interface Props {
   q: Question;
@@ -14,15 +15,15 @@ interface Props {
 export function QuestionView({ q, ctx, answer, error, onChange }: Props) {
   const text = pipe(q.text, ctx);
   if (q.type === 'info') {
-    return <div className="question info" id={`q-${q.id}`}><div className="q-text">{text}</div></div>;
+    return <div className="question info" id={`q-${q.id}`}><div className="q-text">{rich(text)}</div></div>;
   }
   return (
     <fieldset className={`question${error ? ' has-error' : ''}`} id={`q-${q.id}`}>
       <legend className="q-text">
-        {text}
+        {rich(text)}
         {!isRequired(q) && <span className="optional"> (необязательно)</span>}
       </legend>
-      {q.hint && <div className="q-hint">{pipe(q.hint, ctx)}</div>}
+      {q.hint && <div className="q-hint">{rich(pipe(q.hint, ctx))}</div>}
       <Body q={q} ctx={ctx} answer={answer} onChange={onChange} />
       {error && <div className="q-error" role="alert">{error}</div>}
     </fieldset>
@@ -33,6 +34,7 @@ function Body({ q, ctx, answer, onChange }: Omit<Props, 'error'>) {
   switch (q.type) {
     case 'single': return <Choice q={q} options={resolveOptions(ctx, q)} multi={false} answer={answer} onChange={onChange} otherAlways={q.showOtherAlways} />;
     case 'multi': return <Choice q={q} options={resolveOptions(ctx, q)} multi answer={answer} onChange={onChange} max={q.maxSelected} otherAlways={q.showOtherAlways} />;
+    case 'ranking': return <Ranking q={q} options={resolveOptions(ctx, q)} answer={answer} onChange={onChange} />;
     case 'dropdown': return <Dropdown options={resolveOptions(ctx, q)} answer={answer} onChange={onChange} />;
     case 'text': return <TextInput q={q} answer={answer} onChange={onChange} />;
     case 'number': return <NumberInput decimals={q.decimals ?? 0} answer={answer} onChange={onChange} />;
@@ -87,13 +89,65 @@ function Choice({ q, options, multi, answer, onChange, max, otherAlways }: {
             <label className={`option${on ? ' selected' : ''}`}>
               <input type={multi ? 'checkbox' : 'radio'} name={q.id} checked={on} disabled={!on && atMax && !o.exclusive}
                 onChange={() => toggle(o)} />
-              <span>{o.text}</span>
+              <span>{rich(o.text)}</span>
             </label>
             {o.other && (on || otherAlways) && <OtherInput autoFocus={on && !others[o.code]} value={others[o.code] ?? ''} onChange={(t) => setOther(o.code, t)} />}
           </div>
         );
       })}
       {multi && max ? <div className="q-hint">Можно выбрать не более {max}</div> : null}
+    </div>
+  );
+}
+
+/** Ранжирование: нажатие ставит вариант на следующее место, повторное — убирает */
+function Ranking({ q, options, answer, onChange }: { q: RankingQuestion; options: Option[]; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
+  const ranked = Array.isArray(answer?.v) ? (answer!.v as number[]) : [];
+  const need = Math.min(q.rankCount ?? options.length, options.length);
+  const toggle = (code: number) => {
+    const i = ranked.indexOf(code);
+    if (i >= 0) {
+      const next = ranked.filter((c) => c !== code);
+      return onChange(next.length ? { v: next } : undefined);
+    }
+    if (ranked.length >= need) return;
+    onChange({ v: [...ranked, code] });
+  };
+  const move = (code: number, dir: -1 | 1) => {
+    const i = ranked.indexOf(code);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ranked.length) return;
+    const next = ranked.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange({ v: next });
+  };
+  const byCode = new Map(options.map((o) => [o.code, o]));
+  return (
+    <div className="ranking">
+      <div className="q-hint">
+        {ranked.length < need
+          ? `Нажимайте на варианты по порядку: сначала самый важный (${ranked.length} из ${need})`
+          : 'Готово. Порядок можно поменять стрелками или снять вариант нажатием'}
+      </div>
+      {ranked.length > 0 && (
+        <ol className="ranked">
+          {ranked.map((code, i) => (
+            <li key={code}>
+              <span className="rank-num">{i + 1}</span>
+              <button type="button" className="rank-text" onClick={() => toggle(code)} title="Убрать">{rich(byCode.get(code)?.text ?? String(code))}</button>
+              <button type="button" className="rank-move" disabled={i === 0} onClick={() => move(code, -1)} aria-label="Выше">↑</button>
+              <button type="button" className="rank-move" disabled={i === ranked.length - 1} onClick={() => move(code, 1)} aria-label="Ниже">↓</button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <div className="options">
+        {options.filter((o) => !ranked.includes(o.code)).map((o) => (
+          <button type="button" key={o.code} className="option rank-option" disabled={ranked.length >= need} onClick={() => toggle(o.code)}>
+            <span className="rank-slot">{ranked.length + 1}</span><span>{rich(o.text)}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

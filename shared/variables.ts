@@ -51,7 +51,14 @@ const SELECTED_LABELS = [
 
 /** Убирает переносы строк и подстановки из подписи */
 function clean(text: string): string {
-  return text.replace(/\{\{\s*([\w.]+)\s*\}\}/g, '[$1]').replace(/\s+/g, ' ').trim();
+  return text
+    .replace(/\{\{\s*([\w.]+)\s*\}\}/g, '[$1]')
+    // Разметка текста: картинки убираем, ссылки и выделение — только текст
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/(^|[^*])\*([^*]+)\*/g, '$1$2')
+    .replace(/\s+/g, ' ').trim();
 }
 
 function toDate(iso: string | null): Date | null {
@@ -128,6 +135,20 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[]): Var
             add({
               name: `${q.id}_${o.code}_other`, label: `${text}: ${clean(o.text)} (текст)`, kind: 'string', measure: 'nominal',
               get: (r) => ans(r)?.o?.[String(o.code)] ?? null,
+            });
+          }
+          break;
+        }
+        case 'ranking': {
+          for (const o of allOptions(survey, q)) {
+            add({
+              name: `${q.id}_${o.code}`, label: `${text}: ${clean(o.text)} (место)`, kind: 'numeric', measure: 'ordinal',
+              get: (r) => {
+                const v = ans(r)?.v;
+                if (!Array.isArray(v)) return null;
+                const i = v.indexOf(o.code);
+                return i >= 0 ? i + 1 : null;
+              },
             });
           }
           break;
