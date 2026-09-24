@@ -4,7 +4,7 @@ import { ActionsEditor, actionKinds, describeActions, newAction } from './Action
 import { ScriptsEditor } from './ScriptsEditor.tsx';
 import { OptionsEditor } from './OptionsEditor.tsx';
 import { QuestionPreview } from './preview.tsx';
-import { allQuestions } from '../../../shared/logic.ts';
+import { allQuestions, blockOf } from '../../../shared/logic.ts';
 import { allIds } from '../../../shared/refactor.ts';
 import { ID_RE, RESERVED_IDS } from '../../../shared/validate.ts';
 import { Flag, Menu, Modal, NumField, Section, Segmented, compact } from './common.tsx';
@@ -19,7 +19,7 @@ function convert(q: Question, type: QuestionType): Question {
   const old = q as any;
   const keep = {
     id: q.id, text: q.text || fresh.text, hint: q.hint, required: q.required, showIf: q.showIf, scripts: q.scripts, actions: q.actions,
-    hideBack: q.hideBack, hideFinish: q.hideFinish, requiredMessage: q.requiredMessage, note: q.note,
+    hideBack: q.hideBack, hideFinish: q.hideFinish, requiredMessage: q.requiredMessage, note: q.note, fixed: q.fixed,
   };
   const opts: Option[] | undefined = old.options ?? old.rows;
   if (CHOICE_TYPES.includes(type) && opts?.length) {
@@ -525,6 +525,7 @@ function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: P
   if (answerable && q.required !== false) textLine('requiredMessage', 'Сообщение, если нет ответа', 'Пожалуйста, ответьте на вопрос', () => 'Своё сообщение');
   if (answerable || q.type === 'info') {
     if (!answerable) group('Отображение');
+    if (blockOf(def, q.id)?.order) flag('fixed', 'Оставить на месте при перемешивании блока', 'Блок перемешивается для каждого респондента');
     flag('hideBack', 'Скрыть кнопку «Назад»');
     flag('hideFinish', 'Скрыть кнопку «Завершить»');
   }

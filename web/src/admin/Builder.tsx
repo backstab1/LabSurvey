@@ -4,7 +4,7 @@ import { describeCondition } from './ConditionEditor.tsx';
 import { describeActions } from './ActionsEditor.tsx';
 import { QuestionPreview } from './preview.tsx';
 import { Menu, toast } from './common.tsx';
-import { QUESTION_TYPE_LABELS, type Question, type QuestionType, type Survey } from '../../../shared/types.ts';
+import { QUESTION_TYPE_LABELS, type Block, type Question, type QuestionType, type Survey } from '../../../shared/types.ts';
 import { allIds, nextId, renameId } from '../../../shared/refactor.ts';
 import type { ValidationResult } from '../../../shared/validate.ts';
 
@@ -36,6 +36,12 @@ type Pos = { bi: number; qi: number };
 function withQuestion(def: Survey, { bi, qi }: Pos, q: Question): Survey {
   return { ...def, blocks: def.blocks.map((b, i) => (i === bi ? { ...b, questions: b.questions.map((x, j) => (j === qi ? q : x)) } : b)) };
 }
+
+const compactBlock = (b: Block): Block => {
+  const out = { ...b };
+  if (!out.order) delete out.order;
+  return out;
+};
 
 /** Вопросы из буфера обмена: вопрос, массив вопросов или анкета целиком. Конфликтующие ID получают новые */
 function questionsFromClipboard(text: string, def: Survey): Question[] | null {
@@ -137,6 +143,9 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
     const [b] = d.blocks.splice(bi, 1);
     d.blocks.splice(bi + dir, 0, b);
   });
+
+  const setBlockOrder = (bi: number, order: 'random' | 'rotate' | undefined) =>
+    onChange({ ...def, blocks: def.blocks.map((b, i) => (i === bi ? compactBlock({ ...b, order }) : b)) });
 
   const setBlockTitle = (bi: number, title: string) =>
     onChange({ ...def, blocks: def.blocks.map((b, i) => (i === bi ? { ...b, title: title || undefined } : b)) });
@@ -271,11 +280,21 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
               <span className="muted small mono" title="ID блока — для перехода «в начало блока»">{b.id}</span>
               {issueFor(b.id) && <span className="chip-error">{issueFor(b.id)!.message}</span>}
               <span className="grow" />
+              {b.order && (
+                <span className="chip-info act" title="Порядок вопросов у каждого респондента свой; закреплённые вопросы остаются на местах">
+                  {b.order === 'random' ? '🔀 случайный порядок' : '↻ ротация'}
+                </span>
+              )}
               {collapsed.has(b.id) && <span className="muted small">вопросов: {b.questions.length}</span>}
               <Menu items={[
                 { label: collapsed.has(b.id) ? 'Развернуть' : 'Свернуть', onClick: () => toggleBlock(b.id) },
                 { label: 'Свернуть все блоки', onClick: () => setCollapsed(new Set(def.blocks.map((x) => x.id))) },
                 { label: 'Развернуть все', onClick: () => setCollapsed(new Set()) },
+                { label: 'Порядок вопросов', onClick: () => {}, group: true },
+                { label: `${!b.order ? '✓ ' : ''}Как в конструкторе`, onClick: () => setBlockOrder(bi, undefined) },
+                { label: `${b.order === 'random' ? '✓ ' : ''}Случайный для каждого респондента`, onClick: () => setBlockOrder(bi, 'random') },
+                { label: `${b.order === 'rotate' ? '✓ ' : ''}Ротация`, onClick: () => setBlockOrder(bi, 'rotate') },
+                { label: 'Действия', onClick: () => {}, group: true },
                 { label: 'Предпросмотр с начала блока', onClick: () => b.questions[0] && onPreview(b.questions[0].id), disabled: !b.questions.length },
                 { label: 'Добавить блок после', onClick: () => addBlock(bi) },
                 { label: 'Переместить выше', onClick: () => moveBlock(bi, -1), disabled: bi === 0 },
@@ -299,7 +318,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                     onPick={(t) => addQuestion({ bi, qi }, t)} onPaste={() => pasteAt({ bi, qi })} onClose={() => setPicker(null)}
                     dropping={!!drag && drop?.bi === bi && drop.qi === qi}
                     onDragOver={() => drag && setDrop({ bi, qi })} onDrop={() => dropAt({ bi, qi })} />
-                  <QuestionCard def={def} q={q} n={n} error={issueFor(q.id)?.message} flash={flash === q.id}
+                  <QuestionCard def={def} q={q} n={n} error={issueFor(q.id)?.message} flash={flash === q.id} pinned={!!b.order && !!q.fixed}
                     selected={sel.has(q.id)} onSelect={(range) => pick(q.id, range)}
                     dragging={drag?.bi === bi && drag.qi === qi}
                     onOpen={() => setOpen({ bi, qi })}
@@ -364,8 +383,8 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
   );
 }
 
-const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragging, selected, onSelect, onOpen, onDragStart, onDragEnd, onDragOverHalf, onDropHere, onDuplicate, onDelete, onPreview, onCopy }: {
-  def: Survey; q: Question; n: number | null; error?: string; flash: boolean; dragging: boolean;
+const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, pinned, dragging, selected, onSelect, onOpen, onDragStart, onDragEnd, onDragOverHalf, onDropHere, onDuplicate, onDelete, onPreview, onCopy }: {
+  def: Survey; q: Question; n: number | null; error?: string; flash: boolean; pinned: boolean; dragging: boolean;
   selected: boolean; onSelect: (range: boolean) => void;
   onOpen: () => void; onDragStart: () => void; onDragEnd: () => void;
   onDragOverHalf: (after: boolean) => void; onDropHere: () => void;
@@ -373,6 +392,7 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragg
 }) {
   const chips: { text: string; kind: 'cond' | 'act' | 'plain' }[] = [];
   if (q.type !== 'info' && q.type !== 'hidden' && q.required === false) chips.push({ text: 'необязательный', kind: 'plain' });
+  if (pinned) chips.push({ text: '📌 на месте при перемешивании', kind: 'plain' });
   if (q.showIf) chips.push({ text: `если ${describeCondition(def, q.showIf)}`, kind: 'cond' });
   const before = describeActions(def, q, q.actions?.before);
   const after = describeActions(def, q, q.actions?.after);
@@ -419,7 +439,7 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, dragg
         : <div className="muted empty-q">Пустой вопрос — нажмите, чтобы заполнить</div>}
     </div>
   );
-}, (a, b) => a.q === b.q && a.n === b.n && a.error === b.error && a.flash === b.flash && a.dragging === b.dragging && a.selected === b.selected
+}, (a, b) => a.q === b.q && a.n === b.n && a.error === b.error && a.flash === b.flash && a.dragging === b.dragging && a.selected === b.selected && a.pinned === b.pinned
   && a.def.blocks.length === b.def.blocks.length);
 
 /** Полоска между карточками: «+» добавляет вопрос в это место, сюда же можно бросить перетаскиваемую карточку */

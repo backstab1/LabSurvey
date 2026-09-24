@@ -32,6 +32,7 @@ export function PrintView({ id }: { id: string }) {
       {def.blocks.map((b) => (
         <section key={b.id} className="print-block">
           <h2>{b.title || 'Блок'} <span className="print-id">{b.id}</span></h2>
+          {b.order && <div className="print-note">{b.order === 'random' ? 'ВОПРОСЫ БЛОКА В СЛУЧАЙНОМ ПОРЯДКЕ' : 'РОТАЦИЯ ВОПРОСОВ БЛОКА'}{b.questions.some((q) => q.fixed) ? ' (закреплённые — на местах)' : ''}</div>}
           {b.questions.map((q) => (
             <PrintQuestion key={q.id} def={def} q={q} n={q.type === 'hidden' ? null : ++n} />
           ))}
@@ -85,6 +86,7 @@ function OptionList({ list, multi = false }: { list: Option[]; multi?: boolean }
 function PrintQuestion({ def, q, n }: { def: Survey; q: Question; n: number | null }) {
   const notes: ReactNode[] = [];
   const note = (text: ReactNode) => notes.push(<div key={notes.length} className="print-note">{text}</div>);
+  if (q.fixed) note('НЕ ПЕРЕМЕШИВАТЬ');
   if (q.showIf) note(<>ПОКАЗЫВАТЬ, ЕСЛИ {describeCondition(def, q.showIf)}</>);
   const before = describeActions(def, q, q.actions?.before);
   if (before) note(<>ПЕРЕД ПОКАЗОМ: {before}</>);

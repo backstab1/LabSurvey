@@ -108,6 +108,7 @@ export function validateSurvey(input: unknown): ValidationResult {
   for (const id of blockStart.keys()) {
     if (qIndex.has(id)) err(id, 'ID блока совпадает с ID вопроса — переходы станут неоднозначными');
   }
+  checkRandomBlocks(s, err, warn);
 
   // Ссылки: условия, переносы, переходы, пайпинг
   const checkRef = (where: string, id: string, current: { page: number; pos: number } | null, samePageOk: boolean) => {
@@ -239,6 +240,34 @@ export function validateSurvey(input: unknown): ValidationResult {
   }
 
   return { ok: errors.length === 0, errors, warnings };
+}
+
+/** Блоки с перемешиванием: порядок внутри блока у каждого респондента свой */
+function checkRandomBlocks(s: Survey, err: (w: string, m: string) => void, warn: (w: string, m: string) => void) {
+  for (const b of s.blocks) {
+    if (!isObj(b) || !Array.isArray(b.questions)) continue;
+    const bw = typeof b.id === 'string' ? b.id : 'блок';
+    for (const q of b.questions) {
+      if (isObj(q) && q.fixed !== undefined && typeof q.fixed !== 'boolean') err(q.id ?? bw, 'fixed: true или false');
+    }
+    if (b.order === undefined) continue;
+    if (b.order !== 'random' && b.order !== 'rotate') { err(bw, 'order блока: random или rotate'); continue; }
+    const movable = b.questions.filter((q) => isObj(q) && !q.fixed && q.type !== 'hidden');
+    if (movable.length < 2) warn(bw, 'В блоке с перемешиванием меньше двух незакреплённых вопросов — перемешивать нечего');
+    // Ссылки между перемешиваемыми вопросами: ответа на «соседа» к моменту показа может ещё не быть
+    const ids = new Set(movable.map((q) => q.id));
+    for (const q of movable) {
+      const { id, ...rest } = q as Question;
+      const json = JSON.stringify(rest);
+      for (const other of ids) {
+        if (other === id) continue;
+        const re = new RegExp(`"(q|question|target)":"${other}"|\\{\\{\\s*${other}[.}\\s]`);
+        if (re.test(json)) {
+          warn(id, `Ссылается на «${other}» из того же блока с перемешиванием — порядок у респондентов разный, ответа может ещё не быть. Закрепите оба вопроса или вынесите их из блока`);
+        }
+      }
+    }
+  }
 }
 
 const BOOL_SETTINGS = ['showProgress', 'allowBack', 'allowEarlyFinish', 'showQuestionNumbers', 'enterSubmits', 'autoNext', 'noPaste', 'allowRetake'];

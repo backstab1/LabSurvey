@@ -57,3 +57,40 @@ test('new question fields are validated', () => {
   assert.match(msgs, /columnCount/);
   assert.match(msgs, /fixed: true или false/);
 });
+
+test('block question order: per respondent, stable, fixed questions stay', async () => {
+  const { pagesFor, nextPage, firstPage } = await import('../shared/logic.ts');
+  const qs: Question[] = ['A', 'B', 'C', 'D', 'E'].map((id) => ({ id, type: 'text', text: id }) as Question);
+  qs[0].fixed = true;
+  const s: Survey = { formatVersion: 2, title: 't', blocks: [
+    { id: 'B1', order: 'random', questions: qs },
+    { id: 'B2', questions: [{ id: 'Z', type: 'text', text: 'z' }] },
+  ] };
+  const orders = new Set<string>();
+  for (const seed of ['r1', 'r2', 'r3', 'r4', 'r5', 'r6']) {
+    const c = ctx(s, seed);
+    const ids = pagesFor(c).map((p) => p.id);
+    assert.equal(ids[0], 'A');
+    assert.equal(ids.at(-1), 'Z');
+    assert.deepEqual(pagesFor(ctx(s, seed)).map((p) => p.id), ids, 'стабильно для респондента');
+    // Навигация идёт по порядку респондента
+    let cur = firstPage(c);
+    const walk = [cur];
+    while (walk.length < 6) { cur = nextPage(c, cur); walk.push(cur); }
+    assert.deepEqual(walk, ids);
+    orders.add(ids.join(''));
+  }
+  assert.ok(orders.size > 1, 'порядок отличается у разных респондентов');
+});
+
+test('shuffled block warns about cross-references', () => {
+  const r = validateSurvey({ formatVersion: 2, title: 't', blocks: [{ id: 'B1', order: 'random', questions: [
+    { id: 'A', type: 'single', text: 'a', options: [{ code: 1, text: 'x' }] },
+    { id: 'B', type: 'text', text: 'Про {{A}}' },
+    { id: 'C', type: 'text', text: 'c', showIf: { q: 'A', op: 'eq', value: 1 } },
+  ] }] });
+  assert.ok(r.ok);
+  const w = r.warnings.filter((x) => /перемешиванием/.test(x.message)).map((x) => x.where).sort();
+  assert.deepEqual(w, ['B', 'C']);
+  assert.ok(!validateSurvey({ formatVersion: 2, title: 't', blocks: [{ id: 'B1', order: 'x' as 'random', questions: [{ id: 'A', type: 'info', text: 'a' }] }] }).ok);
+});

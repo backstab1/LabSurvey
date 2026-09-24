@@ -89,6 +89,41 @@ function orderOptions(options: Option[], seed: string, order: 'random' | 'rotate
 
 const shown = (list: Option[]) => (list.some((o) => o.hidden) ? list.filter((o) => !o.hidden) : list);
 
+// ---------- Порядок экранов у респондента ----------
+
+const orderCache = new WeakMap<Survey, Map<string, Page[]>>();
+
+/**
+ * Экраны в том порядке, в котором их видит респондент: вопросы блоков с order перемешаны
+ * (стабильно для одного респондента), закреплённые вопросы (fixed) остаются на местах.
+ */
+export function pagesFor(ctx: RespondentContext): Page[] {
+  const { survey, seed } = ctx;
+  if (!survey.blocks.some((b) => b.order)) return pagesOf(survey);
+  let bySeed = orderCache.get(survey);
+  if (!bySeed) orderCache.set(survey, (bySeed = new Map()));
+  let pages = bySeed.get(seed);
+  if (!pages) {
+    const byId = new Map(pagesOf(survey).map((pg) => [pg.id, pg]));
+    pages = survey.blocks.flatMap((b) => {
+      let qs = b.questions;
+      if (b.order) {
+        // Скрытые переменные не видны респонденту — не участвуют в перемешивании
+        const free = qs.filter((q) => !q.fixed && q.type !== 'hidden');
+        const moved = b.order === 'random'
+          ? seededShuffle(free, `${seed}:block:${b.id}`)
+          : (() => { const s = free.length ? hash(`${seed}:block:${b.id}`) % free.length : 0; return [...free.slice(s), ...free.slice(0, s)]; })();
+        let k = 0;
+        qs = qs.map((q) => (q.fixed || q.type === 'hidden' ? q : moved[k++]));
+      }
+      return qs.map((q) => byId.get(q.id)!);
+    });
+    if (bySeed.size > 500) bySeed.clear();
+    bySeed.set(seed, pages);
+  }
+  return pages;
+}
+
 // ---------- Варианты с учётом переноса ----------
 
 /** Все возможные варианты вопроса (без фильтра переноса и рандомизации) — для выгрузки */
@@ -311,7 +346,7 @@ export function isPageVisible(ctx: RespondentContext, page: Page): boolean {
  * до проверки видимости — так действия «перед показом» срабатывают и на пропускаемых страницах.
  */
 function firstVisibleFrom(ctx: RespondentContext, index: number, onScan?: (p: Page) => void): string {
-  const pages = pagesOf(ctx.survey);
+  const pages = pagesFor(ctx);
   for (let i = index; i < pages.length; i++) {
     onScan?.(pages[i]);
     if (isPageVisible(ctx, pages[i])) return pages[i].id;
@@ -319,13 +354,15 @@ function firstVisibleFrom(ctx: RespondentContext, index: number, onScan?: (p: Pa
   return END;
 }
 
-/** Индекс экрана по ID вопроса или блока (переход к блоку — к его первому вопросу) */
-function targetIndex(survey: Survey, id: string): number {
-  const pages = pagesOf(survey);
+/** Индекс экрана по ID вопроса или блока (переход к блоку — к его первому вопросу в порядке респондента) */
+function targetIndex(ctx: RespondentContext, id: string): number {
+  const pages = pagesFor(ctx);
   const byQuestion = pages.findIndex((p) => p.id === id);
   if (byQuestion >= 0) return byQuestion;
-  const block = survey.blocks.find((b) => b.id === id);
-  return block?.questions.length ? pages.findIndex((p) => p.id === block.questions[0].id) : -1;
+  const block = ctx.survey.blocks.find((b) => b.id === id);
+  if (!block?.questions.length) return -1;
+  const ids = new Set(block.questions.map((q) => q.id));
+  return pages.findIndex((p) => ids.has(p.id));
 }
 
 export function firstPage(ctx: RespondentContext): string {
@@ -337,7 +374,7 @@ export function firstPage(ctx: RespondentContext): string {
  * Сначала действия «после ответа» видимых вопросов (по порядку), затем переходы страницы.
  */
 export function nextPage(ctx: RespondentContext, pageId: string, onScan?: (p: Page) => void): string {
-  const pages = pagesOf(ctx.survey);
+  const pages = pagesFor(ctx);
   const idx = pages.findIndex((p) => p.id === pageId);
   if (idx < 0) return END;
   const rules: { if?: Condition; goTo: string }[] = [];
@@ -353,7 +390,7 @@ export function nextPage(ctx: RespondentContext, pageId: string, onScan?: (p: Pa
   for (const j of rules) {
     if (!evalCondition(j.if, ctx)) continue;
     if (j.goTo === END || j.goTo === SCREENOUT) return j.goTo;
-    const t = targetIndex(ctx.survey, j.goTo);
+    const t = targetIndex(ctx, j.goTo);
     if (t >= 0) return firstVisibleFrom(ctx, t, onScan);
   }
   return firstVisibleFrom(ctx, idx + 1, onScan);
@@ -373,7 +410,7 @@ export function computePath(ctx: RespondentContext): { pages: string[]; end: str
 }
 
 export function progressPercent(ctx: RespondentContext, currentPageId: string, history: string[]): number {
-  const idx = pagesOf(ctx.survey).findIndex((p) => p.id === currentPageId);
+  const idx = pagesFor(ctx).findIndex((p) => p.id === currentPageId);
   // Оценка: пройденные страницы + оставшиеся по маршруту по умолчанию
   let remaining = 0;
   const seen = new Set<string>();
