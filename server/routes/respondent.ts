@@ -4,7 +4,7 @@ import { isAdmin } from '../auth.ts';
 import { responses, surveys, type StoredResponse, type SurveyRow } from '../db.ts';
 import { queueResponseSync } from '../sheets.ts';
 import {
-  cleanAnswers, findPage, firstPage, isQuestionVisible, nextPage, progressPercent,
+  actionError, allQuestions, cleanAnswers, findPage, firstPage, isQuestionVisible, nextPage, progressPercent,
 } from '../../shared/logic.ts';
 import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
 import { DEFAULT_SETTINGS, END, SCREENOUT, type Answer, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
@@ -60,6 +60,8 @@ function stateOf(survey: Survey, r: StoredResponse): RunnerState {
   const nav = cleanAnswers(ctxOf(survey, r, r.answers), r.history);
   return {
     ...base,
+    // + значения, вычисленные действиями (переменные, автоответы)
+    answers: { ...r.answers, ...nav },
     page: r.currentPage,
     canBack: st.allowBack && r.history.length > 0,
     progress: progressPercent(ctxOf(survey, r, nav), r.currentPage, r.history),
@@ -76,7 +78,7 @@ function checkPage(survey: Survey, r: StoredResponse, pageId: string, submitted:
   const errors: Record<string, string> = {};
   const pageAnswers: Answers = {};
   // Скрытые переменные (любой страницы) приходят от скриптов браузера
-  for (const q of survey.pages.flatMap((p) => p.questions)) {
+  for (const q of allQuestions(survey)) {
     if (q.type !== 'hidden' || !submitted?.[q.id]) continue;
     const a = submitted[q.id];
     if (a && typeof a === 'object' && 'v' in a && !validateAnswer(ctxOf(survey, r, working), q, a)) {
@@ -99,6 +101,15 @@ function checkPage(survey: Survey, r: StoredResponse, pageId: string, submitted:
     if (a && !isEmptyAnswer(a)) {
       working[q.id] = a;
       pageAnswers[q.id] = a;
+    }
+  }
+  // Действия «показать ошибку» — когда известны все ответы страницы
+  if (strict) {
+    const ctx = ctxOf(survey, r, working);
+    for (const q of page.questions) {
+      if (errors[q.id] || !isQuestionVisible(ctx, q)) continue;
+      const e = actionError(ctx, q);
+      if (e) errors[q.id] = e;
     }
   }
   return { errors, working, pageAnswers, page };
@@ -169,7 +180,7 @@ export async function respondentRoutes(app: FastifyInstance) {
       const params = cleanParams(req.body?.params);
       // Скрытые переменные из параметров ссылки
       const initial: Answers = {};
-      for (const q of survey.pages.flatMap((p) => p.questions)) {
+      for (const q of allQuestions(survey)) {
         if (q.type === 'hidden' && q.fromParam && params[q.fromParam] !== undefined && params[q.fromParam] !== '') {
           const raw = params[q.fromParam];
           initial[q.id] = { v: q.valueType === 'number' && isFinite(Number(raw)) ? Number(raw) : raw };
@@ -180,7 +191,7 @@ export async function respondentRoutes(app: FastifyInstance) {
         currentPage: null, params, ip: req.ip ?? null, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 500) || null,
         startedAt: new Date().toISOString(),
       });
-      const first = firstPage(ctxOf(survey, created, initial));
+      const first = firstPage(ctxOf(survey, created, cleanAnswers(ctxOf(survey, created, initial), [])));
       if (first === END || first === SCREENOUT) {
         await finalize(survey, created, initial, [], first === END ? 'completed' : 'screened_out');
       } else {
@@ -199,12 +210,13 @@ export async function respondentRoutes(app: FastifyInstance) {
       if (r.status !== 'in_progress' || r.currentPage !== req.body.page) {
         return { ...stateOf(survey, r), resynced: true };
       }
-      const { errors, working, pageAnswers, page } = checkPage(survey, r, r.currentPage, req.body.answers, true);
+      const { errors, pageAnswers, page } = checkPage(survey, r, r.currentPage, req.body.answers, true);
       if (Object.keys(errors).length) return reply.code(422).send({ errors });
 
       const answers = mergePage(r.answers, page, pageAnswers);
-      const next = nextPage(ctxOf(survey, r, working), page.id);
       const visited = [...r.history, page.id];
+      // Навигация — по ответам с учётом действий «после ответа» (переменные)
+      const next = nextPage(ctxOf(survey, r, cleanAnswers(ctxOf(survey, r, answers), visited)), page.id);
       if (next === END || next === SCREENOUT) {
         await finalize(survey, r, answers, visited, next === END ? 'completed' : 'screened_out');
       } else {

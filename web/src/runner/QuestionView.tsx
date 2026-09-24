@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { pipe, resolveOptions, resolveRows } from '../../../shared/logic.ts';
 import { isRequired } from '../../../shared/answers.ts';
-import type { Answer, MatrixQuestion, Option, Question, RespondentContext, ScaleQuestion } from '../../../shared/types.ts';
+import type { Answer, MatrixQuestion, Option, Question, RespondentContext, ScaleQuestion, TextQuestion } from '../../../shared/types.ts';
 
 interface Props {
   q: Question;
@@ -31,10 +31,10 @@ export function QuestionView({ q, ctx, answer, error, onChange }: Props) {
 
 function Body({ q, ctx, answer, onChange }: Omit<Props, 'error'>) {
   switch (q.type) {
-    case 'single': return <Choice q={q} options={resolveOptions(ctx, q)} multi={false} answer={answer} onChange={onChange} />;
-    case 'multi': return <Choice q={q} options={resolveOptions(ctx, q)} multi answer={answer} onChange={onChange} max={q.maxSelected} />;
+    case 'single': return <Choice q={q} options={resolveOptions(ctx, q)} multi={false} answer={answer} onChange={onChange} otherAlways={q.showOtherAlways} />;
+    case 'multi': return <Choice q={q} options={resolveOptions(ctx, q)} multi answer={answer} onChange={onChange} max={q.maxSelected} otherAlways={q.showOtherAlways} />;
     case 'dropdown': return <Dropdown options={resolveOptions(ctx, q)} answer={answer} onChange={onChange} />;
-    case 'text': return <TextInput multiline={q.multiline} maxLength={q.maxLength} answer={answer} onChange={onChange} />;
+    case 'text': return <TextInput q={q} answer={answer} onChange={onChange} />;
     case 'number': return <NumberInput decimals={q.decimals ?? 0} answer={answer} onChange={onChange} />;
     case 'scale': return <Scale q={q} answer={answer} onChange={onChange} />;
     case 'matrix': return <Matrix q={q} rows={resolveRows(ctx, q)} answer={answer} onChange={onChange} />;
@@ -54,8 +54,8 @@ function OtherInput({ value, onChange, placeholder = 'Укажите ваш ва
   return <input className="input other-input" value={value} placeholder={placeholder} maxLength={500} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />;
 }
 
-function Choice({ q, options, multi, answer, onChange, max }: {
-  q: Question; options: Option[]; multi: boolean; answer?: Answer; onChange: (a: Answer | undefined) => void; max?: number;
+function Choice({ q, options, multi, answer, onChange, max, otherAlways }: {
+  q: Question; options: Option[]; multi: boolean; answer?: Answer; onChange: (a: Answer | undefined) => void; max?: number; otherAlways?: boolean;
 }) {
   const selected: number[] = multi ? ((answer?.v as number[]) ?? []) : typeof answer?.v === 'number' ? [answer.v] : [];
   const others = answer?.o ?? {};
@@ -68,7 +68,14 @@ function Choice({ q, options, multi, answer, onChange, max }: {
     else next = [...selected.filter((c) => !options.find((x) => x.code === c)?.exclusive), o.code];
     onChange(next.length ? { v: next, o: others } : undefined);
   };
-  const setOther = (code: number, text: string) => onChange({ v: answer?.v ?? (multi ? [] : code), o: { ...others, [code]: text } });
+  // Ввод текста в «Другое» сам отмечает вариант
+  const setOther = (code: number, text: string) => {
+    let v = answer?.v;
+    if (text && !selected.includes(code)) {
+      v = multi ? [...selected.filter((c) => !options.find((x) => x.code === c)?.exclusive), code] : code;
+    }
+    onChange({ v: v ?? (multi ? [] : code), o: { ...others, [code]: text } });
+  };
 
   const atMax = multi && !!max && selected.length >= max;
   return (
@@ -82,7 +89,7 @@ function Choice({ q, options, multi, answer, onChange, max }: {
                 onChange={() => toggle(o)} />
               <span>{o.text}</span>
             </label>
-            {o.other && on && <OtherInput autoFocus={!others[o.code]} value={others[o.code] ?? ''} onChange={(t) => setOther(o.code, t)} />}
+            {o.other && (on || otherAlways) && <OtherInput autoFocus={on && !others[o.code]} value={others[o.code] ?? ''} onChange={(t) => setOther(o.code, t)} />}
           </div>
         );
       })}
@@ -107,15 +114,23 @@ function Dropdown({ options, answer, onChange }: { options: Option[]; answer?: A
   );
 }
 
-function TextInput({ multiline, maxLength, answer, onChange }: { multiline?: boolean; maxLength?: number; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
+function TextInput({ q, answer, onChange }: { q: TextQuestion; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
   const value = typeof answer?.v === 'string' ? answer.v : '';
   const set = (s: string) => onChange(s ? { v: s } : undefined);
+  const block = (e: { preventDefault: () => void }) => e.preventDefault();
+  const common = {
+    value,
+    maxLength: q.maxLength,
+    onChange: (e: { target: { value: string } }) => set(e.target.value),
+    onPaste: q.noPaste ? block : undefined,
+    onDrop: q.noPaste ? block : undefined,
+  };
+  if (q.inputType === 'time') return <input className="input input-date" type="time" {...common} />;
+  if (q.inputType === 'email') return <input className="input" type="email" inputMode="email" autoComplete="email" {...common} />;
   return (
     <div>
-      {multiline
-        ? <textarea className="input" rows={4} value={value} maxLength={maxLength} onChange={(e) => set(e.target.value)} />
-        : <input className="input" value={value} maxLength={maxLength} onChange={(e) => set(e.target.value)} />}
-      {maxLength && <div className="counter">{value.length} / {maxLength}</div>}
+      {q.multiline ? <textarea className="input" rows={4} {...common} /> : <input className="input" {...common} />}
+      {q.maxLength && <div className="counter">{value.length} / {q.maxLength}</div>}
     </div>
   );
 }
@@ -186,37 +201,107 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
     const x = v[String(row)];
     return Array.isArray(x) ? x.includes(col) : x === col;
   };
+  const answered = (r: Option) => {
+    const x = v[String(r.code)];
+    return x !== undefined && (!Array.isArray(x) || x.length > 0);
+  };
+  const rowLabel = (r: Option): ReactNode => (r.other
+    ? <OtherInput placeholder={r.text} value={others[r.code] ?? ''} onChange={(t) => emit(v, { ...others, [r.code]: t })} />
+    : r.text);
+  const cell = (r: Option, c: Option, label: string): ReactNode => (
+    <label className={`cell${isOn(r.code, c.code) ? ' selected' : ''}`}>
+      <input type={q.mode === 'single' ? 'radio' : 'checkbox'} name={`${q.id}_${r.code}`}
+        checked={isOn(r.code, c.code)} onChange={() => pick(r.code, c.code)} />
+      <span className="cell-label">{label}</span>
+    </label>
+  );
+
+  if (q.carousel) return <MatrixCarousel q={q} rows={rows} rowLabel={rowLabel} cell={cell} answered={answered} />;
+
+  // Постепенный показ: строки до первой неотвеченной (строки «Другое» не останавливают)
+  let shownRows = rows;
+  if (q.progressiveRows) {
+    const firstOpen = rows.findIndex((r) => !r.other && !answered(r));
+    if (firstOpen >= 0) shownRows = rows.slice(0, firstOpen + 1);
+  }
+  const cls = `matrix${q.verticalHeaders ? ' vertical-headers' : ''}`;
+
+  if (q.transpose) {
+    return (
+      <div className="matrix-wrap">
+        <table className={cls}>
+          <thead>
+            <tr><th />{shownRows.map((r) => <th key={r.code} scope="col"><span>{rowLabel(r)}</span></th>)}</tr>
+          </thead>
+          <tbody>
+            {q.columns.map((c) => (
+              <tr key={c.code}>
+                <th scope="row">{c.text}</th>
+                {shownRows.map((r) => <td key={r.code}>{cell(r, c, r.other ? others[r.code] || r.text : r.text)}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 
   return (
     <div className="matrix-wrap">
-      <table className="matrix" style={{ ['--cols' as string]: q.columns.length }}>
+      <table className={cls}>
         <thead>
-          <tr>
-            <th />
-            {q.columns.map((c) => <th key={c.code} scope="col">{c.text}</th>)}
-          </tr>
+          <tr><th />{q.columns.map((c) => <th key={c.code} scope="col"><span>{c.text}</span></th>)}</tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.code}>
-              <th scope="row">
-                {r.other
-                  ? <OtherInput placeholder={r.text} value={others[r.code] ?? ''} onChange={(t) => emit(v, { ...others, [r.code]: t })} />
-                  : r.text}
-              </th>
-              {q.columns.map((c) => (
-                <td key={c.code}>
-                  <label className={`cell${isOn(r.code, c.code) ? ' selected' : ''}`}>
-                    <input type={q.mode === 'single' ? 'radio' : 'checkbox'} name={`${q.id}_${r.code}`}
-                      checked={isOn(r.code, c.code)} onChange={() => pick(r.code, c.code)} />
-                    <span className="cell-label">{c.text}</span>
-                  </label>
-                </td>
-              ))}
+          {shownRows.map((r) => (
+            <tr key={r.code} className="fade-in">
+              <th scope="row">{rowLabel(r)}</th>
+              {q.columns.map((c) => <td key={c.code}>{cell(r, c, c.text)}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function MatrixCarousel({ q, rows, rowLabel, cell, answered }: {
+  q: MatrixQuestion;
+  rows: Option[];
+  rowLabel: (r: Option) => ReactNode;
+  cell: (r: Option, c: Option, label: string) => ReactNode;
+  answered: (r: Option) => boolean;
+}) {
+  const [idx, setIdx] = useState(() => Math.max(0, rows.findIndex((r) => !answered(r))));
+  const i = Math.min(idx, rows.length - 1);
+  const row = rows[i];
+  const done = row ? answered(row) : false;
+  // В режиме «один ответ» после ответа в строке — переход к следующей
+  const [wasDone, setWasDone] = useState(done);
+  useEffect(() => { setWasDone(rows[i] ? answered(rows[i]) : false); /* eslint-disable-next-line */ }, [i]);
+  useEffect(() => {
+    if (done && !wasDone && q.mode === 'single' && !row?.other && i < rows.length - 1) {
+      const t = setTimeout(() => setIdx(i + 1), 250);
+      return () => clearTimeout(t);
+    }
+  }, [done, wasDone, q.mode, row, i, rows.length]);
+  if (!row) return null;
+  return (
+    <div className="carousel">
+      <div className="carousel-head">
+        <button type="button" className="icon-btn" disabled={i === 0} onClick={() => setIdx(i - 1)} aria-label="Предыдущая строка">‹</button>
+        <div className="carousel-dots">
+          {rows.map((r, k) => (
+            <button type="button" key={r.code} className={`dot${k === i ? ' current' : ''}${answered(r) ? ' done' : ''}`}
+              onClick={() => setIdx(k)} aria-label={`Строка ${k + 1}`} />
+          ))}
+        </div>
+        <button type="button" className="icon-btn" disabled={i === rows.length - 1} onClick={() => setIdx(i + 1)} aria-label="Следующая строка">›</button>
+      </div>
+      <div className="carousel-row">{rowLabel(row)}</div>
+      <div className="options">
+        {q.columns.map((c) => <div key={c.code} className="carousel-cell">{cell(row, c, c.text)}</div>)}
+      </div>
     </div>
   );
 }

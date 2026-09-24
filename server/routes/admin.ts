@@ -6,24 +6,25 @@ import { writeXlsx } from '../export/xlsx.ts';
 import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
 import { validateSurvey } from '../../shared/validate.ts';
+import { migrateSurvey } from '../../shared/migrate.ts';
 import type { Survey } from '../../shared/types.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
 
 /** Черновик можно сохранить с ошибками логики, но не с поломанной структурой */
 function draftShapeOk(def: unknown): boolean {
   const d = def as Survey;
-  return !!d && typeof d === 'object' && typeof d.title === 'string' && Array.isArray(d.pages) && d.pages.length > 0
-    && d.pages.every((p) => p && typeof p === 'object' && Array.isArray(p.questions));
+  return !!d && typeof d === 'object' && typeof d.title === 'string' && Array.isArray(d.blocks) && d.blocks.length > 0
+    && d.blocks.every((b) => b && typeof b === 'object' && Array.isArray(b.questions));
 }
 
 const ALL_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'terminated', 'in_progress'];
 
 export function blankSurvey(title = 'Новая анкета'): Survey {
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     title,
     settings: { showProgress: true, allowBack: true, allowEarlyFinish: false },
-    pages: [{ id: 'P1', questions: [{ id: 'Q1', type: 'single', text: 'Первый вопрос', options: [{ code: 1, text: 'Да' }, { code: 2, text: 'Нет' }] }] }],
+    blocks: [{ id: 'B1', questions: [{ id: 'Q1', type: 'single', text: 'Первый вопрос', options: [{ code: 1, text: 'Да' }, { code: 2, text: 'Нет' }] }] }],
   };
 }
 
@@ -57,7 +58,7 @@ export async function adminRoutes(app: FastifyInstance) {
     priv.get('/api/admin/surveys', async () => surveys.list());
 
     priv.post<{ Body: { definition?: unknown; title?: string } }>('/api/admin/surveys', async (req, reply) => {
-      const def = req.body?.definition ?? blankSurvey(req.body?.title);
+      const def = req.body?.definition !== undefined ? migrateSurvey(req.body.definition) : blankSurvey(req.body?.title);
       const v = validateSurvey(def);
       if (!draftShapeOk(def)) return reply.code(422).send(v);
       const s = await surveys.create(def as Survey);
@@ -73,9 +74,10 @@ export async function adminRoutes(app: FastifyInstance) {
     priv.put<{ Params: { id: string }; Body: { definition: unknown } }>('/api/admin/surveys/:id', async (req, reply) => {
       const s = await surveys.get(req.params.id);
       if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
-      const v = validateSurvey(req.body?.definition);
-      if (!draftShapeOk(req.body?.definition)) return reply.code(422).send(v);
-      await surveys.saveDraft(s.id, req.body.definition as Survey);
+      const def = migrateSurvey(req.body?.definition);
+      const v = validateSurvey(def);
+      if (!draftShapeOk(def)) return reply.code(422).send(v);
+      await surveys.saveDraft(s.id, def as Survey);
       return { ok: true, errors: v.errors, warnings: v.warnings };
     });
 

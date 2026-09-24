@@ -22,7 +22,6 @@ export const RESERVED_IDS = new Set([
 const TYPES = new Set(['single', 'multi', 'dropdown', 'text', 'number', 'scale', 'matrix', 'date', 'phone', 'info', 'hidden']);
 const SCRIPT_KEYS = {
   survey: ['init'],
-  page: ['onShow', 'onSubmit'],
   question: ['onShow', 'onChange', 'validate'],
 } as const;
 
@@ -42,6 +41,8 @@ const OPS = new Set([
   'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'notIn',
   'contains', 'notContains', 'containsAny', 'containsAll', 'answered', 'notAnswered',
 ]);
+const BEFORE_ACTIONS = ['hideOptions', 'showOnlyOptions', 'hideOptionsFrom', 'skipIfFewer', 'answer', 'setValue'] as const;
+const AFTER_ACTIONS = ['goTo', 'end', 'screenout', 'setValue', 'error'] as const;
 const ARRAY_OPS = new Set(['in', 'notIn', 'containsAny', 'containsAll']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -59,34 +60,33 @@ export function validateSurvey(input: unknown): ValidationResult {
     return { ok: false, errors, warnings };
   }
   const s = input as unknown as Survey;
-  if (s.formatVersion !== 1) err('formatVersion', 'Должно быть 1');
+  if (s.formatVersion !== 2) err('formatVersion', 'Должно быть 2');
   if (typeof s.title !== 'string' || !s.title.trim()) err('title', 'Укажите название анкеты');
   if (s.settings !== undefined && !isObj(s.settings)) err('settings', 'Ожидается объект');
   if (s.css !== undefined && typeof s.css !== 'string') err('css', 'Ожидается строка');
   checkScripts(s.scripts, 'survey', 'анкета', err);
-  if (!Array.isArray(s.pages) || s.pages.length === 0) {
-    err('pages', 'Нужна хотя бы одна страница');
+  if (!Array.isArray(s.blocks) || s.blocks.length === 0) {
+    err('blocks', 'Нужен хотя бы один блок с вопросами');
     return { ok: false, errors, warnings };
   }
 
-  // Порядок вопросов: id → { страница, позиция }
+  // Порядок вопросов. Каждый вопрос — отдельный экран, поэтому page = pos
   const qIndex = new Map<string, { page: number; pos: number; q: Question }>();
-  const pageIds = new Map<string, number>();
+  const blockStart = new Map<string, number>();
   let pos = 0;
 
-  s.pages.forEach((p, pi) => {
-    const pw = `страница ${pi + 1}`;
-    if (!isObj(p)) return err(pw, 'Ожидается объект');
-    if (typeof p.id !== 'string' || !ID_RE.test(p.id)) err(pw, 'ID страницы: латиница, цифры и _, начинается с буквы');
-    else if (pageIds.has(p.id)) err(p.id, 'ID страницы повторяется');
-    else if (p.id === END || p.id === SCREENOUT) err(p.id, 'Это зарезервированное имя');
-    else pageIds.set(p.id, pi);
-    if (!Array.isArray(p.questions)) return err(p.id ?? pw, 'Нужен массив questions');
-    if (p.questions.length === 0) warn(p.id ?? pw, 'Пустая страница — она будет пропущена');
-    checkScripts(p.scripts, 'page', p.id ?? pw, err);
+  s.blocks.forEach((b, bi) => {
+    const bw = `блок ${bi + 1}`;
+    if (!isObj(b)) return err(bw, 'Ожидается объект');
+    if (typeof b.id !== 'string' || !ID_RE.test(b.id)) err(bw, 'ID блока: латиница, цифры и _, начинается с буквы');
+    else if (blockStart.has(b.id)) err(b.id, 'ID блока повторяется');
+    else if (b.id === END || b.id === SCREENOUT) err(b.id, 'Это зарезервированное имя');
+    else blockStart.set(b.id, pos);
+    if (!Array.isArray(b.questions)) return err(b.id ?? bw, 'Нужен массив questions');
+    if (b.questions.length === 0) warn(b.id ?? bw, 'Пустой блок');
 
-    p.questions.forEach((q, qi) => {
-      const qw = isObj(q) && typeof q.id === 'string' ? q.id : `${p.id ?? pw} → вопрос ${qi + 1}`;
+    b.questions.forEach((q, qi) => {
+      const qw = isObj(q) && typeof q.id === 'string' ? q.id : `${b.id ?? bw} → вопрос ${qi + 1}`;
       if (!isObj(q)) return err(qw, 'Ожидается объект');
       if (typeof q.id !== 'string' || !ID_RE.test(q.id)) {
         err(qw, 'ID вопроса: латиница, цифры и _, начинается с буквы, до 32 символов');
@@ -95,7 +95,8 @@ export function validateSurvey(input: unknown): ValidationResult {
       } else if ([...qIndex.keys()].some((k) => k.toLowerCase() === q.id.toLowerCase())) {
         err(qw, 'ID вопроса повторяется (регистр букв не учитывается)');
       } else {
-        qIndex.set(q.id, { page: pi, pos: pos++, q: q as Question });
+        qIndex.set(q.id, { page: pos, pos, q: q as Question });
+        pos++;
       }
       if (!TYPES.has(q.type)) return err(qw, `Неизвестный тип «${String(q.type)}»`);
       if (typeof q.text !== 'string' || (!q.text.trim() && q.type !== 'info' && q.type !== 'hidden')) err(qw, 'Нужен текст вопроса');
@@ -103,6 +104,9 @@ export function validateSurvey(input: unknown): ValidationResult {
       validateQuestion(q as Question, qw, err, warn);
     });
   });
+  for (const id of blockStart.keys()) {
+    if (qIndex.has(id)) err(id, 'ID блока совпадает с ID вопроса — переходы станут неоднозначными');
+  }
 
   // Ссылки: условия, переносы, переходы, пайпинг
   const checkRef = (where: string, id: string, current: { page: number; pos: number } | null, samePageOk: boolean) => {
@@ -148,12 +152,11 @@ export function validateSurvey(input: unknown): ValidationResult {
     if (ARRAY_OPS.has(c.op) && !Array.isArray(c.value)) err(where, `Оператору «${c.op}» нужен массив в value`);
   };
 
-  s.pages.forEach((p, pi) => {
-    if (!isObj(p) || !Array.isArray(p.questions)) return;
-    if (p.showIf) checkCondition(p.showIf, `${p.id} → условие показа`, { page: pi, pos: Infinity }, false);
-    p.questions.forEach((q) => {
+  for (const b of s.blocks) {
+    if (!isObj(b) || !Array.isArray(b.questions)) continue;
+    for (const q of b.questions) {
       const info = qIndex.get(q?.id);
-      if (!info || !isObj(q)) return;
+      if (!info || !isObj(q)) continue;
       if (q.showIf) checkCondition(q.showIf, `${q.id} → условие показа`, info, true);
       const from = (q as { optionsFrom?: { question: string; filter: string } }).optionsFrom
         ?? (q as { rowsFrom?: { question: string; filter: string } }).rowsFrom;
@@ -170,19 +173,59 @@ export function validateSurvey(input: unknown): ValidationResult {
         }
       }
       for (const t of [q.text, q.hint]) checkPiping(t, q.id, info);
-    });
-    (p.jumps ?? []).forEach((j, ji) => {
-      const where = `${p.id} → переход ${ji + 1}`;
-      if (!isObj(j)) return err(where, 'Ожидается объект {if, goTo}');
-      if (!j.if) err(where, 'Нужно условие if');
-      else checkCondition(j.if, where, { page: pi, pos: Infinity }, true);
-      if (j.goTo !== END && j.goTo !== SCREENOUT) {
-        const t = pageIds.get(j.goTo);
-        if (t === undefined) err(where, `goTo: нет страницы «${j.goTo}» (или используйте END / SCREENOUT)`);
-        else if (t <= pi) warn(where, 'Переход назад — возможен бесконечный цикл');
-      }
-    });
-  });
+      checkActions(q as Question, info, info.pos);
+    }
+  }
+
+  function checkActions(q: Question, info: { page: number; pos: number }, pi: number) {
+    const acts = (q as { actions?: unknown }).actions;
+    if (acts === undefined) return;
+    if (!isObj(acts)) return err(q.id, 'actions: ожидается объект {before, after}');
+    for (const phase of ['before', 'after'] as const) {
+      const list = (acts as Record<string, unknown>)[phase];
+      if (list === undefined) continue;
+      if (!Array.isArray(list)) { err(q.id, `actions.${phase}: ожидается массив`); continue; }
+      (list as any[]).forEach((a: any, i: number) => {
+        const where = `${q.id} → ${phase === 'before' ? 'перед показом' : 'после ответа'} ${i + 1}`;
+        if (!a || typeof a !== 'object' || Array.isArray(a)) return err(where, 'Ожидается объект {do, ...}');
+        const allowed: readonly string[] = phase === 'before' ? BEFORE_ACTIONS : AFTER_ACTIONS;
+        if (!allowed.includes(a.do)) return err(where, `Действие «${a.do}» недоступно ${phase === 'before' ? 'перед показом' : 'после ответа'}`);
+        if (a.if !== undefined) checkCondition(a.if, where, phase === 'before' ? info : { page: pi, pos: Infinity }, true);
+        switch (a.do) {
+          case 'hideOptions':
+          case 'showOnlyOptions':
+            if (!Array.isArray(a.codes) || !a.codes.every(isInt)) err(where, 'codes: массив кодов');
+            if (!['single', 'multi', 'dropdown', 'matrix'].includes(q.type)) err(where, 'У вопроса нет вариантов');
+            break;
+          case 'hideOptionsFrom':
+            if (typeof a.question !== 'string') err(where, 'Укажите question');
+            else checkRef(where, a.question, info, true);
+            if (!['single', 'multi', 'dropdown', 'matrix'].includes(q.type)) err(where, 'У вопроса нет вариантов');
+            break;
+          case 'skipIfFewer':
+            if (!isInt(a.n) || a.n < 1) err(where, 'n: целое ≥ 1');
+            break;
+          case 'setValue': {
+            const t = typeof a.target === 'string' ? qIndex.get(a.target) : undefined;
+            if (!t) err(where, 'target: укажите скрытую переменную');
+            else if (t.q.type !== 'hidden') err(where, `«${a.target}» — не скрытая переменная`);
+            if (a.value === undefined) err(where, 'Укажите value');
+            break;
+          }
+          case 'goTo': {
+            const t = typeof a.target === 'string' ? qIndex.get(a.target)?.pos ?? blockStart.get(a.target) : undefined;
+            if (t === undefined) err(where, `Нет вопроса или блока «${a.target}»`);
+            else if (t <= pi) warn(where, 'Переход назад — возможен бесконечный цикл');
+            break;
+          }
+          case 'error':
+            if (a.message !== undefined && typeof a.message !== 'string') err(where, 'message: строка');
+            if (a.if === undefined) warn(where, 'Ошибка без условия не даст пройти вопрос');
+            break;
+        }
+      });
+    }
+  }
 
   function checkPiping(text: unknown, where: string, current: { page: number; pos: number }) {
     if (typeof text !== 'string') return;
@@ -220,6 +263,7 @@ function validateQuestion(
     case 'dropdown':
     case 'multi':
       validateOptions(q.options, w, 'options', err, !!q.optionsFrom);
+      if (q.order !== undefined && q.order !== 'random' && q.order !== 'rotate') err(w, 'order: random или rotate');
       if (q.type === 'multi') {
         if (q.minSelected !== undefined && (!isInt(q.minSelected) || q.minSelected < 1)) err(w, 'minSelected: целое ≥ 1');
         if (q.maxSelected !== undefined && (!isInt(q.maxSelected) || q.maxSelected < 1)) err(w, 'maxSelected: целое ≥ 1');
@@ -246,6 +290,8 @@ function validateQuestion(
       if (q.mode !== 'single' && q.mode !== 'multi') err(w, 'mode: single или multi');
       validateOptions(q.rows, w, 'rows', err, !!q.rowsFrom);
       validateOptions(q.columns, w, 'columns', err);
+      if (q.rowOrder !== undefined && q.rowOrder !== 'random' && q.rowOrder !== 'rotate') err(w, 'rowOrder: random или rotate');
+      if (q.carousel && q.progressiveRows) warn(w, 'carousel и progressiveRows вместе не имеют смысла — будет карусель');
       if (Array.isArray(q.columns) && q.columns.some((c) => c?.other)) err(w, '«Другое» в матрице задаётся в строках, а не в столбцах');
       if (q.requiredRows !== undefined && q.requiredRows !== 'all' && q.requiredRows !== 'none'
         && !(isInt(q.requiredRows) && q.requiredRows >= 1)) {
@@ -260,6 +306,7 @@ function validateQuestion(
       break;
     case 'text':
       if (q.maxLength !== undefined && (!isInt(q.maxLength) || q.maxLength < 1)) err(w, 'maxLength: целое ≥ 1');
+      if (q.inputType !== undefined && !['text', 'email', 'time'].includes(q.inputType)) err(w, 'inputType: text, email или time');
       break;
     case 'date':
       for (const k of ['min', 'max'] as const) {

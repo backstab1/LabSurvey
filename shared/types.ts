@@ -1,4 +1,6 @@
-// Формат анкеты SurveyLAB (formatVersion 1). Подробное описание: docs/survey-format.md
+// Формат анкеты SurveyLAB (formatVersion 2). Подробное описание: docs/survey-format.md
+// Анкета — последовательность вопросов (один вопрос на экран), сгруппированных в блоки.
+// Вся логика задаётся на вопросах: условие показа и действия перед показом / после ответа.
 
 export type Code = number;
 
@@ -54,15 +56,46 @@ export interface QuestionScripts {
   validate?: string;
 }
 
-export interface PageScripts {
-  onShow?: string;
-  /** Перед отправкой страницы: вернуть строку — отправка отменяется с этим сообщением */
-  onSubmit?: string;
-}
-
 export interface SurveyScripts {
   /** Глобальный скрипт: выполняется при каждой загрузке страницы до остальных. Функции можно класть в sl.shared */
   init?: string;
+}
+
+/**
+ * Действия — логика без программирования (как в Survey Studio).
+ * Выполняются по порядку; у каждого может быть условие `if`.
+ */
+export type BeforeActionKind =
+  | 'hideOptions'      // скрыть варианты (строки матрицы) с кодами codes
+  | 'showOnlyOptions'  // показать только варианты с кодами codes
+  | 'hideOptionsFrom'  // скрыть варианты, выбранные (filter: selected) или невыбранные в вопросе question
+  | 'skipIfFewer'      // не показывать вопрос, если видимых вариантов (строк) меньше n
+  | 'answer'           // отметить ответ value и не показывать вопрос; без value — единственный видимый вариант
+  | 'setValue';        // записать value в скрытую переменную target
+
+export type AfterActionKind =
+  | 'goTo'             // перейти к вопросу или странице target
+  | 'end'              // завершить анкету
+  | 'screenout'        // отсеять респондента
+  | 'setValue'         // записать value в скрытую переменную target
+  | 'error';           // не пускать дальше, показать message
+
+export interface Action {
+  if?: Condition;
+  do: BeforeActionKind | AfterActionKind;
+  codes?: number[];
+  question?: string;
+  filter?: 'selected' | 'notSelected';
+  n?: number;
+  target?: string;
+  /** Для setValue строка может содержать подстановки {{Q1}} */
+  value?: number | string | number[];
+  message?: string;
+}
+
+export interface QuestionActions {
+  before?: Action[];
+  after?: Action[];
 }
 
 interface QuestionBase {
@@ -73,21 +106,35 @@ interface QuestionBase {
   /** По умолчанию true (кроме info) */
   required?: boolean;
   showIf?: Condition;
+  actions?: QuestionActions;
   scripts?: QuestionScripts;
+  /** Скрыть кнопку «Назад», пока вопрос на экране */
+  hideBack?: boolean;
+  /** Скрыть кнопку «Завершить досрочно», пока вопрос на экране */
+  hideFinish?: boolean;
 }
 
-export interface ChoiceQuestion extends QuestionBase {
+/** Порядок вариантов: random — перемешать, rotate — циклический сдвиг с сохранением порядка */
+export type OptionOrder = 'random' | 'rotate';
+
+interface ChoiceBase extends QuestionBase {
+  options: Option[];
+  optionsFrom?: OptionsFrom;
+  /** Устаревший синоним order: "random" */
+  randomize?: boolean;
+  order?: OptionOrder;
+  /** Поле «укажите» видно всегда, а не только после выбора варианта */
+  showOtherAlways?: boolean;
+}
+
+export interface ChoiceQuestion extends ChoiceBase {
   type: 'single' | 'dropdown';
-  options: Option[];
-  optionsFrom?: OptionsFrom;
-  randomize?: boolean;
+  /** Автопереход на следующую страницу после выбора (если на странице один вопрос) */
+  autoNext?: boolean;
 }
 
-export interface MultiQuestion extends QuestionBase {
+export interface MultiQuestion extends ChoiceBase {
   type: 'multi';
-  options: Option[];
-  optionsFrom?: OptionsFrom;
-  randomize?: boolean;
   minSelected?: number;
   maxSelected?: number;
 }
@@ -96,6 +143,10 @@ export interface TextQuestion extends QuestionBase {
   type: 'text';
   multiline?: boolean;
   maxLength?: number;
+  /** text — обычный текст, email — адрес почты, time — время ЧЧ:ММ */
+  inputType?: 'text' | 'email' | 'time';
+  /** Запретить вставку из буфера обмена */
+  noPaste?: boolean;
 }
 
 export interface NumberQuestion extends QuestionBase {
@@ -114,6 +165,7 @@ export interface ScaleQuestion extends QuestionBase {
   labels?: Record<string, string>;
   /** Дополнительные варианты вне шкалы, например {code: 99, text: "Затрудняюсь ответить"} */
   extraOptions?: Option[];
+  autoNext?: boolean;
 }
 
 export interface MatrixQuestion extends QuestionBase {
@@ -123,7 +175,17 @@ export interface MatrixQuestion extends QuestionBase {
   rows: Option[];
   rowsFrom?: OptionsFrom;
   columns: Option[];
+  /** Устаревший синоним rowOrder: "random" */
   randomizeRows?: boolean;
+  rowOrder?: OptionOrder;
+  /** Перевернуть таблицу: строки — варианты ответа, столбцы — утверждения (только отображение) */
+  transpose?: boolean;
+  /** Вертикальный текст в заголовках столбцов */
+  verticalHeaders?: boolean;
+  /** Показывать следующую строку только после ответа на предыдущую */
+  progressiveRows?: boolean;
+  /** Карусель: по одной строке на экране, после ответа — следующая */
+  carousel?: boolean;
   /** all — обязательны все строки, none — ни одна, число — минимум заполненных строк */
   requiredRows?: 'all' | 'none' | number;
 }
@@ -174,20 +236,31 @@ export type QuestionType = Question['type'];
 export const END = 'END';
 export const SCREENOUT = 'SCREENOUT';
 
+/** Правило перехода (внутреннее представление действий goTo / end / screenout) */
 export interface JumpRule {
-  if: Condition;
-  /** ID страницы, END (завершить) или SCREENOUT (отсеять) */
+  if?: Condition;
+  /** ID вопроса или блока, END (завершить) или SCREENOUT (отсеять) */
   goTo: string;
 }
 
+/** Блок — группа вопросов (для порядка и навигации в конструкторе; своей логики нет) */
+export interface Block {
+  id: string;
+  /** Заголовок блока; если задан — показывается респонденту над вопросами блока */
+  title?: string;
+  questions: Question[];
+}
+
+/**
+ * Экран опроса — внутреннее понятие движка: сейчас каждый вопрос показывается на отдельном экране,
+ * ID экрана = ID вопроса. В формате анкеты экранов нет.
+ */
 export interface Page {
   id: string;
-  title?: string;
-  showIf?: Condition;
   questions: Question[];
-  scripts?: PageScripts;
-  /** Переходы после страницы: срабатывает первое подходящее правило */
+  showIf?: Condition;
   jumps?: JumpRule[];
+  scripts?: { onShow?: string; onSubmit?: string };
 }
 
 export interface SurveySettings {
@@ -202,14 +275,14 @@ export interface SurveySettings {
 }
 
 export interface Survey {
-  formatVersion: 1;
+  formatVersion: 2;
   title: string;
   description?: string;
   settings?: SurveySettings;
   /** Свои стили для страницы опроса */
   css?: string;
   scripts?: SurveyScripts;
-  pages: Page[];
+  blocks: Block[];
 }
 
 // ---- Ответы ----

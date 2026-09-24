@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { QuestionView } from './QuestionView.tsx';
 import { runScript, type ScriptEnv } from './scripts.ts';
-import { findPage, isQuestionVisible, nextPage, pipe } from '../../../shared/logic.ts';
+import { actionError, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions } from '../../../shared/logic.ts';
 import { validateAnswer } from '../../../shared/answers.ts';
 import {
   DEFAULT_SETTINGS, END, type Answer, type AnswerValue, type Answers, type Page, type RespondentContext, type Survey,
@@ -81,6 +81,7 @@ function PageView({ state, page, surveyId, onState }: {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pageError, setPageError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [autoSubmit, setAutoSubmit] = useState(false);
 
   const answers: Answers = { ...state.answers, ...local };
   // Стёртые на этой странице ответы не должны подтягиваться из сохранённых
@@ -128,6 +129,12 @@ function PageView({ state, page, surveyId, onState }: {
     });
     if (errors[id]) setErrors((e) => ({ ...e, [id]: '' }));
     const q = page.questions.find((x) => x.id === id);
+    // Автопереход: единственный вопрос на странице, выбран обычный вариант (не «Другое»)
+    if (q && 'autoNext' in q && q.autoNext && typeof a?.v === 'number'
+      && visible.filter((x) => x.type !== 'info').length === 1
+      && !resolveOptions(ctx, q, 0, false).find((o) => o.code === a.v)?.other) {
+      setAutoSubmit(true);
+    }
     if (q?.scripts?.onChange) {
       const nextAnswers = { ...answers };
       if (a === undefined) delete nextAnswers[id]; else nextAnswers[id] = a;
@@ -135,12 +142,25 @@ function PageView({ state, page, surveyId, onState }: {
     }
   };
 
+  // Небольшая пауза, чтобы респондент увидел свой выбор; вызываем актуальную версию send
+  const sendRef = useRef<(a: 'submit') => void>(() => {});
+  useEffect(() => {
+    if (!autoSubmit) return;
+    const t = setTimeout(() => { setAutoSubmit(false); sendRef.current('submit'); }, 300);
+    return () => clearTimeout(t);
+  }, [autoSubmit]);
+
+  // Заголовок блока показывается над его вопросами
+  const blockTitle = blockOf(survey, page.id)?.title;
+  const hideBack = visible.some((q) => q.hideBack);
+  const hideFinish = visible.some((q) => q.hideFinish);
+
   const payload = (): Answers => {
     const out: Answers = {};
     for (const q of visible) if (local[q.id]) out[q.id] = local[q.id];
     // Скрытые переменные любой страницы, выставленные скриптами
     for (const [id, a] of Object.entries(local)) {
-      const q = survey.pages.flatMap((p) => p.questions).find((x) => x.id === id);
+      const q = findQuestion(survey, id);
       if (q?.type === 'hidden') out[id] = a;
     }
     return out;
@@ -159,6 +179,7 @@ function PageView({ state, page, surveyId, onState }: {
       const errs: Record<string, string> = {};
       for (const q of visible) {
         const e = validateAnswer(ctx, q, local[q.id])
+          ?? actionError(ctx, q)
           ?? (runScript(q.scripts?.validate, `validate (${q.id})`, env(), { question: q.id, value: local[q.id]?.v }) as string | undefined);
         if (typeof e === 'string' && e) errs[q.id] = e;
       }
@@ -178,6 +199,8 @@ function PageView({ state, page, surveyId, onState }: {
     }
   };
 
+  sendRef.current = send;
+
   return (
     <div className={`runner page-${page.id}`}>
       {state.preview && <div className="preview-banner">Предпросмотр: ответы помечаются как тестовые</div>}
@@ -186,17 +209,24 @@ function PageView({ state, page, surveyId, onState }: {
           <div className="progress-fill" style={{ width: `${state.progress}%` }} />
         </div>
       )}
-      <div className="runner-card">
-        {page.title && <h1 className="page-title">{pipe(page.title, ctx)}</h1>}
+      <div className="runner-card" onKeyDown={(e) => {
+        // Enter в однострочном поле — «Далее»
+        const t = e.target as HTMLElement;
+        if (e.key === 'Enter' && t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'checkbox' && (t as HTMLInputElement).type !== 'radio') {
+          e.preventDefault();
+          send('submit');
+        }
+      }}>
+        {blockTitle && <div className="page-title">{pipe(blockTitle, ctx)}</div>}
         {visible.map((q) => (
           <QuestionView key={q.id} q={q} ctx={ctx} answer={local[q.id]} error={errors[q.id]} onChange={(a) => setAnswer(q.id, a)} />
         ))}
         {pageError && <div className="q-error page-error" role="alert">{pageError}</div>}
         <div className="nav">
-          {state.canBack && <button className="btn btn-secondary" disabled={busy} onClick={() => send('back')}>Назад</button>}
+          {state.canBack && !hideBack && <button className="btn btn-secondary" disabled={busy} onClick={() => send('back')}>Назад</button>}
           <button className="btn btn-primary" disabled={busy} onClick={() => send('submit')}>{isLast ? 'Отправить' : 'Далее'}</button>
         </div>
-        {settings.allowEarlyFinish && (
+        {settings.allowEarlyFinish && !hideFinish && (
           <div className="early-finish">
             <button className="btn-link" disabled={busy} onClick={() => send('finish')}>Завершить опрос досрочно</button>
           </div>

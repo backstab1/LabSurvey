@@ -91,8 +91,8 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[]): Var
     });
   }
 
-  for (const page of survey.pages) {
-    for (const q of page.questions) {
+  for (const block of survey.blocks) {
+    for (const q of block.questions) {
       const text = clean(q.text);
       const ans = (r: ResponseRecord) => r.answers[q.id];
       switch (q.type) {

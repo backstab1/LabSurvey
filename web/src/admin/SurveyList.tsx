@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { navigate } from './AdminApp.tsx';
-import { IssuesList } from './common.tsx';
+import { IssuesList, Menu, Modal } from './common.tsx';
 import type { Issue } from '../../../shared/validate.ts';
 
 interface Row {
@@ -19,7 +19,8 @@ export function SurveyList() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
-  useEffect(() => { api<Row[]>('GET', '/api/admin/surveys').then(setRows); }, []);
+  const load = () => api<Row[]>('GET', '/api/admin/surveys').then(setRows);
+  useEffect(() => { load(); }, []);
 
   const createBlank = async () => {
     const r = await api('POST', '/api/admin/surveys', {});
@@ -39,7 +40,7 @@ export function SurveyList() {
         ) : (
           <table className="table">
             <thead>
-              <tr><th>Название</th><th>Статус</th><th>Завершили</th><th>Всего начали</th><th>Изменена</th></tr>
+              <tr><th>Название</th><th>Статус</th><th>Завершили</th><th>Начали</th><th>Изменена</th><th /></tr>
             </thead>
             <tbody>
               {rows.map((r) => (
@@ -49,6 +50,21 @@ export function SurveyList() {
                   <td>{r.counts.completed ?? 0}</td>
                   <td>{Object.values(r.counts).reduce((a, b) => a + b, 0)}</td>
                   <td className="muted">{new Date(r.updatedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                  <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
+                    <Menu items={[
+                      { label: 'Открыть', onClick: () => navigate(`/admin/s/${r.id}`) },
+                      { label: 'Предпросмотр', onClick: () => window.open(`/s/${r.id}?preview=1&new=1`, '_blank') },
+                      { label: 'Дублировать', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/duplicate`); load(); } },
+                      {
+                        label: 'Удалить', danger: true, onClick: async () => {
+                          const n = Object.values(r.counts).reduce((a, b) => a + b, 0);
+                          if (!window.confirm(`Удалить «${r.title}»${n ? ` и ${n} ответов` : ''}? Это нельзя отменить.`)) return;
+                          await api('DELETE', `/api/admin/surveys/${r.id}`);
+                          load();
+                        },
+                      },
+                    ]} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -79,15 +95,14 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal stack" onClick={(e) => e.stopPropagation()}>
-        <h2>Импорт анкеты из JSON</h2>
-        <p className="muted" style={{ margin: 0 }}>Вставьте JSON или выберите файл. Формат описан в docs/survey-format.md.</p>
+    <Modal onClose={onClose} title="Импорт анкеты из JSON">
+      <div className="stack">
+        <p className="muted" style={{ margin: 0 }}>Вставьте JSON или выберите файл. Формат — вкладка JSON → «Скопировать инструкцию для ИИ».</p>
         <input type="file" accept=".json,application/json" onChange={async (e) => {
           const f = e.target.files?.[0];
           if (f) setText(await f.text());
         }} />
-        <textarea className="json-editor" style={{ minHeight: 300 }} value={text} onChange={(e) => setText(e.target.value)} placeholder='{"formatVersion": 1, "title": "...", "pages": [...]}' />
+        <textarea className="json-editor" style={{ minHeight: 300 }} value={text} onChange={(e) => setText(e.target.value)} placeholder='{"formatVersion": 2, "title": "...", "blocks": [...]}' />
         {error && <div className="error-box">{error}</div>}
         {issues.length > 0 && <div className="error-box"><IssuesList issues={issues} /></div>}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
@@ -95,6 +110,6 @@ function ImportModal({ onClose }: { onClose: () => void }) {
           <button className="btn btn-primary" disabled={!text.trim()} onClick={submit}>Импортировать</button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

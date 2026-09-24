@@ -18,30 +18,31 @@ test('demo survey is valid', () => {
 
 test('validator catches common mistakes', () => {
   const bad = structuredClone(demo) as Survey;
-  bad.pages[1].questions[0].id = 'S1';
-  (bad.pages[0].jumps![0] as { goTo: string }).goTo = 'NOPE';
-  (bad.pages[2].questions[0] as { rows: unknown[] }).rows.push({ code: 1, text: 'dup' });
+  bad.blocks[1].questions[0].id = 'S1';
+  bad.blocks[1].questions[3].actions!.after![0].target = 'NOPE';
+  (bad.blocks[1].questions[2] as { rows: unknown[] }).rows.push({ code: 1, text: 'dup' });
   const r = validateSurvey(bad);
   const msgs = r.errors.map((e) => e.message).join('\n');
   assert.match(msgs, /повторяется/);
-  assert.match(msgs, /нет страницы «NOPE»/);
+  assert.match(msgs, /Нет вопроса или блока «NOPE»/);
   assert.match(msgs, /код 1 повторяется/);
 });
 
 test('screenout jumps', () => {
-  assert.equal(nextPage(ctx({ S1: { v: 16 }, S2: { v: 1 } }), 'P_intro'), 'SCREENOUT');
-  assert.equal(nextPage(ctx({ S1: { v: 30 }, S2: { v: 5 } }), 'P_intro'), 'SCREENOUT');
-  assert.equal(nextPage(ctx({ S1: { v: 30 }, S2: { v: 1 } }), 'P_intro'), 'P_brands');
+  assert.equal(nextPage(ctx({ S1: { v: 16 } }), 'S1'), 'SCREENOUT');
+  assert.equal(nextPage(ctx({ S1: { v: 30 } }), 'S1'), 'S2');
+  assert.equal(nextPage(ctx({ S1: { v: 30 }, S2: { v: 5 } }), 'S2'), 'SCREENOUT');
+  assert.equal(nextPage(ctx({ S1: { v: 30 }, S2: { v: 1 } }), 'S2'), 'Q1');
 });
 
 test('carry forward + page skipped when nothing to carry', () => {
   const a: Answers = { S1: { v: 30 }, S2: { v: 1 }, Q1: { v: [2, 97] , o: { '97': 'Даблби' } } };
   const q2 = findQuestion(demo, 'Q2')!;
   assert.deepEqual(resolveOptions(ctx(a), q2).map((o) => o.text), ['Coffee Like', 'Даблби']);
-  // «Ничего из перечисленного» → Q2 скрыт → страница оценки пропускается
+  // «Ничего из перечисленного» → Q2 скрыт → оценки пропускаются
   const none: Answers = { S1: { v: 30 }, S2: { v: 1 }, Q1: { v: [99] } };
-  assert.equal(nextPage(ctx(none), 'P_brands'), 'P_profile');
-  assert.deepEqual(computePath(ctx(none)).pages, ['P_intro', 'P_brands', 'P_profile']);
+  assert.equal(nextPage(ctx(none), 'Q1'), 'D1');
+  assert.deepEqual(computePath(ctx(none)).pages, ['INTRO', 'S1', 'S2', 'Q1', 'D1', 'D2', 'D3']);
 });
 
 test('piping', () => {

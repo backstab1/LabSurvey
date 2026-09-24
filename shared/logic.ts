@@ -1,18 +1,40 @@
 import {
   END, SCREENOUT,
-  type Answer, type Condition, type MatrixQuestion, type Option, type Page, type Question,
-  type RespondentContext, type SimpleCondition, type Survey,
+  type Action, type Answer, type Answers, type AnswerValue, type Block, type Condition, type MatrixQuestion, type Option, type Page,
+  type Question, type RespondentContext, type SimpleCondition, type Survey,
 } from './types.ts';
 
 // ---------- Справочники ----------
 
+/** Все вопросы анкеты по порядку */
+export function allQuestions(survey: Survey): Question[] {
+  return survey.blocks.flatMap((b) => b.questions);
+}
+
+const screensCache = new WeakMap<Survey, Page[]>();
+
+/** Экраны опроса: по одному вопросу на экран, ID экрана = ID вопроса */
+export function pagesOf(survey: Survey): Page[] {
+  let pages = screensCache.get(survey);
+  if (!pages) {
+    pages = allQuestions(survey).map((q) => ({ id: q.id, questions: [q] }));
+    screensCache.set(survey, pages);
+  }
+  return pages;
+}
+
 export function findQuestion(survey: Survey, id: string): Question | undefined {
-  for (const p of survey.pages) for (const q of p.questions) if (q.id === id) return q;
+  for (const b of survey.blocks) for (const q of b.questions) if (q.id === id) return q;
   return undefined;
 }
 
 export function findPage(survey: Survey, id: string): Page | undefined {
-  return survey.pages.find((p) => p.id === id);
+  return pagesOf(survey).find((p) => p.id === id);
+}
+
+/** Блок, в котором находится вопрос */
+export function blockOf(survey: Survey, questionId: string): Block | undefined {
+  return survey.blocks.find((b) => b.questions.some((q) => q.id === questionId));
 }
 
 export function hasOptions(q: Question): q is Extract<Question, { options: Option[] }> {
@@ -46,11 +68,14 @@ function seededShuffle<T>(items: T[], seed: string): T[] {
   return arr;
 }
 
-/** Перемешивает варианты; «Другое» и эксклюзивные варианты остаются в конце */
-function shuffleOptions(options: Option[], seed: string): Option[] {
+/** Перемешивает или сдвигает варианты; «Другое» и эксклюзивные варианты остаются в конце */
+function orderOptions(options: Option[], seed: string, order: 'random' | 'rotate' | undefined): Option[] {
+  if (!order) return options;
   const fixed = options.filter((o) => o.other || o.exclusive);
   const free = options.filter((o) => !o.other && !o.exclusive);
-  return [...seededShuffle(free, seed), ...fixed];
+  if (order === 'random') return [...seededShuffle(free, seed), ...fixed];
+  const shift = free.length ? hash(seed) % free.length : 0;
+  return [...free.slice(shift), ...free.slice(0, shift), ...fixed];
 }
 
 // ---------- Варианты с учётом переноса ----------
@@ -114,17 +139,34 @@ function applyFrom(ctx: RespondentContext, from: { question: string; filter: str
   return mergeOptions(filtered, own);
 }
 
+/** Действия «перед показом», скрывающие варианты или строки */
+function filterByActions(ctx: RespondentContext, q: Question, opts: Option[], depth: number): Option[] {
+  for (const a of q.actions?.before ?? []) {
+    if (depth > 10 || !evalCondition(a.if, ctx)) continue;
+    const codes = new Set(a.codes ?? []);
+    if (a.do === 'hideOptions') opts = opts.filter((o) => !codes.has(o.code));
+    else if (a.do === 'showOnlyOptions') opts = opts.filter((o) => codes.has(o.code));
+    else if (a.do === 'hideOptionsFrom' && a.question) {
+      const sel = selectedCodes(ctx.answers[a.question]);
+      opts = opts.filter((o) => (a.filter === 'notSelected' ? sel.has(o.code) : !sel.has(o.code)));
+    }
+  }
+  return opts;
+}
+
 /** Варианты, которые видит конкретный респондент */
 export function resolveOptions(ctx: RespondentContext, q: Question, depth = 0, shuffle = true): Option[] {
   if (!hasOptions(q)) return [];
   let opts = q.optionsFrom && depth < 10 ? applyFrom(ctx, q.optionsFrom, q.options, depth) : q.options;
-  if (shuffle && q.randomize) opts = shuffleOptions(opts, ctx.seed + ':' + q.id);
+  opts = filterByActions(ctx, q, opts, depth);
+  if (shuffle) opts = orderOptions(opts, ctx.seed + ':' + q.id, q.order ?? (q.randomize ? 'random' : undefined));
   return opts;
 }
 
 export function resolveRows(ctx: RespondentContext, q: MatrixQuestion, depth = 0): Option[] {
   let rows = q.rowsFrom && depth < 10 ? applyFrom(ctx, q.rowsFrom, q.rows, depth) : q.rows;
-  if (q.randomizeRows) rows = shuffleOptions(rows, ctx.seed + ':' + q.id);
+  rows = filterByActions(ctx, q, rows, depth);
+  rows = orderOptions(rows, ctx.seed + ':' + q.id, q.rowOrder ?? (q.randomizeRows ? 'random' : undefined));
   return rows;
 }
 
@@ -189,12 +231,59 @@ export function evalCondition(c: Condition | undefined, ctx: RespondentContext):
 
 // ---------- Видимость и навигация ----------
 
+/** Сколько вариантов (строк матрицы) видит респондент; null — у вопроса нет вариантов */
+function visibleCount(ctx: RespondentContext, q: Question): number | null {
+  if (hasOptions(q)) return resolveOptions(ctx, q, 0, false).length;
+  if (q.type === 'matrix') return resolveRows(ctx, q).length;
+  return null;
+}
+
+/**
+ * Значение, которым действие «answer» отмечает вопрос без показа.
+ * undefined — действие не сработало (вопрос показывается как обычно).
+ */
+export function autoAnswerValue(ctx: RespondentContext, q: Question): AnswerValue | undefined {
+  for (const a of q.actions?.before ?? []) {
+    if (a.do !== 'answer' || !evalCondition(a.if, ctx)) continue;
+    if (a.value !== undefined && a.value !== '') return a.value as AnswerValue;
+    // Без значения — единственный оставшийся вариант
+    if (!hasOptions(q)) continue;
+    const opts = resolveOptions(ctx, q, 0, false);
+    if (opts.length === 1) return q.type === 'multi' ? [opts[0].code] : opts[0].code;
+  }
+  return undefined;
+}
+
 export function isQuestionVisible(ctx: RespondentContext, q: Question): boolean {
   if (!evalCondition(q.showIf, ctx)) return false;
-  // Перенос вариантов дал пустой список — вопрос не показываем
-  if (hasOptions(q) && q.optionsFrom && resolveOptions(ctx, q, 0, false).length === 0) return false;
-  if (q.type === 'matrix' && q.rowsFrom && resolveRows(ctx, q).length === 0) return false;
+  const count = visibleCount(ctx, q);
+  // Все варианты скрыты (перенос или действия) — вопрос не показываем
+  if (count === 0) return false;
+  for (const a of q.actions?.before ?? []) {
+    if (a.do === 'skipIfFewer' && count !== null && count < (a.n ?? 1) && evalCondition(a.if, ctx)) return false;
+  }
+  if (autoAnswerValue(ctx, q) !== undefined) return false;
   return true;
+}
+
+/** Ошибка из действия «error» после ответа (null — всё хорошо) */
+export function actionError(ctx: RespondentContext, q: Question): string | null {
+  for (const a of q.actions?.after ?? []) {
+    if (a.do === 'error' && evalCondition(a.if, ctx)) return a.message || 'Проверьте ответ';
+  }
+  return null;
+}
+
+/** Значение для setValue: подстановки {{Q1}} и приведение к числу для числовых переменных */
+function actionValue(ctx: RespondentContext, a: Action): AnswerValue | undefined {
+  if (!a.target || a.value === undefined) return undefined;
+  let v: AnswerValue = typeof a.value === 'string' ? pipe(a.value, ctx) : (a.value as AnswerValue);
+  const target = findQuestion(ctx.survey, a.target);
+  if (target?.type === 'hidden' && target.valueType === 'number' && typeof v === 'string') {
+    const n = Number(v.replace(',', '.'));
+    if (v.trim() !== '' && isFinite(n)) v = n;
+  }
+  return v === '' ? undefined : v;
 }
 
 export function visibleQuestions(ctx: RespondentContext, page: Page): Question[] {
@@ -206,30 +295,57 @@ export function isPageVisible(ctx: RespondentContext, page: Page): boolean {
   return evalCondition(page.showIf, ctx) && visibleQuestions(ctx, page).some((q) => q.type !== 'hidden');
 }
 
-/** Первая видимая страница начиная с индекса */
-function firstVisibleFrom(ctx: RespondentContext, index: number): string {
-  const pages = ctx.survey.pages;
-  for (let i = index; i < pages.length; i++) if (isPageVisible(ctx, pages[i])) return pages[i].id;
+/**
+ * Первая видимая страница начиная с индекса. onScan вызывается для каждой просмотренной страницы
+ * до проверки видимости — так действия «перед показом» срабатывают и на пропускаемых страницах.
+ */
+function firstVisibleFrom(ctx: RespondentContext, index: number, onScan?: (p: Page) => void): string {
+  const pages = pagesOf(ctx.survey);
+  for (let i = index; i < pages.length; i++) {
+    onScan?.(pages[i]);
+    if (isPageVisible(ctx, pages[i])) return pages[i].id;
+  }
   return END;
+}
+
+/** Индекс экрана по ID вопроса или блока (переход к блоку — к его первому вопросу) */
+function targetIndex(survey: Survey, id: string): number {
+  const pages = pagesOf(survey);
+  const byQuestion = pages.findIndex((p) => p.id === id);
+  if (byQuestion >= 0) return byQuestion;
+  const block = survey.blocks.find((b) => b.id === id);
+  return block?.questions.length ? pages.findIndex((p) => p.id === block.questions[0].id) : -1;
 }
 
 export function firstPage(ctx: RespondentContext): string {
   return firstVisibleFrom(ctx, 0);
 }
 
-/** Куда идти после страницы: ID страницы, END или SCREENOUT */
-export function nextPage(ctx: RespondentContext, pageId: string): string {
-  const pages = ctx.survey.pages;
+/**
+ * Куда идти после страницы: ID страницы, END или SCREENOUT.
+ * Сначала действия «после ответа» видимых вопросов (по порядку), затем переходы страницы.
+ */
+export function nextPage(ctx: RespondentContext, pageId: string, onScan?: (p: Page) => void): string {
+  const pages = pagesOf(ctx.survey);
   const idx = pages.findIndex((p) => p.id === pageId);
   if (idx < 0) return END;
-  for (const j of pages[idx].jumps ?? []) {
-    if (evalCondition(j.if, ctx)) {
-      if (j.goTo === END || j.goTo === SCREENOUT) return j.goTo;
-      const t = pages.findIndex((p) => p.id === j.goTo);
-      if (t >= 0) return firstVisibleFrom(ctx, t);
+  const rules: { if?: Condition; goTo: string }[] = [];
+  for (const q of pages[idx].questions) {
+    if (!isQuestionVisible(ctx, q)) continue;
+    for (const a of q.actions?.after ?? []) {
+      if (a.do === 'goTo' && a.target) rules.push({ if: a.if, goTo: a.target });
+      else if (a.do === 'end') rules.push({ if: a.if, goTo: END });
+      else if (a.do === 'screenout') rules.push({ if: a.if, goTo: SCREENOUT });
     }
   }
-  return firstVisibleFrom(ctx, idx + 1);
+  rules.push(...(pages[idx].jumps ?? []));
+  for (const j of rules) {
+    if (!evalCondition(j.if, ctx)) continue;
+    if (j.goTo === END || j.goTo === SCREENOUT) return j.goTo;
+    const t = targetIndex(ctx.survey, j.goTo);
+    if (t >= 0) return firstVisibleFrom(ctx, t, onScan);
+  }
+  return firstVisibleFrom(ctx, idx + 1, onScan);
 }
 
 /** Маршрут респондента с текущими ответами (для прогресса и очистки данных) */
@@ -246,7 +362,7 @@ export function computePath(ctx: RespondentContext): { pages: string[]; end: str
 }
 
 export function progressPercent(ctx: RespondentContext, currentPageId: string, history: string[]): number {
-  const idx = ctx.survey.pages.findIndex((p) => p.id === currentPageId);
+  const idx = pagesOf(ctx.survey).findIndex((p) => p.id === currentPageId);
   // Оценка: пройденные страницы + оставшиеся по маршруту по умолчанию
   let remaining = 0;
   const seen = new Set<string>();
@@ -267,25 +383,48 @@ export function progressPercent(ctx: RespondentContext, currentPageId: string, h
  * Маршрут проходится заново, и логика видит только уже «принятые» ответы,
  * поэтому устаревший ответ из брошенной ветки не влияет на дальнейшие переходы.
  */
-export function cleanAnswers(ctx: RespondentContext, pagesVisited: string[]): typeof ctx.answers {
-  const kept: typeof ctx.answers = {};
+export function cleanAnswers(ctx: RespondentContext, pagesVisited: string[]): Answers {
+  const kept: Answers = {};
   const c: RespondentContext = { ...ctx, answers: kept };
+  // Скрытые переменные не привязаны к маршруту: их задают скрипты и параметры ссылки
+  for (const q of allQuestions(ctx.survey)) {
+    if (q.type === 'hidden' && ctx.answers[q.id] !== undefined) kept[q.id] = ctx.answers[q.id];
+  }
+  // Действия «перед показом»: переменные и автоответы
+  const before = (page: Page) => {
+    if (!evalCondition(page.showIf, c)) return;
+    for (const q of page.questions) {
+      if (!evalCondition(q.showIf, c)) continue;
+      for (const a of q.actions?.before ?? []) {
+        if (a.do === 'setValue' && evalCondition(a.if, c)) {
+          const v = actionValue(c, a);
+          if (v !== undefined) kept[a.target!] = { v };
+        }
+      }
+      const auto = autoAnswerValue(c, q);
+      if (auto !== undefined) kept[q.id] = { v: auto };
+    }
+  };
   const visited = new Set(pagesVisited);
   const seen = new Set<string>();
-  let cur = firstPage(c);
+  let cur = firstVisibleFrom(c, 0, before);
   while (cur !== END && cur !== SCREENOUT && visited.has(cur) && !seen.has(cur)) {
     seen.add(cur);
     const page = findPage(ctx.survey, cur)!;
     for (const q of page.questions) {
-      if (ctx.answers[q.id] !== undefined && isQuestionVisible(c, q)) kept[q.id] = ctx.answers[q.id];
+      if (q.type !== 'hidden' && ctx.answers[q.id] !== undefined && isQuestionVisible(c, q)) kept[q.id] = ctx.answers[q.id];
     }
-    cur = nextPage(c, cur);
-  }
-  // Скрытые переменные не привязаны к маршруту: их задают скрипты и параметры ссылки
-  for (const page of ctx.survey.pages) {
+    // Действия «после ответа»: переменные
     for (const q of page.questions) {
-      if (q.type === 'hidden' && ctx.answers[q.id] !== undefined) kept[q.id] = ctx.answers[q.id];
+      if (!isQuestionVisible(c, q) && !(q.id in kept)) continue;
+      for (const a of q.actions?.after ?? []) {
+        if (a.do === 'setValue' && evalCondition(a.if, c)) {
+          const v = actionValue(c, a);
+          if (v !== undefined) kept[a.target!] = { v };
+        }
+      }
     }
+    cur = nextPage(c, cur, before);
   }
   return kept;
 }
@@ -296,7 +435,7 @@ export function answerText(ctx: RespondentContext, q: Question, rowCode?: string
   const a = ctx.answers[q.id];
   if (!a) return '';
   const label = (opts: Option[], code: number) => {
-    const o = opts.find((x) => x.code === code);
+    const o = opts.find((x) => x.code === code) ?? allOptions(ctx.survey, q).find((x) => x.code === code);
     if (!o) return String(code);
     return o.other && a.o?.[String(code)] ? a.o[String(code)] : o.text;
   };

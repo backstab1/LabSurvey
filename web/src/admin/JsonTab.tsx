@@ -26,8 +26,8 @@ export function JsonTab({ def, onChange }: { def: Survey; onChange: (d: Survey) 
     setText(value);
     try {
       const parsed = JSON.parse(value);
-      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.pages)) {
-        setError('Нужен объект с массивом pages');
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.blocks)) {
+        setError('Нужен объект с массивом blocks (формат 2)');
         return;
       }
       setError('');

@@ -1,290 +1,405 @@
-import { useState } from 'react';
-import { ConditionEditor } from './ConditionEditor.tsx';
+import { useState, type ReactNode } from 'react';
+import { ConditionEditor, describeCondition } from './ConditionEditor.tsx';
+import { ActionsEditor, describeActions } from './ActionsEditor.tsx';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
-import { NumField, compact } from './common.tsx';
-import { newQuestion } from './Builder.tsx';
-import { QUESTION_TYPE_LABELS, type Option, type OptionsFrom, type Question, type QuestionType, type Survey } from '../../../shared/types.ts';
-
-type Props = {
-  q: Question; def: Survey;
-  onChange: (q: Question) => void; onDelete: () => void; onDuplicate: () => void; onMove: (dir: -1 | 1) => void;
-};
+import { OptionsEditor } from './OptionsEditor.tsx';
+import { QuestionPreview } from './preview.tsx';
+import { allQuestions } from '../../../shared/logic.ts';
+import { Flag, Menu, Modal, NumField, Section, Segmented, compact } from './common.tsx';
+import { newQuestion, TYPE_ICONS } from './Builder.tsx';
+import {
+  QUESTION_TYPE_LABELS, type MatrixQuestion, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
+} from '../../../shared/types.ts';
 
 /** Смена типа с сохранением всего, что можно перенести */
 function convert(q: Question, type: QuestionType): Question {
   const fresh = newQuestion(type, q.id) as any;
   const old = q as any;
-  const keep = { id: q.id, text: q.text, hint: q.hint, required: q.required, showIf: q.showIf, scripts: q.scripts };
+  const keep = {
+    id: q.id, text: q.text || fresh.text, hint: q.hint, required: q.required, showIf: q.showIf, scripts: q.scripts, actions: q.actions,
+    hideBack: q.hideBack, hideFinish: q.hideFinish,
+  };
   const opts: Option[] | undefined = old.options ?? old.rows;
-  if (['single', 'multi', 'dropdown'].includes(type) && opts) {
-    return compact({ ...fresh, ...keep, options: opts.map((o) => compact({ ...o, exclusive: type === 'multi' ? o.exclusive : undefined })), optionsFrom: old.optionsFrom ?? old.rowsFrom }) as Question;
+  if (['single', 'multi', 'dropdown'].includes(type) && opts?.length) {
+    return compact({
+      ...fresh, ...keep, order: old.order ?? old.rowOrder, optionsFrom: old.optionsFrom ?? old.rowsFrom,
+      options: opts.map((o) => compact({ ...o, exclusive: type === 'multi' ? o.exclusive : undefined })),
+    }) as Question;
   }
-  if (type === 'matrix' && opts) return compact({ ...fresh, ...keep, rows: opts.map((o) => compact({ ...o, exclusive: undefined })) }) as Question;
+  if (type === 'matrix' && opts?.length) {
+    return compact({ ...fresh, ...keep, rows: opts.map((o) => compact({ ...o, exclusive: undefined })), rowsFrom: old.optionsFrom }) as Question;
+  }
   return compact({ ...fresh, ...keep }) as Question;
 }
 
-export function QuestionEditor({ q, def, onChange, onDelete, onDuplicate, onMove }: Props) {
-  const set = (patch: Record<string, unknown>) => onChange(compact({ ...q, ...patch } as Question));
-  const anyQ = q as any;
-  const choiceSources = def.pages.flatMap((p) => p.questions)
-    .filter((x) => x.id !== q.id && ['single', 'multi', 'dropdown', 'matrix'].includes(x.type));
+type Patch = Record<string, unknown>;
+
+interface Props {
+  def: Survey;
+  q: Question;
+  prevId?: string;
+  position: string;
+  onChange: (q: Question) => void;
+  onClose: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onNav: (dir: -1 | 1) => void;
+  hasPrev: boolean;
+  hasNext: boolean;
+  onCreateVar: () => string;
+}
+
+export function QuestionDialog({ def, q, prevId, position, onChange, onClose, onDelete, onDuplicate, onNav, hasPrev, hasNext, onCreateVar }: Props) {
+  const set = (patch: Patch) => onChange(compact({ ...q, ...patch } as Question));
+  const [showHint, setShowHint] = useState(!!q.hint);
+  const answerable = q.type !== 'info' && q.type !== 'hidden';
 
   return (
-    <div className="stack">
-      <div className="row">
-        <h2 className="grow" style={{ margin: 0 }}>{q.id} <span className="muted" style={{ fontWeight: 400 }}>· {QUESTION_TYPE_LABELS[q.type]}</span></h2>
-        <button className="icon-btn" title="Выше" onClick={() => onMove(-1)}>↑</button>
-        <button className="icon-btn" title="Ниже" onClick={() => onMove(1)}>↓</button>
-        <button className="btn btn-secondary btn-sm" onClick={onDuplicate}>Копия</button>
-        <button className="btn btn-danger btn-sm" onClick={onDelete}>Удалить</button>
-      </div>
-
-      <div className="grid3">
-        <label className="field"><span>ID (имя переменной)</span>
-          <input className="input" value={q.id} onChange={(e) => set({ id: e.target.value.trim() })} />
-        </label>
-        <label className="field"><span>Тип</span>
-          <select className="input" value={q.type} onChange={(e) => onChange(convert(q, e.target.value as QuestionType))}>
-            {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => <option key={t} value={t}>{QUESTION_TYPE_LABELS[t]}</option>)}
-          </select>
-        </label>
-        {q.type !== 'info' && q.type !== 'hidden' && (
-          <label className="check" style={{ alignSelf: 'end', minHeight: 38 }}>
-            <input type="checkbox" checked={q.required !== false} onChange={(e) => set({ required: e.target.checked ? undefined : false })} />
-            Обязательный
-          </label>
-        )}
-      </div>
-
-      <label className="field"><span>{q.type === 'hidden' ? 'Подпись переменной (для выгрузки)' : 'Текст вопроса'} — подстановка ответа: {'{{Q1}}'}, параметра ссылки: {'{{param.src}}'}</span>
-        <textarea className="input" rows={2} value={q.text} onChange={(e) => set({ text: e.target.value })} />
-      </label>
-      {q.type !== 'info' && q.type !== 'hidden' && (
-        <label className="field"><span>Подсказка (необязательно)</span>
-          <input className="input" value={q.hint ?? ''} onChange={(e) => set({ hint: e.target.value || undefined })} />
-        </label>
-      )}
-
-      {/* ---------- Параметры по типу ---------- */}
-      {(q.type === 'single' || q.type === 'multi' || q.type === 'dropdown') && (
-        <>
-          <div className="section-title">Варианты ответа</div>
-          <OptionsEditor options={q.options} onChange={(options) => set({ options })} allowOther allowExclusive={q.type === 'multi'} />
-          <div className="row">
-            <label className="check"><input type="checkbox" checked={!!q.randomize} onChange={(e) => set({ randomize: e.target.checked || undefined })} />Перемешивать варианты</label>
-            {q.type === 'multi' && (
-              <>
-                <div style={{ width: 120 }}><NumField label="Мин. выбрать" value={q.minSelected} onChange={(v) => set({ minSelected: v })} /></div>
-                <div style={{ width: 120 }}><NumField label="Макс. выбрать" value={q.maxSelected} onChange={(v) => set({ maxSelected: v })} /></div>
-              </>
+    <Modal wide onClose={onClose}
+      title={<><span className="type-icon">{TYPE_ICONS[q.type]}</span> {q.id} <span className="muted" style={{ fontWeight: 400 }}>· {position}</span></>}
+      actions={<>
+        <button className="icon-btn" title="Предыдущий вопрос" disabled={!hasPrev} onClick={() => onNav(-1)}>‹</button>
+        <button className="icon-btn" title="Следующий вопрос" disabled={!hasNext} onClick={() => onNav(1)}>›</button>
+        <Menu items={[
+          { label: 'Дублировать', onClick: onDuplicate },
+          { label: 'Удалить вопрос', onClick: onDelete, danger: true },
+        ]} />
+        <button className="btn btn-primary btn-sm" onClick={onClose}>Готово</button>
+      </>}>
+      <div className="qdialog">
+        <div className="stack">
+          <div className="qhead">
+            <label className="field grow"><span>Тип</span>
+              <select className="input" value={q.type} onChange={(e) => onChange(convert(q, e.target.value as QuestionType))}>
+                {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => (
+                  <option key={t} value={t}>{TYPE_ICONS[t]}  {QUESTION_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field" style={{ width: 130 }}><span>ID / переменная</span>
+              <input className="input mono" value={q.id} onChange={(e) => set({ id: e.target.value.trim() })} />
+            </label>
+            {answerable && (
+              <label className="switch" title="Без ответа нельзя перейти дальше">
+                <input type="checkbox" checked={q.required !== false} onChange={(e) => set({ required: e.target.checked ? undefined : false })} />
+                <span>Обязательный</span>
+              </label>
             )}
           </div>
-          <CarryForward label="Перенести варианты из вопроса" value={q.optionsFrom} sources={choiceSources} onChange={(v) => set({ optionsFrom: v })} />
-        </>
-      )}
 
-      {q.type === 'matrix' && (
-        <>
-          <div className="grid3">
-            <label className="field"><span>Ответов в строке</span>
-              <select className="input" value={q.mode} onChange={(e) => set({ mode: e.target.value })}>
-                <option value="single">Один</option>
-                <option value="multi">Несколько</option>
-              </select>
-            </label>
-            <label className="field"><span>Обязательность строк</span>
-              <select className="input" value={typeof q.requiredRows === 'number' ? 'n' : q.requiredRows ?? 'all'}
-                onChange={(e) => set({ requiredRows: e.target.value === 'all' ? undefined : e.target.value === 'n' ? 1 : e.target.value })}>
-                <option value="all">Все строки</option>
-                <option value="none">Необязательно</option>
-                <option value="n">Минимум N строк</option>
-              </select>
-            </label>
-            {typeof q.requiredRows === 'number' && <NumField label="N" value={q.requiredRows} onChange={(v) => set({ requiredRows: v ?? 1 })} />}
-          </div>
-          <div className="section-title">Строки (утверждения)</div>
-          <OptionsEditor options={q.rows} onChange={(rows) => set({ rows })} allowOther otherHint="строка «Другое» — респондент вписывает свой вариант" />
-          <label className="check"><input type="checkbox" checked={!!q.randomizeRows} onChange={(e) => set({ randomizeRows: e.target.checked || undefined })} />Перемешивать строки</label>
-          <CarryForward label="Перенести строки из вопроса" value={q.rowsFrom} sources={choiceSources} onChange={(v) => set({ rowsFrom: v })} />
-          <div className="section-title">Столбцы (шкала)</div>
-          <OptionsEditor options={q.columns} onChange={(columns) => set({ columns })} />
-        </>
-      )}
-
-      {q.type === 'scale' && (
-        <>
-          <div className="grid3">
-            <NumField label="От" value={q.from} onChange={(v) => set({ from: v ?? 0 })} />
-            <NumField label="До" value={q.to} onChange={(v) => set({ to: v ?? 5 })} />
-            <div style={{ alignSelf: 'end' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => set({ from: 0, to: 10, labels: { '0': 'Точно не порекомендую', '10': 'Точно порекомендую' } })}>Сделать NPS 0–10</button>
-            </div>
-          </div>
-          <div className="grid2">
-            <label className="field"><span>Подпись слева ({q.from})</span>
-              <input className="input" value={q.labels?.[String(q.from)] ?? ''} onChange={(e) => set({ labels: compact({ ...q.labels, [String(q.from)]: e.target.value || undefined }) })} />
-            </label>
-            <label className="field"><span>Подпись справа ({q.to})</span>
-              <input className="input" value={q.labels?.[String(q.to)] ?? ''} onChange={(e) => set({ labels: compact({ ...q.labels, [String(q.to)]: e.target.value || undefined }) })} />
-            </label>
-          </div>
-          <div className="section-title">Варианты вне шкалы</div>
-          <OptionsEditor options={q.extraOptions ?? []} onChange={(extraOptions) => set({ extraOptions: extraOptions.length ? extraOptions : undefined })}
-            emptyHint="Например, 99 — «Затрудняюсь ответить»" defaultCode={99} />
-        </>
-      )}
-
-      {q.type === 'number' && (
-        <div className="grid3">
-          <NumField label="Минимум" value={q.min} onChange={(v) => set({ min: v })} />
-          <NumField label="Максимум" value={q.max} onChange={(v) => set({ max: v })} />
-          <NumField label="Знаков после запятой" value={q.decimals} placeholder="0" onChange={(v) => set({ decimals: v || undefined })} />
-        </div>
-      )}
-      {q.type === 'text' && (
-        <div className="row">
-          <label className="check"><input type="checkbox" checked={!!q.multiline} onChange={(e) => set({ multiline: e.target.checked || undefined })} />Многострочное поле</label>
-          <div style={{ width: 180 }}><NumField label="Макс. символов" value={q.maxLength} onChange={(v) => set({ maxLength: v })} /></div>
-        </div>
-      )}
-      {q.type === 'date' && (
-        <div className="grid2">
-          <label className="field"><span>Не раньше</span><input className="input" type="date" value={q.min ?? ''} onChange={(e) => set({ min: e.target.value || undefined })} /></label>
-          <label className="field"><span>Не позже</span><input className="input" type="date" value={q.max ?? ''} onChange={(e) => set({ max: e.target.value || undefined })} /></label>
-        </div>
-      )}
-      {q.type === 'phone' && (
-        <label className="field" style={{ maxWidth: 320 }}><span>Формат</span>
-          <select className="input" value={q.format ?? 'ru'} onChange={(e) => set({ format: e.target.value === 'ru' ? undefined : e.target.value })}>
-            <option value="ru">Россия: +7 и 10 цифр</option>
-            <option value="international">Международный: + и 8–15 цифр</option>
-          </select>
-        </label>
-      )}
-      {q.type === 'hidden' && (
-        <div className="grid2">
-          <label className="field"><span>Тип значения</span>
-            <select className="input" value={q.valueType ?? 'string'} onChange={(e) => set({ valueType: e.target.value })}>
-              <option value="string">Строка</option>
-              <option value="number">Число</option>
-            </select>
+          <label className="field">
+            <span>{q.type === 'hidden' ? 'Подпись для выгрузки' : q.type === 'info' ? 'Текст' : 'Текст вопроса'}</span>
+            <textarea className="input autogrow" rows={Math.min(8, Math.max(2, q.text.split('\n').length))} value={q.text} autoFocus={!q.text}
+              placeholder={q.type === 'hidden' ? 'Например: ID панелиста' : 'Введите вопрос. Подставить ответ: {{Q1}}'}
+              onChange={(e) => set({ text: e.target.value })} />
           </label>
-          <label className="field"><span>Взять из параметра ссылки (необязательно)</span>
-            <input className="input" placeholder="panel_id" value={q.fromParam ?? ''} onChange={(e) => set({ fromParam: e.target.value.trim() || undefined })} />
-          </label>
-          <p className="muted" style={{ gridColumn: '1 / -1', margin: 0, fontSize: 14 }}>
-            Значение также можно задать скриптом: <code>sl.set("{q.id}", ...)</code>. Скрытая переменная попадает в выгрузку и доступна в условиях.
-          </p>
+          {answerable && (showHint ? (
+            <label className="field"><span>Подсказка под вопросом</span>
+              <input className="input" value={q.hint ?? ''} autoFocus={!q.hint} onChange={(e) => set({ hint: e.target.value || undefined })} />
+            </label>
+          ) : <button className="btn-link" style={{ alignSelf: 'flex-start', padding: 0 }} onClick={() => setShowHint(true)}>+ подсказка</button>)}
+
+          <TypeBody q={q} set={set} />
+
+          <div className="sections">
+            {q.type !== 'hidden' && <ActionsBlock def={def} q={q} prevId={prevId} set={set} onCreateVar={onCreateVar} />}
+            <SettingsSection q={q} set={set} />
+          </div>
         </div>
-      )}
 
-      {q.type !== 'hidden' && (
-        <>
-          <div className="section-title">Показывать вопрос, если</div>
-          <ConditionEditor def={def} value={q.showIf} onChange={(c) => set({ showIf: c })} />
-        </>
-      )}
+        <aside className="qdialog-preview">
+          <div className="preview-label">Так увидит респондент</div>
+          <div className="phone">
+            <QuestionPreview key={JSON.stringify(q)} def={def} q={q} interactive />
+          </div>
+        </aside>
+      </div>
+    </Modal>
+  );
+}
 
-      <details open={!!(anyQ.scripts && Object.values(anyQ.scripts).some(Boolean))}>
-        <summary className="section-title" style={{ cursor: 'pointer' }}>Скрипты вопроса</summary>
-        <ScriptsEditor level="question" value={q.scripts} onChange={(s) => set({ scripts: s })} />
-      </details>
+/** «Действия»: всё, что происходит перед показом вопроса и после ответа на него */
+function ActionsBlock({ def, q, prevId, set, onCreateVar }: {
+  def: Survey; q: Question; prevId?: string; set: (p: Patch) => void; onCreateVar: () => string;
+}) {
+  const before = q.actions?.before;
+  const after = q.actions?.after;
+  const scripts = (q.scripts ?? {}) as Record<string, string | undefined>;
+  const setActions = (phase: 'before' | 'after', list: typeof before) => {
+    const next = compact({ ...q.actions, [phase]: list });
+    set({ actions: Object.keys(next).length ? next : undefined });
+  };
+  const from = q.type === 'matrix' ? q.rowsFrom : 'optionsFrom' in q ? q.optionsFrom : undefined;
+  const fromKey = q.type === 'matrix' ? 'rowsFrom' : 'optionsFrom';
+  const canCarry = ['single', 'multi', 'dropdown', 'matrix'].includes(q.type);
+  const beforeParts = [
+    q.showIf && `показывать, если ${describeCondition(def, q.showIf)}`,
+    from && `${q.type === 'matrix' ? 'строки' : 'варианты'} из ${from.question} (${FILTER_LABELS[from.filter]})`,
+    describeActions(def, q, before),
+    scripts.onShow && 'JS',
+  ].filter(Boolean);
+  const afterParts = [describeActions(def, q, after), (scripts.onChange || scripts.validate) && 'JS'].filter(Boolean);
+  const answerable = q.type !== 'info';
+
+  return (
+    <div className="actions-block">
+      <div className="block-title">Действия</div>
+      <Section title="Перед показом" active={beforeParts.length > 0} summary={beforeParts.length ? beforeParts.join(' · ') : 'показывать всегда'}>
+        <div className="sub-title">Показывать вопрос, если</div>
+        <ConditionEditor def={def} value={q.showIf} suggest={prevId} onChange={(c) => set({ showIf: c })} />
+        {canCarry && (
+          <>
+            <div className="sub-title">{q.type === 'matrix' ? 'Строки' : 'Варианты'} из другого вопроса</div>
+            <CarryForward def={def} self={q.id} value={from} onChange={(v) => set({ [fromKey]: v })} />
+          </>
+        )}
+        <div className="sub-title">Действия</div>
+        <ActionsEditor def={def} q={q} phase="before" value={before} onChange={(v) => setActions('before', v)} onCreateVar={onCreateVar} />
+        <details className="js-details" open={!!scripts.onShow}>
+          <summary>JS-скрипт</summary>
+          <ScriptsEditor level="question" only={['onShow']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
+        </details>
+      </Section>
+      {answerable && (
+        <Section title="После ответа" active={afterParts.length > 0} summary={afterParts.length ? afterParts.join(' · ') : 'к следующему вопросу'}>
+          <ActionsEditor def={def} q={q} phase="after" value={after} onChange={(v) => setActions('after', v)} onCreateVar={onCreateVar} />
+          <details className="js-details" open={!!(scripts.onChange || scripts.validate)}>
+            <summary>JS-скрипты</summary>
+            <ScriptsEditor level="question" only={['onChange', 'validate']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
+          </details>
+        </Section>
+      )}
     </div>
   );
 }
 
-function CarryForward({ label, value, sources, onChange }: {
-  label: string; value: OptionsFrom | undefined; sources: Question[]; onChange: (v: OptionsFrom | undefined) => void;
-}) {
+const FILTER_LABELS = { selected: 'выбранные', notSelected: 'невыбранные', all: 'все' } as const;
+
+/** Главное содержимое по типу: варианты, строки и столбцы, шкала и т. п. */
+function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
+  switch (q.type) {
+    case 'single':
+    case 'multi':
+    case 'dropdown':
+      return (
+        <Block title="Варианты ответа" note={q.optionsFrom ? `+ варианты из ${q.optionsFrom.question}` : undefined}>
+          <OptionsEditor options={q.options} onChange={(options) => set({ options })} allowOther allowExclusive={q.type === 'multi'} quickAdd />
+        </Block>
+      );
+    case 'matrix':
+      return (
+        <>
+          <Segmented value={q.mode} onChange={(mode) => set({ mode })}
+            options={[{ value: 'single', label: 'Один ответ в строке' }, { value: 'multi', label: 'Несколько ответов в строке' }]} />
+          <div className="grid2 matrix-editor">
+            <Block title="Строки" note={q.rowsFrom ? `+ из ${q.rowsFrom.question}` : undefined}>
+              <OptionsEditor options={q.rows} onChange={(rows) => set({ rows })} allowOther placeholder="Утверждение" />
+            </Block>
+            <Block title="Столбцы">
+              <OptionsEditor options={q.columns} onChange={(columns) => set({ columns })} placeholder="Ответ" />
+            </Block>
+          </div>
+        </>
+      );
+    case 'scale':
+      return (
+        <Block title="Шкала">
+          <div className="row" style={{ alignItems: 'end' }}>
+            <NumField label="От" width={90} value={q.from} onChange={(v) => set({ from: v ?? 0 })} />
+            <NumField label="До" width={90} value={q.to} onChange={(v) => set({ to: v ?? 5 })} />
+            <Segmented value={q.from === 0 && q.to === 10 ? 'nps' : q.from === 1 && q.to === 5 ? '5' : q.from === 1 && q.to === 10 ? '10' : ''}
+              onChange={(v) => set(v === 'nps' ? { from: 0, to: 10 } : v === '5' ? { from: 1, to: 5 } : { from: 1, to: 10 })}
+              options={[{ value: '5', label: '1–5' }, { value: '10', label: '1–10' }, { value: 'nps', label: 'NPS 0–10' }]} />
+          </div>
+          <div className="grid2" style={{ marginTop: 10 }}>
+            <label className="field"><span>Подпись слева</span>
+              <input className="input" value={q.labels?.[String(q.from)] ?? ''} placeholder="Совсем не согласен"
+                onChange={(e) => set({ labels: emptyToUndef(compact({ ...q.labels, [String(q.from)]: e.target.value || undefined })) })} />
+            </label>
+            <label className="field"><span>Подпись справа</span>
+              <input className="input" value={q.labels?.[String(q.to)] ?? ''} placeholder="Полностью согласен"
+                onChange={(e) => set({ labels: emptyToUndef(compact({ ...q.labels, [String(q.to)]: e.target.value || undefined })) })} />
+            </label>
+          </div>
+          <div className="sub-title">Варианты вне шкалы</div>
+          <OptionsEditor options={q.extraOptions ?? []} onChange={(extraOptions) => set({ extraOptions: extraOptions.length ? extraOptions : undefined })}
+            emptyHint="Например, «Затрудняюсь ответить»" quickAdd />
+        </Block>
+      );
+    case 'number':
+      return (
+        <div className="row">
+          <NumField label="Минимум" width={140} value={q.min} onChange={(v) => set({ min: v })} />
+          <NumField label="Максимум" width={140} value={q.max} onChange={(v) => set({ max: v })} />
+        </div>
+      );
+    case 'date':
+      return (
+        <div className="row">
+          <label className="field"><span>Не раньше</span><input className="input" type="date" value={q.min ?? ''} onChange={(e) => set({ min: e.target.value || undefined })} /></label>
+          <label className="field"><span>Не позже</span><input className="input" type="date" value={q.max ?? ''} onChange={(e) => set({ max: e.target.value || undefined })} /></label>
+        </div>
+      );
+    case 'phone':
+      return (
+        <Segmented value={q.format ?? 'ru'} onChange={(v) => set({ format: v === 'ru' ? undefined : v })}
+          options={[{ value: 'ru', label: 'Россия +7' }, { value: 'international', label: 'Международный' }]} />
+      );
+    case 'hidden':
+      return (
+        <div className="stack" style={{ gap: 10 }}>
+          <div className="row">
+            <Segmented value={q.valueType ?? 'string'} onChange={(v) => set({ valueType: v })}
+              options={[{ value: 'string', label: 'Строка' }, { value: 'number', label: 'Число' }]} />
+            <label className="field grow"><span>Взять из параметра ссылки</span>
+              <input className="input mono" placeholder="например, pid" value={q.fromParam ?? ''} onChange={(e) => set({ fromParam: e.target.value.trim() || undefined })} />
+            </label>
+          </div>
+          <p className="muted small" style={{ margin: 0 }}>Или задайте скриптом: <code>sl.set("{q.id}", …)</code>. Переменная попадает в выгрузку и доступна в условиях.</p>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
+const emptyToUndef = <T extends object>(o: T): T | undefined => (Object.keys(o).length ? o : undefined);
+
+function Block({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <div className="grid2">
-      <label className="field"><span>{label}</span>
+    <div className="block">
+      <div className="sub-title">{title}{note && <span className="muted"> {note}</span>}</div>
+      {children}
+    </div>
+  );
+}
+
+/** Флажки и мелкие параметры — всё, что не нужно видеть постоянно */
+function SettingsSection({ q, set }: { q: Question; set: (p: Patch) => void }) {
+  const a = q as any;
+  const on: string[] = [];
+  const body: ReactNode[] = [];
+  const flag = (key: string, label: string, hint?: string) => {
+    if (a[key]) on.push(label);
+    body.push(<Flag key={key} label={label} hint={hint} checked={!!a[key]} onChange={(v) => set({ [key]: v || undefined })} />);
+  };
+  const group = (title: string) => body.push(<div key={`g-${title}`} className="flag-group">{title}</div>);
+  const answerable = q.type !== 'info' && q.type !== 'hidden';
+  const isChoice = q.type === 'single' || q.type === 'multi' || q.type === 'dropdown';
+
+  if (isChoice || q.type === 'matrix' || q.type === 'number' || q.type === 'text' || q.type === 'scale') group('Логика');
+  if (isChoice || q.type === 'matrix') {
+    const key = q.type === 'matrix' ? 'rowOrder' : 'order';
+    const legacy = q.type === 'matrix' ? (q as MatrixQuestion).randomizeRows : a.randomize;
+    const value = a[key] ?? (legacy ? 'random' : 'fixed');
+    if (value !== 'fixed') on.push(value === 'random' ? 'Рандомизация' : 'Ротация');
+    body.push(
+      <div key="order" className="flag-line">
+        <span>{q.type === 'matrix' ? 'Порядок строк' : 'Порядок вариантов'}</span>
+        <Segmented value={value} onChange={(v) => set({ [key]: v === 'fixed' ? undefined : v, randomize: undefined, randomizeRows: undefined })}
+          options={[{ value: 'fixed', label: 'Как есть' }, { value: 'random', label: 'Случайный' }, { value: 'rotate', label: 'Ротация' }]} />
+      </div>,
+    );
+  }
+  if (q.type === 'multi') {
+    if (q.minSelected || q.maxSelected) on.push(`Выбор ${q.minSelected ?? 1}–${q.maxSelected ?? '∞'}`);
+    body.push(
+      <div key="minmax" className="flag-line">
+        <span>Сколько можно выбрать</span>
+        <div className="row" style={{ gap: 6 }}>
+          <input className="input mini" type="number" placeholder="от" value={q.minSelected ?? ''} onChange={(e) => set({ minSelected: e.target.value ? Number(e.target.value) : undefined })} />
+          <input className="input mini" type="number" placeholder="до" value={q.maxSelected ?? ''} onChange={(e) => set({ maxSelected: e.target.value ? Number(e.target.value) : undefined })} />
+        </div>
+      </div>,
+    );
+  }
+  if (q.type === 'matrix') {
+    const rr = q.requiredRows ?? 'all';
+    if (q.required !== false && rr !== 'all') on.push(rr === 'none' ? 'Строки необязательны' : `Минимум ${rr} строк`);
+    body.push(
+      <div key="rr" className="flag-line">
+        <span>Обязательные строки</span>
+        <div className="row" style={{ gap: 6 }}>
+          <Segmented value={typeof rr === 'number' ? 'n' : rr} onChange={(v) => set({ requiredRows: v === 'all' ? undefined : v === 'n' ? 1 : v })}
+            options={[{ value: 'all', label: 'Все' }, { value: 'n', label: 'Минимум N' }, { value: 'none', label: 'Не обязательно' }]} />
+          {typeof rr === 'number' && <input className="input mini" type="number" min={1} value={rr} onChange={(e) => set({ requiredRows: Math.max(1, Number(e.target.value) || 1) })} />}
+        </div>
+      </div>,
+    );
+  }
+  if (q.type === 'number') {
+    if (q.decimals) on.push(`Дробные (${q.decimals} зн.)`);
+    body.push(
+      <div key="dec" className="flag-line">
+        <Flag label="Разрешить дробные числа" checked={!!q.decimals} onChange={(v) => set({ decimals: v ? 2 : undefined })} />
+        {!!q.decimals && <input className="input mini" type="number" min={1} max={6} title="Знаков после запятой" value={q.decimals} onChange={(e) => set({ decimals: Number(e.target.value) || undefined })} />}
+      </div>,
+    );
+  }
+  if (q.type === 'text') {
+    const it = q.inputType ?? 'text';
+    if (it !== 'text') on.push(it === 'email' ? 'E-mail' : 'Время');
+    body.push(
+      <div key="it" className="flag-line">
+        <span>Что вводит респондент</span>
+        <Segmented value={it} onChange={(v) => set({ inputType: v === 'text' ? undefined : v, multiline: v === 'text' ? q.multiline : undefined })}
+          options={[{ value: 'text', label: 'Текст' }, { value: 'email', label: 'E-mail' }, { value: 'time', label: 'Время' }]} />
+      </div>,
+    );
+    if (q.maxLength) on.push(`До ${q.maxLength} симв.`);
+    body.push(
+      <div key="ml" className="flag-line">
+        <span>Максимум символов</span>
+        <input className="input mini" type="number" placeholder="—" value={q.maxLength ?? ''} onChange={(e) => set({ maxLength: e.target.value ? Number(e.target.value) : undefined })} />
+      </div>,
+    );
+    flag('noPaste', 'Запретить вставку из буфера обмена');
+  }
+  if (q.type === 'single' || q.type === 'dropdown' || q.type === 'scale') {
+    flag('autoNext', 'Автопереход далее при выборе ответа', 'Если вопрос на странице один');
+  }
+
+  // ---- Отображение ----
+  if (answerable) group('Отображение');
+  if (q.type === 'text' && (q.inputType ?? 'text') === 'text') flag('multiline', 'Большое поле для ответа');
+  if (q.type === 'single' || q.type === 'multi') flag('showOtherAlways', 'Не скрывать поле «Другое»', 'Поле видно сразу, ввод текста отмечает вариант');
+  if (q.type === 'matrix') {
+    flag('transpose', 'Перевернуть таблицу', 'Строки и столбцы меняются местами');
+    flag('verticalHeaders', 'Вертикальный текст в заголовках столбцов');
+    flag('progressiveRows', 'Показывать строки по мере ответа');
+    flag('carousel', 'Таблица как карусель', 'По одной строке на экране');
+  }
+  if (answerable || q.type === 'info') {
+    if (!answerable) group('Отображение');
+    flag('hideBack', 'Скрыть кнопку «Назад»');
+    flag('hideFinish', 'Скрыть кнопку «Завершить»');
+  }
+
+  if (body.length === 0) return null;
+  return (
+    <Section title="Настройки" active={on.length > 0} summary={on.length ? on.join(' · ') : 'по умолчанию'}>
+      <div className="flags">{body}</div>
+    </Section>
+  );
+}
+
+function CarryForward({ def, self, value, onChange }: {
+  def: Survey; self: string; value: OptionsFrom | undefined; onChange: (v: OptionsFrom | undefined) => void;
+}) {
+  const sources = allQuestions(def)
+    .filter((x) => x.id !== self && ['single', 'multi', 'dropdown', 'matrix'].includes(x.type));
+  return (
+    <div className="row">
+      <label className="field grow"><span>Из вопроса</span>
         <select className="input" value={value?.question ?? ''} onChange={(e) => onChange(e.target.value ? { question: e.target.value, filter: value?.filter ?? 'selected' } : undefined)}>
           <option value="">— не переносить —</option>
           {sources.map((s) => <option key={s.id} value={s.id}>{s.id}{s.text ? ` · ${s.text.slice(0, 50)}` : ''}</option>)}
         </select>
       </label>
       {value && (
-        <label className="field"><span>Какие варианты</span>
-          <select className="input" value={value.filter} onChange={(e) => onChange({ ...value, filter: e.target.value as OptionsFrom['filter'] })}>
-            <option value="selected">Выбранные</option>
-            <option value="notSelected">Невыбранные</option>
-            <option value="all">Все</option>
-          </select>
-        </label>
+        <Segmented value={value.filter} onChange={(filter) => onChange({ ...value, filter })}
+          options={[{ value: 'selected', label: 'Выбранные' }, { value: 'notSelected', label: 'Невыбранные' }, { value: 'all', label: 'Все' }]} />
       )}
-    </div>
-  );
-}
-
-function OptionsEditor({ options, onChange, allowOther, allowExclusive, otherHint, emptyHint, defaultCode }: {
-  options: Option[]; onChange: (o: Option[]) => void; allowOther?: boolean; allowExclusive?: boolean;
-  otherHint?: string; emptyHint?: string; defaultCode?: number;
-}) {
-  const [bulk, setBulk] = useState<string | null>(null);
-  const setAt = (i: number, patch: Partial<Option>) => onChange(options.map((o, k) => (k === i ? compact({ ...o, ...patch }) : o)));
-  const move = (i: number, dir: -1 | 1) => {
-    const next = options.slice();
-    [next[i], next[i + dir]] = [next[i + dir], next[i]];
-    onChange(next);
-  };
-  const nextCode = () => {
-    const regular = options.filter((o) => o.code < 90).map((o) => o.code);
-    return options.length === 0 && defaultCode ? defaultCode : regular.length ? Math.max(...regular) + 1 : 1;
-  };
-
-  if (bulk !== null) {
-    return (
-      <div className="stack">
-        <textarea className="input" rows={8} autoFocus value={bulk} onChange={(e) => setBulk(e.target.value)}
-          placeholder={'По одному варианту в строке.\nКод можно указать в начале: «97. Другое»'} />
-        <div className="row">
-          <button className="btn btn-primary btn-sm" onClick={() => {
-            const lines = bulk.split('\n').map((l) => l.trim()).filter(Boolean);
-            const re = /^(\d+)[.)\t:-]\s*(.+)$/;
-            const explicit = new Set(lines.map((l) => l.match(re)?.[1]).filter(Boolean).map(Number));
-            let auto = 1;
-            const parsed = lines.map((l) => {
-              const m = l.match(re);
-              if (m) return { code: Number(m[1]), text: m[2] };
-              while (explicit.has(auto)) auto++;
-              return { code: auto++, text: l };
-            });
-            onChange(parsed);
-            setBulk(null);
-          }}>Заменить варианты</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setBulk(null)}>Отмена</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {options.length === 0 && emptyHint && <p className="muted" style={{ fontSize: 14, margin: '0 0 6px' }}>{emptyHint}</p>}
-      <table className="opt-table">
-        <tbody>
-          {options.map((o, i) => (
-            <tr key={i}>
-              <td className="code"><input className="input" type="number" title="Код" value={o.code} onChange={(e) => setAt(i, { code: Number(e.target.value) })} /></td>
-              <td><input className="input" value={o.text} onChange={(e) => setAt(i, { text: e.target.value })} /></td>
-              <td className="flags">
-                {allowOther && <label title={otherHint ?? 'Поле «укажите»'}><input type="checkbox" checked={!!o.other} onChange={(e) => setAt(i, { other: e.target.checked || undefined })} />другое</label>}
-                {allowExclusive && <label title="Снимает остальные варианты"><input type="checkbox" checked={!!o.exclusive} onChange={(e) => setAt(i, { exclusive: e.target.checked || undefined })} />эксклюзив</label>}
-              </td>
-              <td style={{ whiteSpace: 'nowrap' }}>
-                <button className="icon-btn" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-                <button className="icon-btn" disabled={i === options.length - 1} onClick={() => move(i, 1)}>↓</button>
-                <button className="icon-btn" onClick={() => onChange(options.filter((_, k) => k !== i))}>✕</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="row" style={{ marginTop: 6, gap: 8 }}>
-        <button className="btn btn-secondary btn-sm" onClick={() => onChange([...options, { code: nextCode(), text: '' }])}>+ вариант</button>
-        <button className="btn-link" onClick={() => setBulk(options.map((o) => `${o.code}. ${o.text}`).join('\n'))}>Вставить списком</button>
-      </div>
     </div>
   );
 }

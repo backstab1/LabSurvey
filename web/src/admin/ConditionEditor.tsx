@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { allOptions, allRows, findQuestion } from '../../../shared/logic.ts';
+import { allOptions, allQuestions, allRows, findQuestion } from '../../../shared/logic.ts';
 import type { Condition, ConditionOp, Option, Question, SimpleCondition, Survey } from '../../../shared/types.ts';
 
 const OP_LABELS: Record<ConditionOp, string> = {
@@ -51,15 +51,17 @@ function fromVisual(v: Visual): Condition | undefined {
   return v.mode === 'all' ? { all: v.items } : { any: v.items };
 }
 
-export function ConditionEditor({ def, value, onChange, required }: {
+export function ConditionEditor({ def, value, onChange, required, suggest }: {
   def: Survey; value: Condition | undefined; onChange: (c: Condition | undefined) => void; required?: boolean;
+  /** ID вопроса, который подставляется в новое условие (обычно — предыдущий вопрос) */
+  suggest?: string;
 }) {
   const visual = toVisual(value);
   const [jsonMode, setJsonMode] = useState(visual === null);
   const [jsonText, setJsonText] = useState(value ? JSON.stringify(value, null, 2) : '');
   const [jsonError, setJsonError] = useState('');
 
-  const questions = def.pages.flatMap((p) => p.questions).filter((q) => q.type !== 'info');
+  const questions = allQuestions(def).filter((q) => q.type !== 'info');
 
   if (jsonMode || !visual) {
     return (
@@ -84,13 +86,13 @@ export function ConditionEditor({ def, value, onChange, required }: {
   };
 
   const addItem = () => {
-    const q = questions[0];
+    const q = (suggest && findQuestion(def, suggest)) || questions[0];
     setItems([...visual.items, q ? { q: q.id, op: opsFor(q, false)[0], ...(NO_VALUE.includes(opsFor(q, false)[0]) ? {} : { value: '' }) } : { param: 'src', op: 'eq', value: '' }]);
   };
 
   return (
     <div className="cond">
-      {visual.items.length === 0 && <div className="muted" style={{ fontSize: 14, marginBottom: 6 }}>{required ? 'Добавьте условие' : 'Всегда'}</div>}
+      {visual.items.length === 0 && <div className="muted small" style={{ marginBottom: 6 }}>{required ? 'Добавьте условие' : 'Показывается всегда. Добавьте условие, чтобы показывать выборочно.'}</div>}
       {visual.items.length > 1 && (
         <select className="input" style={{ width: 'auto', minHeight: 32, marginBottom: 8 }} value={visual.mode}
           onChange={(e) => setItems(visual.items, e.target.value as 'all' | 'any')}>
@@ -105,7 +107,7 @@ export function ConditionEditor({ def, value, onChange, required }: {
       ))}
       <div className="row" style={{ gap: 8 }}>
         <button className="btn btn-secondary btn-sm" onClick={addItem}>+ условие</button>
-        <button className="btn-link" onClick={() => { setJsonText(value ? JSON.stringify(value, null, 2) : ''); setJsonMode(true); }}>Сложное условие (JSON)</button>
+        <button className="btn-link" onClick={() => { setJsonText(value ? JSON.stringify(value, null, 2) : ''); setJsonMode(true); }}>в виде JSON</button>
       </div>
     </div>
   );
@@ -189,4 +191,23 @@ function CondRow({ def, c, questions, onChange, onRemove }: {
       <button className="icon-btn" title="Убрать условие" onClick={onRemove}>✕</button>
     </div>
   );
+}
+
+/** Короткое описание условия для свёрнутых настроек: «Q1 = Да и S1 ≥ 18» */
+export function describeCondition(def: Survey, c: Condition | undefined): string {
+  if (!c) return '';
+  if ('all' in c) return c.all.map((x) => describeCondition(def, x)).join(' и ');
+  if ('any' in c) return c.any.map((x) => describeCondition(def, x)).join(' или ');
+  if ('not' in c) return `не (${describeCondition(def, c.not)})`;
+  const q = c.q ? findQuestion(def, c.q) : undefined;
+  const subject = c.param !== undefined ? `?${c.param}` : `${c.q ?? '?'}${c.row !== undefined ? `[${c.row}]` : ''}`;
+  if (c.op === 'answered' || c.op === 'notAnswered') return `${subject}: ${OP_LABELS[c.op]}`;
+  const choices = valueChoices(def, q, c.row);
+  const label = (v: unknown) => {
+    const o = choices?.find((x) => x.code === v);
+    const t = o ? o.text : String(v);
+    return t.length > 18 ? t.slice(0, 17) + '…' : t;
+  };
+  const value = Array.isArray(c.value) ? c.value.map(label).join(', ') : label(c.value);
+  return `${subject} ${OP_LABELS[c.op]} ${value}`;
 }

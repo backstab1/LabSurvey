@@ -94,6 +94,8 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
     case 'text': {
       if (typeof v !== 'string') return 'Некорректный ответ';
       if (required && !v.trim()) return 'Пожалуйста, ответьте на вопрос';
+      if (q.inputType === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())) return 'Введите корректный e-mail';
+      if (q.inputType === 'time' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v.trim())) return 'Введите время в формате ЧЧ:ММ';
       if (q.maxLength && v.length > q.maxLength) return `Не более ${q.maxLength} символов`;
       return null;
     }

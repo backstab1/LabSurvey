@@ -1,11 +1,7 @@
 // Редактор клиентских скриптов. Каждый хук — тело функции (sl) => { ... }
 const HOOKS = {
   survey: [
-    ['init', 'Глобальный скрипт', 'Выполняется на каждой странице перед остальными. Общие функции кладите в sl.shared.'],
-  ],
-  page: [
-    ['onShow', 'При показе страницы', 'Например, sl.set("H1", Date.now()) — засечь время.'],
-    ['onSubmit', 'Перед отправкой', 'Вернуть строку — отправка отменится с этим сообщением.'],
+    ['init', 'Глобальный скрипт', 'Выполняется на каждом экране перед остальными скриптами. Общие функции кладите в sl.shared.'],
   ],
   question: [
     ['onShow', 'При показе вопроса', 'sl.el — DOM-элемент вопроса.'],
@@ -16,8 +12,10 @@ const HOOKS = {
 
 type Level = keyof typeof HOOKS;
 
-export function ScriptsEditor({ level, value, onChange }: {
+export function ScriptsEditor({ level, value, onChange, only }: {
   level: Level;
+  /** Показать только эти хуки */
+  only?: string[];
   value: { [K in string]?: string } | object | undefined;
   onChange: (v: any) => void;
 }) {
@@ -28,7 +26,7 @@ export function ScriptsEditor({ level, value, onChange }: {
   };
   return (
     <div className="stack">
-      {HOOKS[level].map(([key, label, help]) => {
+      {HOOKS[level].filter(([key]) => !only || only.includes(key)).map(([key, label, help]) => {
         let syntaxError = '';
         const code = (value as Record<string, string | undefined> | undefined)?.[key] ?? '';
         if (code) {

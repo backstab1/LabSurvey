@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomBytes } from 'node:crypto';
 import { config } from './config.ts';
 import type { Answers, Survey } from '../shared/types.ts';
+import { migrateSurvey } from '../shared/migrate.ts';
 import type { ResponseRecord, ResponseStatus } from '../shared/variables.ts';
 
 const db = new DatabaseSync(config.dbFile);
@@ -98,8 +99,9 @@ function toSurvey(r: Row): SurveyRow {
   return {
     id: r.id as string,
     title: r.title as string,
-    draft: JSON.parse(r.draft as string),
-    published: r.published ? JSON.parse(r.published as string) : null,
+    // Анкеты старого формата переводятся в текущий при чтении
+    draft: migrateSurvey(JSON.parse(r.draft as string)) as Survey,
+    published: r.published ? (migrateSurvey(JSON.parse(r.published as string)) as Survey) : null,
     version: r.version as number,
     status: r.status as SurveyStatus,
     sheets: r.sheets ? JSON.parse(r.sheets as string) : null,

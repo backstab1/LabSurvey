@@ -1,15 +1,15 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "title": "Демо: опрос о кофейнях",
-  "description": "Пример анкеты со всеми типами вопросов, логикой, переносом и подстановками",
+  "description": "Пример анкеты: все типы вопросов, условия, действия, перенос вариантов и подстановки",
   "settings": {
     "showProgress": true,
     "allowBack": true,
     "allowEarlyFinish": false
   },
-  "pages": [
+  "blocks": [
     {
-      "id": "P_intro",
+      "id": "B_screen",
       "questions": [
         {
           "id": "INTRO",
@@ -21,7 +21,10 @@
           "type": "number",
           "text": "Сколько вам полных лет?",
           "min": 14,
-          "max": 99
+          "max": 99,
+          "actions": {
+            "after": [{ "if": { "q": "S1", "op": "lt", "value": 18 }, "do": "screenout" }]
+          }
         },
         {
           "id": "S2",
@@ -33,23 +36,22 @@
             { "code": 3, "text": "Несколько раз в месяц" },
             { "code": 4, "text": "Реже" },
             { "code": 5, "text": "Не бываю" }
-          ]
+          ],
+          "actions": {
+            "after": [{ "if": { "q": "S2", "op": "eq", "value": 5 }, "do": "screenout" }]
+          }
         }
-      ],
-      "jumps": [
-        { "if": { "q": "S1", "op": "lt", "value": 18 }, "goTo": "SCREENOUT" },
-        { "if": { "q": "S2", "op": "eq", "value": 5 }, "goTo": "SCREENOUT" }
       ]
     },
     {
-      "id": "P_brands",
+      "id": "B_brands",
       "title": "Кофейни",
       "questions": [
         {
           "id": "Q1",
           "type": "multi",
           "text": "Какие сети кофеен вы знаете?",
-          "randomize": true,
+          "order": "random",
           "options": [
             { "code": 1, "text": "Шоколадница" },
             { "code": 2, "text": "Coffee Like" },
@@ -65,18 +67,13 @@
           "text": "Какую из них вы посещаете чаще всего?",
           "optionsFrom": { "question": "Q1", "filter": "selected" },
           "options": []
-        }
-      ]
-    },
-    {
-      "id": "P_eval",
-      "showIf": { "q": "Q2", "op": "answered" },
-      "questions": [
+        },
         {
           "id": "Q3",
           "type": "matrix",
           "mode": "single",
           "text": "Оцените «{{Q2}}» по параметрам",
+          "showIf": { "q": "Q2", "op": "answered" },
           "requiredRows": "all",
           "rows": [
             { "code": 1, "text": "Вкус кофе" },
@@ -95,23 +92,27 @@
           "id": "Q4",
           "type": "scale",
           "text": "Насколько вероятно, что вы порекомендуете «{{Q2}}» друзьям?",
+          "showIf": { "q": "Q2", "op": "answered" },
           "from": 0,
           "to": 10,
           "labels": { "0": "Точно нет", "10": "Точно да" },
-          "extraOptions": [{ "code": 99, "text": "Затрудняюсь ответить" }]
+          "extraOptions": [{ "code": 99, "text": "Затрудняюсь ответить" }],
+          "actions": {
+            "after": [{ "if": { "q": "Q4", "op": "gte", "value": 7 }, "do": "goTo", "target": "B_profile" }]
+          }
         },
         {
           "id": "Q4a",
           "type": "text",
-          "text": "Что стоит улучшить?",
+          "text": "Что стоит улучшить в «{{Q2}}»?",
           "multiline": true,
           "required": false,
-          "showIf": { "q": "Q4", "op": "lte", "value": 6 }
+          "showIf": { "q": "Q4", "op": "answered" }
         }
       ]
     },
     {
-      "id": "P_profile",
+      "id": "B_profile",
       "title": "О вас",
       "questions": [
         {

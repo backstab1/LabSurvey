@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Runner } from './runner/Runner.tsx';
 import { AdminApp } from './admin/AdminApp.tsx';
 import './styles.css';
+import './admin/admin.css';
 
 const path = window.location.pathname;
 const survey = path.match(/^\/s\/([\w-]+)/);
