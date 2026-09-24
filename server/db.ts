@@ -273,6 +273,21 @@ export const responses = {
     return (db.prepare(sql).all(...vals) as Row[]).map(toResponse);
   },
 
+  /** Последняя настоящая (не тестовая) анкета с этим значением параметра ссылки */
+  async findByParam(surveyId: string, key: string, value: string): Promise<StoredResponse | null> {
+    const r = db.prepare(`SELECT * FROM responses WHERE survey_id = ? AND is_test = 0 AND json_extract(params, ?) = ?
+      ORDER BY started_at DESC LIMIT 1`).get(surveyId, `$."${key.replace(/"/g, '')}"`, value) as Row | undefined;
+    return r ? toResponse(r) : null;
+  },
+
+  /** Сколько настоящих анкет начато с этого IP за последние sinceSec секунд */
+  async countByIp(surveyId: string, ip: string, sinceSec: number): Promise<number> {
+    const since = new Date(Date.now() - sinceSec * 1000).toISOString();
+    const r = db.prepare('SELECT COUNT(*) AS n FROM responses WHERE survey_id = ? AND is_test = 0 AND ip = ? AND started_at >= ?')
+      .get(surveyId, ip, since) as Row;
+    return r.n as number;
+  },
+
   async counts(surveyId: string): Promise<{ real: Record<string, number>; test: number }> {
     const rows = db.prepare('SELECT is_test, status, COUNT(*) AS n FROM responses WHERE survey_id = ? GROUP BY is_test, status')
       .all(surveyId) as Row[];

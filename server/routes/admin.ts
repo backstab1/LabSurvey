@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { checkPassword, clearSession, isAdmin, requireAdmin, setSession, testToken } from '../auth.ts';
+import { checkPassword, clearSession, isAdmin, loginBlocked, loginFailed, requireAdmin, setSession, testToken } from '../auth.ts';
 import { responses, surveys, type SheetsConfig, type SurveyStatus } from '../db.ts';
 import { buildTable } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
@@ -38,7 +38,9 @@ function attachment(name: string): string {
 export async function adminRoutes(app: FastifyInstance) {
   app.post<{ Body: { login: string; password: string } }>('/api/admin/login', async (req, reply) => {
     const { login, password } = req.body ?? ({} as { login: string; password: string });
+    if (loginBlocked(req.ip)) return reply.code(429).send({ error: 'Слишком много неудачных попыток. Подождите 15 минут.' });
     if (!checkPassword(String(login ?? ''), String(password ?? ''))) {
+      loginFailed(req.ip);
       return reply.code(401).send({ error: 'Неверный логин или пароль' });
     }
     setSession(reply, login);

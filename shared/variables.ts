@@ -84,6 +84,14 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[]): Var
   add({ name: 'started_at', label: 'Начало', kind: 'datetime', measure: 'scale', get: (r) => toDate(r.startedAt) });
   add({ name: 'completed_at', label: 'Окончание', kind: 'datetime', measure: 'scale', get: (r) => toDate(r.completedAt) });
   add({ name: 'duration_sec', label: 'Длительность, сек', kind: 'numeric', measure: 'scale', get: (r) => r.durationSec });
+  const minDur = survey.settings?.minDurationSec;
+  if (minDur) {
+    add({
+      name: 'speeder', label: `Слишком быстро (меньше ${minDur} сек)`, kind: 'numeric', measure: 'nominal',
+      valueLabels: [{ value: 0, label: 'Нет' }, { value: 1, label: 'Да' }],
+      get: (r) => (r.status === 'completed' && r.durationSec !== null ? (r.durationSec < minDur ? 1 : 0) : null),
+    });
+  }
   add({ name: 'ip', label: 'IP-адрес', kind: 'string', measure: 'nominal', get: (r) => r.ip });
   add({ name: 'user_agent', label: 'Браузер (User-Agent)', kind: 'string', measure: 'nominal', get: (r) => r.userAgent });
   add({ name: 'version', label: 'Версия анкеты', kind: 'numeric', measure: 'nominal', get: (r) => r.version });

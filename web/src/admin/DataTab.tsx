@@ -28,6 +28,7 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
     await reload();
   };
   const total = Object.values(info.counts.real).reduce((a, b) => a + b, 0);
+  const minDur = (info.published ?? info.draft).settings?.minDurationSec;
 
   useEffect(() => { api<RespRow[]>('GET', `/api/admin/surveys/${info.id}/responses`).then(setRecent); }, [info.id, info.counts]);
 
@@ -114,7 +115,11 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
                   <td>{STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}</td>
                   <td>{fmt(r.startedAt)}</td>
                   <td>{fmt(r.completedAt)}</td>
-                  <td>{r.durationSec !== null ? `${Math.floor(r.durationSec / 60)}:${String(r.durationSec % 60).padStart(2, '0')}` : '—'}</td>
+                  <td>
+                    {r.durationSec !== null ? `${Math.floor(r.durationSec / 60)}:${String(r.durationSec % 60).padStart(2, '0')}` : '—'}
+                    {minDur && r.status === 'completed' && r.durationSec !== null && r.durationSec < minDur
+                      ? <span className="badge test" style={{ marginLeft: 6 }} title={`Быстрее ${minDur} сек`}>спидер</span> : null}
+                  </td>
                   <td>{r.answered}</td>
                   <td className="muted" style={{ fontSize: 13 }}>{Object.entries(r.params).map(([k, v]) => `${k}=${v}`).join(' ')}</td>
                 </tr>

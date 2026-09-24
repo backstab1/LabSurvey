@@ -12,6 +12,22 @@ export function checkPassword(login: string, password: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// Защита от перебора пароля: не больше 10 неудачных попыток за 15 минут с одного IP
+const FAIL_WINDOW = 15 * 60_000;
+const MAX_FAILS = 10;
+const fails = new Map<string, number[]>();
+
+export function loginBlocked(ip: string): boolean {
+  const recent = (fails.get(ip) ?? []).filter((t) => Date.now() - t < FAIL_WINDOW);
+  fails.set(ip, recent);
+  return recent.length >= MAX_FAILS;
+}
+
+export function loginFailed(ip: string): void {
+  if (fails.size > 10_000) fails.clear();
+  fails.set(ip, [...(fails.get(ip) ?? []), Date.now()]);
+}
+
 export function setSession(reply: FastifyReply, login: string): void {
   const expires = Date.now() + TTL_DAYS * 86400_000;
   reply.setCookie(COOKIE, `${login}|${expires}`, {

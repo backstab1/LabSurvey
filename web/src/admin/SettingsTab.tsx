@@ -83,6 +83,23 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed }: {
           {text('password', 'Пароль на опрос', { placeholder: 'без пароля', help: 'Респондент вводит его перед началом' })}
         </div>
         {check('allowRetake', 'Разрешить пройти опрос повторно', 'на финальном экране появится кнопка «Пройти ещё раз»')}
+        <div className="sub-title">Защита от дублей и накрутки</div>
+        <div className="grid2">
+          {text('uniqueParam', 'Один ответ на параметр ссылки', {
+            placeholder: 'например, pid', mono: true,
+            help: 'Для панелей: ?pid=… Повторно по тому же pid не пустит, начатую анкету продолжит; без параметра опрос не откроется',
+          })}
+          <label className="field"><span>Новых анкет с одного IP за час</span>
+            <input className="input" type="number" min={1} placeholder="без ограничения" value={st.maxStartsPerIpHour ?? ''}
+              onChange={(e) => setSettings({ maxStartsPerIpHour: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} />
+            <span className="field-help">Осторожно с опросами сотрудников: из одного офиса часто один IP</span>
+          </label>
+          <label className="field"><span>«Спидеры»: быстрее, чем за N секунд</span>
+            <input className="input" type="number" min={1} placeholder="не отмечать" value={st.minDurationSec ?? ''}
+              onChange={(e) => setSettings({ minDurationSec: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} />
+            <span className="field-help">Такие анкеты помечаются в «Данных» и переменной speeder в выгрузке</span>
+          </label>
+        </div>
         <p className="muted small" style={{ margin: 0 }}>
           Незавершённые анкеты можно продолжить с того же устройства. После закрытия сбора, окончания срока или набора лимита новые
           респонденты видят сообщение «Когда опрос закрыт».

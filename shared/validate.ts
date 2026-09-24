@@ -16,7 +16,7 @@ export const ID_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 
 /** Имена служебных переменных выгрузки — не могут быть ID вопросов */
 export const RESERVED_IDS = new Set([
-  'resp_id', 'status', 'started_at', 'completed_at', 'duration_sec', 'ip', 'user_agent', 'is_test', 'version',
+  'resp_id', 'status', 'speeder', 'started_at', 'completed_at', 'duration_sec', 'ip', 'user_agent', 'is_test', 'version',
 ].map((s) => s.toLowerCase()));
 
 const TYPES = new Set(['single', 'multi', 'dropdown', 'ranking', 'text', 'number', 'scale', 'matrix', 'date', 'phone', 'info', 'hidden']);
@@ -291,7 +291,12 @@ function validateSettings(st: Record<string, unknown>, err: (w: string, m: strin
   if (typeof st.openFrom === 'string' && typeof st.closeAt === 'string' && Date.parse(st.openFrom) >= Date.parse(st.closeAt)) {
     err(w('closeAt'), 'Окончание сбора раньше начала');
   }
-  if (st.maxResponses !== undefined && (!isInt(st.maxResponses) || st.maxResponses < 1)) err(w('maxResponses'), 'Целое число ≥ 1');
+  for (const k of ['maxResponses', 'maxStartsPerIpHour', 'minDurationSec']) {
+    if (st[k] !== undefined && (!isInt(st[k]) || (st[k] as number) < 1)) err(w(k), 'Целое число ≥ 1');
+  }
+  if (st.uniqueParam !== undefined && (typeof st.uniqueParam !== 'string' || !/^[\w.-]{1,50}$/.test(st.uniqueParam))) {
+    err(w('uniqueParam'), 'Имя параметра ссылки: латиница, цифры, _ . -');
+  }
   if (st.accentColor !== undefined && (typeof st.accentColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(st.accentColor))) {
     err(w('accentColor'), 'Цвет в формате #RRGGBB');
   }

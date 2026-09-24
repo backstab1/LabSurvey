@@ -217,7 +217,23 @@ export async function respondentRoutes(app: FastifyInstance) {
       }
 
       const survey = preview ? s.draft : s.published!;
+      const params = cleanParams(req.body?.params);
       if (!preview) {
+        const st = settingsOf(survey);
+        // Один ответ на значение параметра (ID панелиста): продолжаем начатую анкету, повторно не пускаем
+        if (st.uniqueParam) {
+          const value = params[st.uniqueParam];
+          if (!value) return { closed: true, title: survey.title, message: 'Ссылка на опрос неполная. Откройте её из приглашения ещё раз.' };
+          const prev = await responses.findByParam(s.id, st.uniqueParam, value);
+          if (prev) {
+            const loaded = await load(s.id, prev.id);
+            if (loaded?.r.status === 'in_progress') return stateOf(loaded.survey, loaded.r);
+            return { closed: true, title: survey.title, message: 'Вы уже прошли этот опрос. Спасибо!' };
+          }
+        }
+        if (st.maxStartsPerIpHour && req.ip && (await responses.countByIp(s.id, req.ip, 3600)) >= st.maxStartsPerIpHour) {
+          return { closed: true, title: survey.title, message: 'С вашего устройства уже начато слишком много анкет. Попробуйте позже.' };
+        }
         const reason = await closedReason(s.id, survey);
         if (reason) return { closed: true, title: survey.title, message: reason };
         const password = survey.settings?.password;
@@ -225,7 +241,6 @@ export async function respondentRoutes(app: FastifyInstance) {
           return { needPassword: true, title: survey.title, error: req.body?.password ? 'Неверный пароль' : undefined };
         }
       }
-      const params = cleanParams(req.body?.params);
       // Скрытые переменные из параметров ссылки
       const initial: Answers = {};
       for (const q of allQuestions(survey)) {

@@ -176,3 +176,34 @@ test('archive closes collection and version history restores a draft', async () 
   cookie = '';
   assert.equal((await call('POST', `/api/s/${sid}/start`, {})).json.closed, true);
 });
+
+test('one response per URL param, IP limit, speeder variable', async () => {
+  let sid = await publish(base({ uniqueParam: 'pid' }));
+  assert.match((await call('POST', `/api/s/${sid}/start`, {})).json.message, /неполная/);
+  const a = (await call('POST', `/api/s/${sid}/start`, { params: { pid: 'P1' } })).json;
+  // Тот же pid с другого устройства — продолжение той же анкеты
+  assert.equal((await call('POST', `/api/s/${sid}/start`, { params: { pid: 'P1' } })).json.rid, a.rid);
+  await call('POST', `/api/s/${sid}/submit`, { rid: a.rid, page: 'Q1', answers: { Q1: { v: 1 } } });
+  assert.match((await call('POST', `/api/s/${sid}/start`, { params: { pid: 'P1' } })).json.message, /уже прошли/);
+  assert.equal((await call('POST', `/api/s/${sid}/start`, { params: { pid: 'P2' } })).json.page, 'Q1');
+
+  sid = await publish(base({ maxStartsPerIpHour: 2 }));
+  assert.ok((await call('POST', `/api/s/${sid}/start`, {})).json.rid);
+  assert.ok((await call('POST', `/api/s/${sid}/start`, {})).json.rid);
+  assert.match((await call('POST', `/api/s/${sid}/start`, {})).json.message, /слишком много/);
+
+  const { buildVariables } = await import('../shared/variables.ts');
+  const vars = buildVariables(base({ minDurationSec: 30 }), []);
+  const speeder = vars.find((v) => v.name === 'speeder')!;
+  const rec = { status: 'completed', durationSec: 12 } as Parameters<typeof speeder.get>[0];
+  assert.equal(speeder.get(rec), 1);
+  assert.equal(speeder.get({ ...rec, durationSec: 60 }), 0);
+});
+
+test('admin login is throttled after repeated failures', async () => {
+  let last = 0;
+  for (let i = 0; i < 11; i++) {
+    last = (await app.inject({ method: 'POST', url: '/api/admin/login', remoteAddress: '10.9.9.9', payload: { login: 'admin', password: 'x' } })).statusCode;
+  }
+  assert.equal(last, 429);
+});
