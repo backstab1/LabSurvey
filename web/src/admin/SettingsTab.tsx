@@ -108,6 +108,7 @@ export function SettingsTab({ def, onChange, surveyId, testToken, completed, quo
           Незавершённые анкеты можно продолжить с того же устройства. После закрытия сбора, окончания срока или набора лимита новые
           респонденты видят сообщение «Когда опрос закрыт».
         </p>
+        <EmbedCode surveyId={surveyId} />
         <div className="field">
           <span>Тестовая ссылка — черновик без входа в админку, ответы помечаются как тестовые</span>
           <div className="row" style={{ gap: 8 }}>
@@ -244,5 +245,22 @@ function QuotasCard({ def, progress, onChange }: { def: Survey; progress: QuotaP
       })}
       <button className="btn-link" style={{ alignSelf: 'flex-start', padding: 0 }} onClick={add}>+ Квота</button>
     </div>
+  );
+}
+
+/** Код для вставки опроса на сайт: iframe подстраивает высоту под содержимое */
+function EmbedCode({ surveyId }: { surveyId: string }) {
+  const url = `${window.location.origin}/s/${surveyId}`;
+  const code = `<iframe id="surveylab-${surveyId}" src="${url}" style="width:100%;border:0;min-height:480px" title="Опрос"></iframe>
+<script>addEventListener('message',function(e){if(e.data&&e.data.type==='surveylab:height'){var f=document.getElementById('surveylab-${surveyId}');if(f&&e.source===f.contentWindow)f.style.height=e.data.height+'px';}});</script>`;
+  return (
+    <details className="field embed-code">
+      <summary>Код для вставки на сайт</summary>
+      <textarea className="input mono" rows={4} readOnly value={code} onFocus={(e) => e.target.select()} />
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(code); toast('Код скопирован'); }}>Копировать код</button>
+        <span className="muted small">Параметры ссылки (?pid=…, utm) можно добавить к адресу в src.</span>
+      </div>
+    </details>
   );
 }

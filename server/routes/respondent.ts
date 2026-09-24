@@ -7,7 +7,7 @@ import { queueResponseSync } from '../sheets.ts';
 import { fullQuota, noteCompleted } from '../quotas.ts';
 import { afterComplete } from '../notify.ts';
 import {
-  actionError, allQuestions, cleanAnswers, endingAction, findPage, firstPage, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
+  actionError, allQuestions, cleanAnswers, endingAction, findPage, firstPage, paramAnswer, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
 } from '../../shared/logic.ts';
 import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
 import { END, SCREENOUT, settingsOf, type Answer, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
@@ -266,6 +266,12 @@ export async function respondentRoutes(app: FastifyInstance) {
           const raw = params[q.fromParam];
           initial[q.id] = { v: q.valueType === 'number' && isFinite(Number(raw)) ? Number(raw) : raw };
         }
+      }
+      // Предзаполнение видимых вопросов из ссылки (респондент может исправить)
+      for (const q of allQuestions(survey)) {
+        if (!q.prefillParam || q.prefillSkip || q.type === 'hidden') continue;
+        const v = paramAnswer({ survey, answers: initial, params, seed: '' }, q);
+        if (v !== undefined) initial[q.id] = { v };
       }
       const created = await responses.create({
         surveyId: s.id, version: s.version, status: 'in_progress', isTest: preview, answers: initial, history: [],

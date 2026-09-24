@@ -242,12 +242,12 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
           break;
         case 'hidden':
           add({
-            name: q.id, label: text || q.id, kind: q.valueType === 'number' ? 'numeric' : 'string', measure: q.valueType === 'number' ? 'scale' : 'nominal',
-            decimals: q.valueType === 'number' ? 2 : undefined,
+            name: q.id, label: text || q.id, kind: (q.valueType === 'number' || q.calc) ? 'numeric' : 'string', measure: (q.valueType === 'number' || q.calc) ? 'scale' : 'nominal',
+            decimals: (q.valueType === 'number' || q.calc) ? 2 : undefined,
             get: (r) => {
               const v = ans(r)?.v;
               if (v === undefined || v === null || v === '') return null;
-              if (q.valueType === 'number') return typeof v === 'number' ? v : isFinite(Number(v)) ? Number(v) : null;
+              if (q.valueType === 'number' || q.calc) return typeof v === 'number' ? v : isFinite(Number(v)) ? Number(v) : null;
               return typeof v === 'object' ? JSON.stringify(v) : String(v);
             },
           });

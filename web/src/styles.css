@@ -165,3 +165,7 @@ textarea.input { resize: vertical; }
 @media (max-width: 640px) { .options.cols { display: flex; } }
 .input-suffix { display: flex; align-items: center; gap: 10px; }
 .input-suffix span { color: var(--muted); }
+
+/* Опрос во встроенном iframe: без внешних отступов и фона страницы */
+html.embedded body { background: transparent; }
+html.embedded .runner { padding-top: 0; padding-bottom: 8px; }

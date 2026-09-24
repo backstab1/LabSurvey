@@ -10,6 +10,8 @@ const TEXT_KEYS = new Set([
 ]);
 /** Поля со скриптами: там ID встречается в кавычках — sl.get('Q1') */
 const SCRIPT_KEYS = new Set(['init', 'onShow', 'onChange', 'validate']);
+/** Формулы: ID вопроса стоит словом — Q1, score(Q1) */
+const CALC_KEYS = new Set(['calc']);
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -31,6 +33,7 @@ export function renameId(survey: Survey, oldId: string, newId: string): Survey {
       if (REF_KEYS.has(key) && node === oldId) return newId;
       if (TEXT_KEYS.has(key)) return node.replace(piping, (_m, sub = '') => `{{${newId}${sub}}}`);
       if (SCRIPT_KEYS.has(key)) return node.replace(quoted, (_m, qch) => `${qch}${newId}${qch}`);
+      if (CALC_KEYS.has(key)) return node.replace(new RegExp(`\\b${esc(oldId)}\\b`, 'g'), newId);
     }
     return node;
   };

@@ -3,6 +3,7 @@ import {
   type Action, type Answer, type Answers, type AnswerValue, type Block, type Condition, type MatrixQuestion, type Option, type Page,
   type Question, type RespondentContext, type SimpleCondition, type Survey,
 } from './types.ts';
+import { calcValue } from './calc.ts';
 
 // ---------- Справочники ----------
 
@@ -288,7 +289,40 @@ function visibleCount(ctx: RespondentContext, q: Question): number | null {
  * Значение, которым действие «answer» отмечает вопрос без показа.
  * undefined — действие не сработало (вопрос показывается как обычно).
  */
+/** Ответ из параметра ссылки для prefillParam; undefined — параметра нет или значение не подходит */
+export function paramAnswer(ctx: RespondentContext, q: Question): AnswerValue | undefined {
+  const raw = q.prefillParam ? ctx.params[q.prefillParam]?.trim() : undefined;
+  if (!raw) return undefined;
+  const num = Number(raw.replace(',', '.'));
+  switch (q.type) {
+    case 'single':
+    case 'dropdown':
+      return resolveOptions(ctx, q, 0, false).some((o) => o.code === num && !o.other) ? num : undefined;
+    case 'multi': {
+      const codes = raw.split(',').map((x) => Number(x.trim()));
+      const allowed = new Set(resolveOptions(ctx, q, 0, false).filter((o) => !o.other).map((o) => o.code));
+      return codes.length && codes.every((c) => allowed.has(c)) ? [...new Set(codes)] : undefined;
+    }
+    case 'scale':
+      return Number.isInteger(num) && ((num >= q.from && num <= q.to) || q.extraOptions?.some((o) => o.code === num)) ? num : undefined;
+    case 'number':
+      return isFinite(num) && (q.min === undefined || num >= q.min) && (q.max === undefined || num <= q.max) ? num : undefined;
+    case 'date':
+      return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
+    case 'text':
+    case 'phone':
+      return raw.slice(0, 2000);
+    default:
+      return undefined;
+  }
+}
+
 export function autoAnswerValue(ctx: RespondentContext, q: Question): AnswerValue | undefined {
+  // Предзаполнение из ссылки с пропуском вопроса
+  if (q.prefillSkip) {
+    const v = paramAnswer(ctx, q);
+    if (v !== undefined) return v;
+  }
   for (const a of q.actions?.before ?? []) {
     if (a.do !== 'answer' || !evalCondition(a.if, ctx)) continue;
     if (a.value !== undefined && a.value !== '') return a.value as AnswerValue;
@@ -451,8 +485,17 @@ export function cleanAnswers(ctx: RespondentContext, pagesVisited: string[]): An
   const c: RespondentContext = { ...ctx, answers: kept };
   // Скрытые переменные не привязаны к маршруту: их задают скрипты и параметры ссылки
   for (const q of allQuestions(ctx.survey)) {
-    if (q.type === 'hidden' && ctx.answers[q.id] !== undefined) kept[q.id] = ctx.answers[q.id];
+    if (q.type === 'hidden' && ctx.answers[q.id] !== undefined && !q.calc) kept[q.id] = ctx.answers[q.id];
   }
+  // Вычисляемые переменные — по порядку анкеты, чтобы следующая формула видела предыдущую
+  const calcs = allQuestions(ctx.survey).filter((q): q is Extract<Question, { type: 'hidden' }> => q.type === 'hidden' && !!q.calc);
+  const recalc = () => {
+    for (const q of calcs) {
+      const v = calcValue(q.calc!, c);
+      if (v === undefined) delete kept[q.id]; else kept[q.id] = { v };
+    }
+  };
+  recalc();
   // Действия «перед показом»: переменные и автоответы
   const before = (page: Page) => {
     if (!evalCondition(page.showIf, c)) return;
@@ -487,6 +530,7 @@ export function cleanAnswers(ctx: RespondentContext, pagesVisited: string[]): An
         }
       }
     }
+    recalc();
     cur = nextPage(c, cur, before);
   }
   return kept;

@@ -499,3 +499,8 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
 /* Пользователи */
 .user-menu { font-weight: 500; }
 .readonly-note { margin-bottom: 10px; }
+
+.embed-code summary { cursor: pointer; color: var(--accent); font-size: 14px; }
+.embed-code textarea { font-size: 12px; margin: 8px 0; }
+
+.opt-score { width: 54px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 13px; background: #fbfbf4; }

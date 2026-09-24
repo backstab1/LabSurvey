@@ -207,3 +207,24 @@ test('admin login is throttled after repeated failures', async () => {
   }
   assert.equal(last, 429);
 });
+
+test('prefill from URL params: editable or skipped', async () => {
+  const def = base({});
+  def.blocks[0].questions = [
+    { id: 'AGE', type: 'number', text: 'Возраст', prefillParam: 'age', prefillSkip: true, min: 14 },
+    { id: 'CITY', type: 'single', text: 'Город', prefillParam: 'city', options: [{ code: 1, text: 'Москва' }, { code: 2, text: 'СПб' }] },
+  ];
+  const sid = await publish(def);
+  // Возраст пришёл — вопрос пропущен, город предзаполнен, но показан
+  let st = (await call('POST', `/api/s/${sid}/start`, { params: { age: '35', city: '2' } })).json;
+  assert.equal(st.page, 'CITY');
+  assert.equal(st.answers.CITY.v, 2);
+  st = (await call('POST', `/api/s/${sid}/submit`, { rid: st.rid, page: 'CITY', answers: { CITY: { v: 1 } } })).json;
+  assert.equal(st.status, 'completed');
+  assert.equal(st.answers.AGE.v, 35);
+  assert.equal(st.answers.CITY.v, 1);
+  // Неподходящее значение игнорируется — вопрос показывается
+  st = (await call('POST', `/api/s/${sid}/start`, { params: { age: '7', city: '9' } })).json;
+  assert.equal(st.page, 'AGE');
+  assert.equal(st.answers.CITY, undefined);
+});

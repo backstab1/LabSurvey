@@ -1,3 +1,4 @@
+import { calcRefs, parseCalc } from './calc.ts';
 import { END, OPTION_TYPES, SCREENOUT, type Condition, type Question, type Survey } from './types.ts';
 
 export interface Issue {
@@ -176,6 +177,17 @@ export function validateSurvey(input: unknown): ValidationResult {
         }
       }
       for (const t of [q.text, q.hint]) checkPiping(t, q.id, info);
+      const calc = (q as { calc?: unknown }).calc;
+      if (calc !== undefined) {
+        if (q.type !== 'hidden') err(q.id, 'calc работает только у скрытой переменной');
+        else if (typeof calc !== 'string' || !calc.trim()) err(q.id, 'calc: формула-строка');
+        else {
+          try {
+            for (const id of calcRefs(parseCalc(calc))) if (!qIndex.has(id)) err(`${q.id} → формула`, `Нет вопроса «${id}»`);
+          } catch (e) { err(`${q.id} → формула`, (e as Error).message); }
+          if ((q as { fromParam?: string }).fromParam) warn(q.id, 'У переменной и формула, и параметр ссылки — формула перезапишет значение');
+        }
+      }
       checkActions(q as Question, info, info.pos);
     }
   }
@@ -342,6 +354,7 @@ function validateOptions(list: unknown, where: string, name: string, err: (w: st
     for (const k of ['other', 'exclusive', 'fixed', 'hidden']) {
       if (o[k] !== undefined && typeof o[k] !== 'boolean') err(where, `${name}[${i + 1}].${k}: true или false`);
     }
+    if (o.score !== undefined && (typeof o.score !== 'number' || !isFinite(o.score))) err(where, `${name}[${i + 1}].score: число`);
   });
   if (list.length > 0 && list.every((o) => isObj(o) && o.hidden === true) && !allowEmpty) err(where, `${name}: все варианты скрыты`);
 }
@@ -352,6 +365,13 @@ function validateQuestion(
   err: (w: string, m: string) => void,
   warn: (w: string, m: string) => void,
 ) {
+  if (q.prefillParam !== undefined && (typeof q.prefillParam !== 'string' || !/^[\w.-]{1,50}$/.test(q.prefillParam))) {
+    err(w, 'prefillParam: имя параметра ссылки (латиница, цифры, _ . -)');
+  }
+  if (q.prefillSkip && !q.prefillParam) warn(w, 'prefillSkip без prefillParam ничего не делает');
+  if (q.prefillParam && (q.type === 'matrix' || q.type === 'ranking' || q.type === 'info' || q.type === 'hidden')) {
+    warn(w, `Предзаполнение из ссылки не работает для типа ${q.type}${q.type === 'hidden' ? ' — используйте fromParam' : ''}`);
+  }
   for (const k of ['requiredMessage', 'note', 'placeholder', 'suffix', 'patternMessage'] as const) {
     const v = (q as unknown as Record<string, unknown>)[k];
     if (v !== undefined && typeof v !== 'string') err(w, `${k}: ожидается строка`);

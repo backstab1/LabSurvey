@@ -6,13 +6,15 @@ import type { Option } from '../../../shared/types.ts';
  * Список вариантов. Быстрый ввод: Enter — новый вариант, Backspace в пустом — удалить,
  * вставка нескольких строк — несколько вариантов («97. Другое» задаёт код).
  */
-export function OptionsEditor({ options, onChange, allowOther, allowExclusive, allowFlags, quickAdd, placeholder = 'Вариант', emptyHint }: {
+export function OptionsEditor({ options, onChange, allowOther, allowExclusive, allowFlags, allowScores, quickAdd, placeholder = 'Вариант', emptyHint }: {
   options: Option[];
   onChange: (o: Option[]) => void;
   allowOther?: boolean;
   allowExclusive?: boolean;
   /** Флаги «закрепить при перемешивании» и «скрыть» */
   allowFlags?: boolean;
+  /** Баллы вариантов для формул (score) */
+  allowScores?: boolean;
   /** Быстрые кнопки «Другое» / «Затрудняюсь» */
   quickAdd?: boolean;
   placeholder?: string;
@@ -21,6 +23,7 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, a
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const [focusIdx, setFocusIdx] = useState<number | null>(null);
   const [bulk, setBulk] = useState<string | null>(null);
+  const [showScores, setShowScores] = useState(() => options.some((o) => o.score !== undefined));
 
   useEffect(() => {
     if (focusIdx === null) return;
@@ -87,6 +90,10 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, a
         <div key={i} className={`opt-row${o.hidden ? ' is-hidden' : ''}`}>
           <input className="opt-code" type="number" title="Код ответа" value={o.code}
             onChange={(e) => setAt(i, { code: Number(e.target.value) })} />
+          {showScores && (
+            <input className="opt-score" type="number" title="Баллы варианта — для формул score(…)" placeholder="балл" value={o.score ?? ''}
+              onChange={(e) => setAt(i, { score: e.target.value === '' ? undefined : Number(e.target.value) })} />
+          )}
           <input ref={(el) => { inputs.current[i] = el; }} className="opt-text" value={o.text} placeholder={placeholder}
             onChange={(e) => setAt(i, { text: e.target.value })}
             onKeyDown={(e) => {
@@ -149,6 +156,10 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, a
           <button type="button" className="btn-link" onClick={() => onChange([...options, compact({ code: 99, text: 'Затрудняюсь ответить', exclusive: allowExclusive || undefined })])}>+ «Затрудняюсь»</button>
         )}
         <button type="button" className="btn-link" onClick={() => setBulk(options.map((o) => `${o.code}. ${o.text}`).join('\n'))}>списком</button>
+        {allowScores && (
+          <button type="button" className="btn-link" title="Баллы вариантов для вычисляемых переменных"
+            onClick={() => setShowScores(!showScores)}>{showScores ? 'скрыть баллы' : 'баллы'}</button>
+        )}
         {options.filter((o) => o.code < 90).some((o, i) => o.code !== i + 1) && (
           <button type="button" className="btn-link" title="Обычные варианты получат коды 1, 2, 3… по порядку; коды 90+ не меняются"
             onClick={() => {

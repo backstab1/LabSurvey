@@ -30,7 +30,25 @@ type Loaded =
   | { kind: 'password'; title: string; error?: string }
   | { kind: 'error'; message: string };
 
+/** Опрос открыт внутри iframe на чужом сайте */
+const embedded = (() => { try { return window.self !== window.top; } catch { return true; } })();
+
+/** Сообщает сайту-родителю высоту страницы — чтобы iframe подстраивался без прокрутки */
+function useEmbedHeight() {
+  useEffect(() => {
+    if (!embedded) return;
+    document.documentElement.classList.add('embedded');
+    // Высота содержимого, а не окна — иначе iframe сможет только расти
+    const send = () => window.parent.postMessage({ type: 'surveylab:height', height: Math.ceil(document.body.getBoundingClientRect().height) }, '*');
+    const ro = new ResizeObserver(send);
+    ro.observe(document.body);
+    send();
+    return () => ro.disconnect();
+  }, []);
+}
+
 export function Runner({ surveyId }: { surveyId: string }) {
+  useEmbedHeight();
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const test = query.get('test') ?? undefined;
   const preview = query.get('preview') === '1' || !!test;

@@ -5,6 +5,7 @@ import { ScriptsEditor } from './ScriptsEditor.tsx';
 import { OptionsEditor } from './OptionsEditor.tsx';
 import { QuestionPreview } from './preview.tsx';
 import { allQuestions, blockOf } from '../../../shared/logic.ts';
+import { CALC_FUNCTIONS, parseCalc } from '../../../shared/calc.ts';
 import { allIds } from '../../../shared/refactor.ts';
 import { ID_RE, RESERVED_IDS } from '../../../shared/validate.ts';
 import { Flag, Menu, Modal, NumField, Section, Segmented, compact } from './common.tsx';
@@ -20,6 +21,7 @@ function convert(q: Question, type: QuestionType): Question {
   const keep = {
     id: q.id, text: q.text || fresh.text, hint: q.hint, required: q.required, showIf: q.showIf, scripts: q.scripts, actions: q.actions,
     hideBack: q.hideBack, hideFinish: q.hideFinish, requiredMessage: q.requiredMessage, note: q.note, fixed: q.fixed,
+    prefillParam: q.prefillParam, prefillSkip: q.prefillSkip,
   };
   const opts: Option[] | undefined = old.options ?? old.rows;
   if (CHOICE_TYPES.includes(type) && opts?.length) {
@@ -275,7 +277,7 @@ function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
     case 'dropdown':
       return (
         <Block title="Варианты ответа" note={q.optionsFrom ? `+ варианты из ${q.optionsFrom.question}` : undefined}>
-          <OptionsEditor options={q.options} onChange={(options) => set({ options })} allowOther allowExclusive={q.type === 'multi'} allowFlags quickAdd />
+          <OptionsEditor options={q.options} onChange={(options) => set({ options })} allowOther allowExclusive={q.type === 'multi'} allowFlags allowScores quickAdd />
         </Block>
       );
     case 'matrix':
@@ -288,7 +290,7 @@ function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
               <OptionsEditor options={q.rows} onChange={(rows) => set({ rows })} allowOther allowFlags placeholder="Утверждение" />
             </Block>
             <Block title="Столбцы">
-              <OptionsEditor options={q.columns} onChange={(columns) => set({ columns })} placeholder="Ответ" />
+              <OptionsEditor options={q.columns} onChange={(columns) => set({ columns })} placeholder="Ответ" allowScores />
             </Block>
           </div>
         </>
@@ -338,21 +340,43 @@ function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
           options={[{ value: 'ru', label: 'Россия +7' }, { value: 'international', label: 'Международный' }]} />
       );
     case 'hidden':
-      return (
-        <div className="stack" style={{ gap: 10 }}>
-          <div className="row">
-            <Segmented value={q.valueType ?? 'string'} onChange={(v) => set({ valueType: v })}
-              options={[{ value: 'string', label: 'Строка' }, { value: 'number', label: 'Число' }]} />
-            <label className="field grow"><span>Взять из параметра ссылки</span>
-              <input className="input mono" placeholder="например, pid" value={q.fromParam ?? ''} onChange={(e) => set({ fromParam: e.target.value.trim() || undefined })} />
-            </label>
-          </div>
-          <p className="muted small" style={{ margin: 0 }}>Или задайте скриптом: <code>sl.set("{q.id}", …)</code>. Переменная попадает в выгрузку и доступна в условиях.</p>
-        </div>
-      );
+      return <HiddenBody q={q} set={set} />;
     default:
       return null;
   }
+}
+
+/** Скрытая переменная: из ссылки, по формуле или скриптом */
+function HiddenBody({ q, set }: { q: Extract<Question, { type: 'hidden' }>; set: (p: Patch) => void }) {
+  let calcError = '';
+  if (q.calc) { try { parseCalc(q.calc); } catch (e) { calcError = (e as Error).message; } }
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      <label className="field"><span>Формула (необязательно)</span>
+        <input className={`input mono${calcError ? ' invalid' : ''}`} placeholder="например, score(Q1) + score(Q2)" value={q.calc ?? ''}
+          onChange={(e) => set({ calc: e.target.value || undefined, valueType: e.target.value ? 'number' : q.valueType })} />
+        {calcError ? <span className="field-error">{calcError}</span> : (
+          <span className="field-help">
+            Пересчитывается после каждого ответа. Ответ на вопрос — его ID (Q5), + − * / и скобки, сравнения &gt; &lt; == дают 1 или 0.
+            Функции: {Object.entries(CALC_FUNCTIONS).map(([f, d]) => `${f}() — ${d}`).join('; ')}. Нет ответа — 0.
+          </span>
+        )}
+      </label>
+      {!q.calc && (
+        <div className="row">
+          <Segmented value={q.valueType ?? 'string'} onChange={(v) => set({ valueType: v })}
+            options={[{ value: 'string', label: 'Строка' }, { value: 'number', label: 'Число' }]} />
+          <label className="field grow"><span>Взять из параметра ссылки</span>
+            <input className="input mono" placeholder="например, pid" value={q.fromParam ?? ''} onChange={(e) => set({ fromParam: e.target.value.trim() || undefined })} />
+          </label>
+        </div>
+      )}
+      <p className="muted small" style={{ margin: 0 }}>
+        {q.calc ? 'Значение — число, попадает в выгрузку и доступно в условиях, квотах и подстановках.'
+          : <>Или задайте действием «Записать в переменную» либо скриптом: <code>sl.set("{q.id}", …)</code>. Переменная попадает в выгрузку и доступна в условиях.</>}
+      </p>
+    </div>
+  );
 }
 
 const emptyToUndef = <T extends object>(o: T): T | undefined => (Object.keys(o).length ? o : undefined);
@@ -521,6 +545,11 @@ function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: P
     flag('verticalHeaders', 'Вертикальный текст в заголовках столбцов');
     flag('progressiveRows', 'Показывать строки по мере ответа');
     flag('carousel', 'Таблица как карусель', 'По одной строке на экране');
+  }
+  if (answerable && q.type !== 'matrix' && q.type !== 'ranking') {
+    group('Предзаполнение');
+    textLine('prefillParam', 'Взять ответ из параметра ссылки', 'например, age', (v) => `Из ссылки ?${v}`);
+    if (q.prefillParam) flag('prefillSkip', 'Не показывать вопрос, если ответ пришёл из ссылки');
   }
   if (answerable && q.required !== false) textLine('requiredMessage', 'Сообщение, если нет ответа', 'Пожалуйста, ответьте на вопрос', () => 'Своё сообщение');
   if (answerable || q.type === 'info') {

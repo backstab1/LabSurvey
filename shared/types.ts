@@ -15,6 +15,8 @@ export interface Option {
   fixed?: boolean;
   /** Не показывать респонденту (код остаётся в выгрузке и условиях) */
   hidden?: boolean;
+  /** Баллы варианта для формул: score(Q1) */
+  score?: number;
 }
 
 /** Перенос вариантов из другого вопроса (single/multi/dropdown или строки матрицы) */
@@ -125,6 +127,10 @@ interface QuestionBase {
   note?: string;
   /** В блоке с перемешиванием — оставить вопрос на своём месте */
   fixed?: boolean;
+  /** Предзаполнить ответ из параметра ссылки (?age=35). Для вариантов — код, для multi — коды через запятую */
+  prefillParam?: string;
+  /** Если ответ пришёл из ссылки — не показывать вопрос */
+  prefillSkip?: boolean;
 }
 
 /** Порядок вариантов: random — перемешать, rotate — циклический сдвиг с сохранением порядка */
@@ -250,6 +256,8 @@ export interface HiddenQuestion extends QuestionBase {
   fromParam?: string;
   /** Тип значения в выгрузке */
   valueType?: 'number' | 'string';
+  /** Формула: значение пересчитывается после каждого ответа, например "score(Q1) + score(Q2)" */
+  calc?: string;
 }
 
 export type Question =
