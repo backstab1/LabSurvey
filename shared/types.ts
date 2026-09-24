@@ -294,6 +294,25 @@ export interface JumpRule {
   goTo: string;
 }
 
+/**
+ * Цикл: блок повторяется для каждого элемента. Источник — выбранные (или невыбранные, или все) варианты вопроса,
+ * строки матрицы с ответом, число из вопроса-числа или свой список items.
+ */
+export interface LoopSpec {
+  /** Вопрос-источник: single / multi / dropdown / ranking / matrix / number */
+  question?: string;
+  /** selected — выбранные (по умолчанию), notSelected — невыбранные, all — все */
+  filter?: 'selected' | 'notSelected' | 'all';
+  /** Для матрицы: только строки, где отмечен один из этих столбцов */
+  columns?: number[];
+  /** Свой список элементов вместо вопроса */
+  items?: Option[];
+  /** Порядок повторов */
+  order?: OptionOrder;
+  /** Не больше N повторов (с order: random — случайные N); для цикла по числу — предел */
+  max?: number;
+}
+
 /** Блок — группа вопросов (для порядка и навигации в конструкторе; своей логики нет) */
 export interface Block {
   id: string;
@@ -301,6 +320,10 @@ export interface Block {
   title?: string;
   /** Порядок вопросов блока у каждого респондента: random — перемешать, rotate — ротация. Вопросы с fixed остаются на месте */
   order?: OptionOrder;
+  /** Блок — цикл */
+  loop?: LoopSpec;
+  /** Вложенный блок: ID внешнего блока-цикла; повторяется внутри каждого его повтора */
+  parent?: string;
   questions: Question[];
 }
 

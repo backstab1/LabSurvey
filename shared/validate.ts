@@ -1,4 +1,5 @@
 import { calcRefs, parseCalc } from './calc.ts';
+import { LOOP_REF, expandAllLoops, hasLoops, loopChain } from './loops.ts';
 import { END, OPTION_TYPES, SCREENOUT, type Condition, type Question, type Survey } from './types.ts';
 
 export interface Issue {
@@ -17,6 +18,7 @@ export const ID_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 
 /** Имена служебных переменных выгрузки — не могут быть ID вопросов */
 export const RESERVED_IDS = new Set([
+  'loop', 'loop1', 'loop2', 'loop3', 'loop4', 'loop5',
   'resp_id', 'status', 'speeder', 'started_at', 'completed_at', 'duration_sec', 'ip', 'user_agent', 'is_test', 'version',
 ].map((s) => s.toLowerCase()));
 
@@ -111,9 +113,31 @@ export function validateSurvey(input: unknown): ValidationResult {
   }
   checkRandomBlocks(s, err, warn);
 
+  // Циклы: структура и копии вопросов (FREQ_1, RATE_1_2), на которые можно ссылаться снаружи
+  const instances = new Map<string, { page: number; pos: number; q: Question }>();
+  if (hasLoops(s) && checkLoops(s, qIndex, blockStart, err, warn)) {
+    try {
+      const baseIds = new Set([...qIndex.keys(), ...blockStart.keys()].map((x) => x.toLowerCase()));
+      // Вопросы вне циклов в развёрнутой анкете — те же объекты; копии повторов — новые
+      const originals = new Set(s.blocks.flatMap((b) => b.questions));
+      for (const b of expandAllLoops(s).blocks) {
+        for (const q of b.questions) {
+          if (originals.has(q)) continue;
+          if (baseIds.has(q.id.toLowerCase())) { err(q.id, `Копия вопроса в цикле получает ID «${q.id}», а такой ID уже есть в анкете`); continue; }
+          let stem = q.id;
+          while (!qIndex.has(stem) && /_\d+$/.test(stem)) stem = stem.replace(/_\d+$/, '');
+          const info = qIndex.get(stem);
+          if (info) instances.set(q.id, { ...info, q });
+        }
+      }
+    } catch { /* развёртка при ошибках структуры не нужна */ }
+  }
+  // Сколько циклов вокруг проверяемого вопроса (для LOOP-условий и {{loop}})
+  let curLoops = 0;
+
   // Ссылки: условия, переносы, переходы, пайпинг
   const checkRef = (where: string, id: string, current: { page: number; pos: number } | null, samePageOk: boolean) => {
-    const ref = qIndex.get(id);
+    const ref = qIndex.get(id) ?? instances.get(id);
     if (!ref) {
       err(where, `Ссылка на несуществующий вопрос «${id}»`);
       return undefined;
@@ -139,6 +163,14 @@ export function validateSurvey(input: unknown): ValidationResult {
       if (typeof c.param !== 'string' || !c.param) err(where, 'param: укажите имя параметра ссылки');
     } else if (typeof c.q !== 'string') {
       return err(where, 'Условие: укажите q (ID вопроса) или param');
+    } else if (LOOP_REF.test(c.q)) {
+      // Код текущего повтора цикла
+      const level = Number(c.q.slice(4) || curLoops);
+      if (!curLoops) err(where, `${c.q} можно использовать только в вопросах внутри цикла`);
+      else if (level < 1 || level > curLoops) err(where, `${c.q}: у вопроса всего ${curLoops} уровн${curLoops === 1 ? 'ь' : 'я'} цикла`);
+      if (['contains', 'notContains', 'containsAll', 'answered', 'notAnswered'].includes(c.op) || c.row !== undefined) {
+        err(where, `${c.q}: сравнивайте код повтора операторами = ≠ > < или «из списка»`);
+      }
     } else {
       const ref = checkRef(where, c.q, current, samePageOk);
       if (ref) {
@@ -158,6 +190,8 @@ export function validateSurvey(input: unknown): ValidationResult {
 
   for (const b of s.blocks) {
     if (!isObj(b) || !Array.isArray(b.questions)) continue;
+    curLoops = hasLoops(s) ? loopChain(s, b).length : 0;
+    if (!curLoops && typeof b.title === 'string' && /\{\{\s*loop/.test(b.title)) warn(b.id, '{{loop}} в заголовке блока вне цикла');
     for (const q of b.questions) {
       const info = qIndex.get(q?.id);
       if (!info || !isObj(q)) continue;
@@ -206,7 +240,7 @@ export function validateSurvey(input: unknown): ValidationResult {
         if (qt.title !== undefined && typeof qt.title !== 'string') err(w, 'title: строка');
         if (!isInt(qt.limit) || qt.limit < 0) err(w, 'limit: целое ≥ 0');
         if (qt.if === undefined) err(w, 'Укажите условие if');
-        else checkCondition(qt.if, w, null, true);
+        else { curLoops = 0; checkCondition(qt.if, w, null, true); }
       });
     }
   }
@@ -272,12 +306,82 @@ export function validateSurvey(input: unknown): ValidationResult {
     if (typeof text !== 'string') return;
     for (const m of text.matchAll(/\{\{\s*([A-Za-z]\w*)(?:\.(\w+))?\s*\}\}/g)) {
       if (m[1] === 'param' || m[1] === 'resp_id') continue;
-      if (!qIndex.has(m[1])) warn(where, `Подстановка {{${m[1]}}}: такого вопроса нет`);
+      const lm = m[1].match(/^loop(\d?)$/);
+      if (lm) {
+        const level = Number(lm[1] || curLoops);
+        if (!curLoops) warn(where, `{{${m[1]}}} работает только внутри цикла`);
+        else if (level < 1 || level > curLoops) warn(where, `{{${m[1]}}}: у вопроса всего ${curLoops} уровн${curLoops === 1 ? 'ь' : 'я'} цикла`);
+        continue;
+      }
+      if (!qIndex.has(m[1]) && !instances.has(m[1])) warn(where, `Подстановка {{${m[1]}}}: такого вопроса нет`);
       else checkRef(`${where} → подстановка`, m[1], current, true);
     }
   }
 
   return { ok: errors.length === 0, errors, warnings };
+}
+
+const LOOP_SOURCE_TYPES = new Set(['single', 'multi', 'dropdown', 'ranking', 'matrix', 'number']);
+
+/** Структура циклов; true — можно разворачивать */
+function checkLoops(
+  s: Survey, qIndex: Map<string, { pos: number; q: Question }>, blockStart: Map<string, number>,
+  err: (w: string, m: string) => void, warn: (w: string, m: string) => void,
+): boolean {
+  let ok = true;
+  const e = (w: string, m: string) => { ok = false; err(w, m); };
+  const blocks = s.blocks.filter(isObj);
+  const index = new Map(blocks.map((b, i) => [b.id, i]));
+  const byId = new Map(blocks.map((b) => [b.id, b]));
+  const isDescendant = (b: Survey['blocks'][number], ancestor: string) => {
+    const seen = new Set<string>();
+    let cur = b;
+    while (cur?.parent && !seen.has(cur.id)) {
+      if (cur.parent === ancestor) return true;
+      seen.add(cur.id);
+      cur = byId.get(cur.parent)!;
+    }
+    return false;
+  };
+  blocks.forEach((b, i) => {
+    const w = b.id ?? `блок ${i + 1}`;
+    if (b.parent !== undefined) {
+      const p = typeof b.parent === 'string' ? byId.get(b.parent) : undefined;
+      if (!p) return e(w, `parent: нет блока «${String(b.parent)}»`);
+      if (!p.loop) return e(w, `parent: блок «${p.id}» не цикл — вкладывать можно только в цикл`);
+      if (index.get(p.id)! >= i) return e(w, 'Вложенный блок должен идти после своего цикла');
+      // Между циклом и вложенным блоком — только его же вложенные блоки
+      for (let k = index.get(p.id)! + 1; k < i; k++) {
+        if (!isDescendant(blocks[k], p.id)) return e(w, `Вложенный блок должен идти сразу за циклом «${p.id}» и другими его вложенными блоками`);
+      }
+      if (loopChain(s, b).length > 3) e(w, 'Не больше трёх уровней вложенных циклов');
+    }
+    const l = b.loop;
+    if (l === undefined) return;
+    if (!isObj(l)) return e(w, 'loop: ожидается объект');
+    if (!b.questions.length) warn(w, 'Пустой цикл');
+    if (!!l.question === !!l.items) return e(w, 'loop: укажите question (вопрос-источник) или items (свой список)');
+    if (l.items !== undefined) validateOptions(l.items, `${w} → цикл`, 'items', e);
+    if (l.question !== undefined) {
+      const src = typeof l.question === 'string' ? qIndex.get(l.question) : undefined;
+      if (!src) return e(w, `loop.question: нет вопроса «${String(l.question)}»`);
+      if (!LOOP_SOURCE_TYPES.has(src.q.type)) e(w, `Источник цикла — вопрос с вариантами, матрица или число, а «${src.q.id}» — ${src.q.type}`);
+      const srcBlock = blocks.find((x) => x.questions.some((q) => q.id === l.question));
+      // Источник во вложенном блоке годится, если этот цикл вложен в тот же цикл (или в сам блок-источник) и идёт после него
+      const inChain = !!srcBlock && srcBlock.id !== b.id && (isDescendant(b, srcBlock.id)
+        || (!!srcBlock.parent && isDescendant(b, srcBlock.parent) && index.get(srcBlock.id)! < i));
+      if (srcBlock?.id === b.id) e(w, 'Источник цикла не может быть внутри самого цикла');
+      else if (srcBlock?.parent && !inChain) e(w, `Источник «${l.question}» — внутри другого цикла; вложите этот блок в тот цикл`);
+      else if (src.pos >= (blockStart.get(b.id) ?? Infinity)) e(w, `Источник «${l.question}» должен идти раньше цикла`);
+      if (src.q.type === 'number' && !l.max) warn(w, `Цикл по числу: не больше ${20} повторов — задайте max, если нужно другое`);
+      if (l.columns !== undefined && (src.q.type !== 'matrix' || !Array.isArray(l.columns) || !l.columns.every(isInt))) e(w, 'loop.columns: коды столбцов, только для матрицы');
+    }
+    if (l.filter !== undefined && !['selected', 'notSelected', 'all'].includes(l.filter as string)) e(w, 'loop.filter: selected, notSelected или all');
+    if (l.order !== undefined && l.order !== 'random' && l.order !== 'rotate') e(w, 'loop.order: random или rotate');
+    if (l.max !== undefined && (!isInt(l.max) || l.max < 1)) e(w, 'loop.max: целое ≥ 1');
+    if (b.order) warn(w, 'В цикле вопросы перемешиваются внутри каждого повтора');
+  });
+  return ok;
 }
 
 /** Блоки с перемешиванием: порядок внутри блока у каждого респондента свой */

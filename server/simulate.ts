@@ -3,6 +3,7 @@ import { responses } from './db.ts';
 import { fullQuota, noteCompleted } from './quotas.ts';
 import { actionError, cleanAnswers, findPage, firstPage, isQuestionVisible, nextPage } from '../shared/logic.ts';
 import { randomAnswer } from '../shared/simulate.ts';
+import { withLoops } from '../shared/loops.ts';
 import { END, SCREENOUT, type Answers, type RespondentContext, type Survey } from '../shared/types.ts';
 import type { ResponseStatus } from '../shared/variables.ts';
 
@@ -14,7 +15,7 @@ export async function simulate(surveyId: string, survey: Survey, version: number
       surveyId, version, status: 'in_progress', isTest: true, answers: {}, history: [], currentPage: null,
       params: { source: 'simulation' }, ip: null, userAgent: 'SurveyLAB simulation', startedAt: started.toISOString(),
     });
-    const ctxOf = (answers: Answers): RespondentContext => ({ survey, answers, params: r.params, seed: r.id });
+    const ctxOf = (answers: Answers): RespondentContext => withLoops({ survey, answers, params: r.params, seed: r.id });
 
     let answers: Answers = {};
     const visited: string[] = [];
@@ -24,7 +25,7 @@ export async function simulate(surveyId: string, survey: Survey, version: number
     while (page !== END && page !== SCREENOUT && guard++ < 1000) {
       const nav = cleanAnswers(ctxOf(answers), visited);
       const working: Answers = { ...nav };
-      for (const q of findPage(survey, page)!.questions) {
+      for (const q of findPage(ctxOf(cleanAnswers(ctxOf(answers), visited)).survey, page)!.questions) {
         if (q.type === 'hidden' || !isQuestionVisible(ctxOf(working), q)) continue;
         // Несколько попыток, чтобы не упереться в действие «показать ошибку»
         for (let attempt = 0; attempt < 5; attempt++) {

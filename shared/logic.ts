@@ -4,6 +4,7 @@ import {
   type Question, type RespondentContext, type SimpleCondition, type Survey,
 } from './types.ts';
 import { calcValue } from './calc.ts';
+import { expandAllLoops, expandLoops, hasLoops, loopBase } from './loops.ts';
 
 // ---------- Справочники ----------
 
@@ -44,7 +45,7 @@ export function hasOptions(q: Question): q is Extract<Question, { options: Optio
 
 // ---------- Рандомизация ----------
 
-function hash(str: string): number {
+export function hash(str: string): number {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);
@@ -53,7 +54,7 @@ function hash(str: string): number {
   return h >>> 0;
 }
 
-function seededShuffle<T>(items: T[], seed: string): T[] {
+export function seededShuffle<T>(items: T[], seed: string): T[] {
   let s = hash(seed) || 1;
   const rnd = () => {
     s ^= s << 13; s >>>= 0;
@@ -482,14 +483,19 @@ export function progressPercent(ctx: RespondentContext, currentPageId: string, h
  */
 export function cleanAnswers(ctx: RespondentContext, pagesVisited: string[]): Answers {
   const kept: Answers = {};
+  const base = loopBase(ctx.survey);
+  const loops = hasLoops(base);
   const c: RespondentContext = { ...ctx, answers: kept };
+  // Циклы разворачиваются по уже принятым ответам: повторы появляются, когда отвечен вопрос-источник
+  const reexpand = () => { if (loops) c.survey = expandLoops(base, kept, ctx.params, ctx.seed); };
   // Скрытые переменные не привязаны к маршруту: их задают скрипты и параметры ссылки
-  for (const q of allQuestions(ctx.survey)) {
+  for (const q of allQuestions(loops ? expandAllLoops(base) : ctx.survey)) {
     if (q.type === 'hidden' && ctx.answers[q.id] !== undefined && !q.calc) kept[q.id] = ctx.answers[q.id];
   }
+  reexpand();
   // Вычисляемые переменные — по порядку анкеты, чтобы следующая формула видела предыдущую
-  const calcs = allQuestions(ctx.survey).filter((q): q is Extract<Question, { type: 'hidden' }> => q.type === 'hidden' && !!q.calc);
   const recalc = () => {
+    const calcs = allQuestions(c.survey).filter((q): q is Extract<Question, { type: 'hidden' }> => q.type === 'hidden' && !!q.calc);
     for (const q of calcs) {
       const v = calcValue(q.calc!, c);
       if (v === undefined) delete kept[q.id]; else kept[q.id] = { v };
@@ -516,7 +522,7 @@ export function cleanAnswers(ctx: RespondentContext, pagesVisited: string[]): An
   let cur = firstVisibleFrom(c, 0, before);
   while (cur !== END && cur !== SCREENOUT && visited.has(cur) && !seen.has(cur)) {
     seen.add(cur);
-    const page = findPage(ctx.survey, cur)!;
+    const page = findPage(c.survey, cur)!;
     for (const q of page.questions) {
       if (q.type !== 'hidden' && ctx.answers[q.id] !== undefined && isQuestionVisible(c, q)) kept[q.id] = ctx.answers[q.id];
     }
@@ -530,6 +536,7 @@ export function cleanAnswers(ctx: RespondentContext, pagesVisited: string[]): An
         }
       }
     }
+    reexpand();
     recalc();
     cur = nextPage(c, cur, before);
   }

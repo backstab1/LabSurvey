@@ -2,7 +2,7 @@
 import type { Survey } from './types.ts';
 
 /** Поля, в которых хранится ID вопроса или блока */
-const REF_KEYS = new Set(['q', 'question', 'target', 'goTo']);
+const REF_KEYS = new Set(['q', 'question', 'target', 'goTo', 'parent']);
 /** Поля с текстом, где могут быть подстановки {{ID}} */
 const TEXT_KEYS = new Set([
   'text', 'hint', 'title', 'value', 'message', 'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'overquotaMessage',

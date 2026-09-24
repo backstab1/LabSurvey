@@ -1,3 +1,4 @@
+import { expandAllLoops } from '../../shared/loops.ts';
 import { buildVariables, labelled, type Cell, type ResponseRecord, type VarDef } from '../../shared/variables.ts';
 import type { Survey } from '../../shared/types.ts';
 import { config } from '../config.ts';
@@ -21,7 +22,8 @@ export interface Table {
 }
 
 export function buildTable(survey: Survey, responses: ResponseRecord[], opts: { timings?: boolean } = {}): Table {
-  const vars = buildVariables(survey, responses, opts);
+  // Циклы: переменные для всех возможных повторов (Q6_1, Q6_2, …)
+  const vars = buildVariables(expandAllLoops(survey), responses, opts);
   const rows = responses.map((r) =>
     vars.map((v) => {
       const cell = v.get(r);

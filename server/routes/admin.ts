@@ -19,6 +19,7 @@ import { validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
 import type { Condition, Survey } from '../../shared/types.ts';
 import { evalCondition } from '../../shared/logic.ts';
+import { expandAllLoops } from '../../shared/loops.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
 
 /** Черновик можно сохранить с ошибками логики, но не с поломанной структурой */
@@ -284,7 +285,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const unfinished = all
         .filter((r) => r.status === 'in_progress' || r.status === 'terminated')
         .map((r) => ({ ...r, lastPage: r.status === 'in_progress' ? r.currentPage : r.history[r.history.length - 1] ?? null }));
-      return buildReport(def, all.filter((r) => statuses.includes(r.status)), unfinished);
+      return buildReport(expandAllLoops(def), all.filter((r) => statuses.includes(r.status)), unfinished);
     });
 
     priv.get<{ Params: { id: string; format: string }; Querystring: { statuses?: string; test?: string; from?: string; to?: string; timings?: string; rejected?: string } }>(

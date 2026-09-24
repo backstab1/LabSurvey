@@ -5,6 +5,7 @@ import { runScript, type ScriptEnv } from './scripts.ts';
 import { rich } from './rich.tsx';
 import { actionError, allQuestions, answerText, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions } from '../../../shared/logic.ts';
 import { validateAnswer } from '../../../shared/answers.ts';
+import { expandLoops, withLoops } from '../../../shared/loops.ts';
 import {
   DEFAULT_SETTINGS, END, settingsOf, type Answer, type AnswerValue, type Answers, type Page, type RespondentContext, type Survey,
 } from '../../../shared/types.ts';
@@ -91,7 +92,8 @@ export function Runner({ surveyId }: { surveyId: string }) {
   if (loaded.kind === 'password') return <PasswordGate title={loaded.title} error={loaded.error} busy={checking} onSubmit={start} />;
 
   const { state } = loaded;
-  const page = state.page ? findPage(state.survey, state.page) : null;
+  // Циклы разворачиваются по ответам — экран повтора (Q6_3) есть только в развёрнутой анкете
+  const page = state.page ? findPage(expandLoops(state.survey, state.answers, state.params, state.rid), state.page) : null;
   return (
     <>
       {state.survey.css && <style>{state.survey.css}</style>}
@@ -198,7 +200,7 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
   const answers: Answers = { ...state.answers, ...local };
   // Стёртые на этой странице ответы не должны подтягиваться из сохранённых
   for (const q of page.questions) if (q.type !== 'hidden' && !local[q.id]) delete answers[q.id];
-  const ctx: RespondentContext = { survey, answers, params: state.params, seed: state.rid };
+  const ctx: RespondentContext = withLoops({ survey, answers, params: state.params, seed: state.rid });
 
   const visible = page.questions.filter((q) => q.type !== 'hidden' && isQuestionVisible(ctx, q));
   const isLast = nextPage(ctx, page.id) === END;
@@ -263,7 +265,7 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
   }, [autoSubmit]);
 
   // Заголовок блока показывается над его вопросами
-  const blockTitle = blockOf(survey, page.id)?.title;
+  const blockTitle = blockOf(ctx.survey, page.id)?.title;
   const hideBack = visible.some((q) => q.hideBack);
   const hideFinish = visible.some((q) => q.hideFinish);
 
@@ -272,7 +274,7 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
     for (const q of visible) if (local[q.id]) out[q.id] = local[q.id];
     // Скрытые переменные любой страницы, выставленные скриптами
     for (const [id, a] of Object.entries(local)) {
-      const q = findQuestion(survey, id);
+      const q = findQuestion(ctx.survey, id);
       if (q?.type === 'hidden') out[id] = a;
     }
     return out;

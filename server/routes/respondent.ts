@@ -10,6 +10,7 @@ import {
   actionError, allQuestions, cleanAnswers, endingAction, findPage, firstPage, paramAnswer, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
 } from '../../shared/logic.ts';
 import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
+import { expandAllLoops, withLoops } from '../../shared/loops.ts';
 import { END, SCREENOUT, settingsOf, type Answer, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
 
@@ -48,8 +49,9 @@ function definitionFor(s: SurveyRow, r: { isTest: boolean }): Survey | null {
   return r.isTest ? s.draft : s.published;
 }
 
+/** Контекст респондента; циклы развёрнуты по его ответам */
 const ctxOf = (survey: Survey, r: StoredResponse, answers: Answers): RespondentContext =>
-  ({ survey, answers, params: r.params, seed: r.id });
+  withLoops({ survey, answers, params: r.params, seed: r.id });
 
 /** Анкета для браузера респондента — без пароля */
 export function publicSurvey(survey: Survey): Survey {
@@ -103,7 +105,7 @@ function stateOf(survey: Survey, r: StoredResponse): RunnerState {
     page: r.currentPage,
     canBack: st.allowBack && r.history.length > 0,
     progress: progressPercent(ctxOf(survey, r, nav), r.currentPage, r.history),
-    step: r.history.filter((id) => findPage(survey, id)?.questions.some((q) => q.type !== 'info')).length + 1,
+    step: r.history.filter((id) => findPage(expandAllLoops(survey), id)?.questions.some((q) => q.type !== 'info')).length + 1,
     deadline: st.timeLimitMin ? new Date(Date.parse(r.startedAt) + st.timeLimitMin * 60_000).toISOString() : undefined,
   };
 }
@@ -113,12 +115,12 @@ function stateOf(survey: Survey, r: StoredResponse): RunnerState {
  * игнорируются. strict=false — невалидные ответы молча отбрасываются (для «Назад» и «Завершить»).
  */
 function checkPage(survey: Survey, r: StoredResponse, pageId: string, submitted: Answers, strict: boolean) {
-  const page = findPage(survey, pageId)!;
+  const page = findPage(ctxOf(survey, r, r.answers).survey, pageId) ?? findPage(expandAllLoops(survey), pageId)!;
   const working: Answers = cleanAnswers(ctxOf(survey, r, r.answers), r.history);
   const errors: Record<string, string> = {};
   const pageAnswers: Answers = {};
   // Скрытые переменные (любой страницы) приходят от скриптов браузера
-  for (const q of allQuestions(survey)) {
+  for (const q of allQuestions(expandAllLoops(survey))) {
     if (q.type !== 'hidden' || !submitted?.[q.id]) continue;
     const a = submitted[q.id];
     if (a && typeof a === 'object' && 'v' in a && !validateAnswer(ctxOf(survey, r, working), q, a)) {
@@ -193,14 +195,15 @@ export async function respondentRoutes(app: FastifyInstance) {
     const survey = definitionFor(s, r);
     if (!survey) return null;
     // Анкету переопубликовали (или черновик изменили) во время прохождения — продолжаем по текущей версии
-    const stale = r.currentPage && !findPage(survey, r.currentPage);
+    const all = expandAllLoops(survey);
+    const stale = r.currentPage && !findPage(all, r.currentPage);
     if (r.status === 'in_progress' && (stale || (!r.isTest && r.version !== s.version))) {
       if (!r.isTest) r.version = s.version;
-      if (r.currentPage && !findPage(survey, r.currentPage)) {
+      if (r.currentPage && !findPage(all, r.currentPage)) {
         r.currentPage = firstPage(ctxOf(survey, r, {}));
         r.history = [];
       }
-      r.history = r.history.filter((p) => findPage(survey, p));
+      r.history = r.history.filter((p) => findPage(all, p));
       await responses.update(r.id, { version: r.version, currentPage: r.currentPage, history: r.history });
     }
     // Время вышло — анкета завершается досрочно с сохранёнными ответами

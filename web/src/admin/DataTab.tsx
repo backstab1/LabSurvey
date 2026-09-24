@@ -3,6 +3,7 @@ import { api } from '../api.ts';
 import { Modal, toast } from './common.tsx';
 import { rich } from '../runner/rich.tsx';
 import { allQuestions, answerText, pipe } from '../../../shared/logic.ts';
+import { expandAllLoops } from '../../../shared/loops.ts';
 import type { Answers, Survey } from '../../../shared/types.ts';
 import type { SurveyInfo } from './Editor.tsx';
 import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
@@ -192,7 +193,7 @@ function ResponseModal({ surveyId, rid, onClose, onDeleted, onChanged }: {
   if (!data) return <Modal onClose={onClose} title="Ответ">Загрузка…</Modal>;
   const { response: r, survey } = data;
   const ctx = { survey, answers: r.answers, params: r.params, seed: r.id };
-  const qs = allQuestions(survey).filter((q) => q.type !== 'info' && r.answers[q.id] !== undefined);
+  const qs = allQuestions(expandAllLoops(survey)).filter((q) => q.type !== 'info' && r.answers[q.id] !== undefined);
   return (
     <Modal onClose={onClose} title={<>Ответ <span className="mono muted" style={{ fontWeight: 400, fontSize: 14 }}>{r.id}</span></>}
       actions={<>
