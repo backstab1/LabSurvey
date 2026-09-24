@@ -6,8 +6,8 @@ import { DataTab } from './DataTab.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
 import { LogicTab } from './LogicTab.tsx';
 import { ReportTab } from './ReportTab.tsx';
-import { IssuesList, Menu, Modal, Toaster, toast } from './common.tsx';
-import { navigate } from './AdminApp.tsx';
+import { IssuesList, Menu, Modal, toast } from './common.tsx';
+import { canEdit, navigate, useMe } from './AdminApp.tsx';
 import { STATUS_TEXT } from './SurveyList.tsx';
 import { validateSurvey } from '../../../shared/validate.ts';
 import { analyzeFlow } from '../../../shared/flow.ts';
@@ -50,6 +50,8 @@ export function Editor({ id }: { id: string }) {
   const [save, setSave] = useState<SaveState>('saved');
   const [showIssues, setShowIssues] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  // Наблюдатель видит всё, но ничего не меняет
+  const readOnly = !canEdit(useMe());
   const [focus, setFocus] = useState<{ where: string; n: number }>();
   const latest = useRef<Survey | null>(null);
   // История для отмены: правки, сделанные подряд быстрее чем за 0,7 с, объединяются в один шаг
@@ -105,6 +107,7 @@ export function Editor({ id }: { id: string }) {
 
   const apply = (next: Survey) => { setDef(next); latest.current = next; setSave('pending'); };
   const update = (next: Survey) => {
+    if (readOnly) { toast('У вас доступ только на просмотр'); return; }
     const h = hist.current;
     const cur = latest.current;
     if (cur && Date.now() - h.last > 700) {
@@ -208,24 +211,24 @@ export function Editor({ id }: { id: string }) {
           <button className="icon-btn" title="Повторить (Ctrl+Shift+Z)" disabled={!hist.current.future.length} onClick={redo}>↷</button>
         </span>
         <button className="btn btn-secondary" onClick={() => preview()}>Предпросмотр</button>
-        <button className="btn btn-primary" disabled={!validation.ok || !unpublished} onClick={publish}
+        {!readOnly && <button className="btn btn-primary" disabled={!validation.ok || !unpublished} onClick={publish}
           title={!validation.ok ? 'Сначала исправьте ошибки' : !unpublished ? 'Опубликованная версия совпадает с черновиком' : ''}>
           {!info.published ? 'Опубликовать' : unpublished ? 'Опубликовать изменения' : 'Опубликовано'}
-        </button>
+        </button>}
         <Menu className="btn btn-secondary menu-trigger" items={[
           { label: 'Скопировать ссылку на опрос', onClick: () => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); } },
           { label: 'Скопировать тестовую ссылку', onClick: () => { navigator.clipboard.writeText(`${link}?test=${info.testToken}`); toast('Тестовая ссылка скопирована: черновик, без входа, ответы тестовые'); } },
-          info.status === 'active' && { label: 'Закрыть сбор ответов', onClick: () => setStatus('closed') },
-          info.status === 'closed' && !info.archived && { label: 'Возобновить сбор', onClick: () => setStatus('active') },
+          !readOnly && info.status === 'active' && { label: 'Закрыть сбор ответов', onClick: () => setStatus('closed') },
+          !readOnly && info.status === 'closed' && !info.archived && { label: 'Возобновить сбор', onClick: () => setStatus('active') },
           { label: 'Печатная версия анкеты', onClick: async () => { await saveNow(); window.open(`/admin/s/${id}/print`, '_blank'); } },
           { label: 'История версий', onClick: () => setShowVersions(true), disabled: !info.published },
-          { label: 'Дублировать анкету', onClick: async () => { const r = await api('POST', `/api/admin/surveys/${id}/duplicate`); navigate(`/admin/s/${r.id}`); } },
+          !readOnly && { label: 'Дублировать анкету', onClick: async () => { const r = await api('POST', `/api/admin/surveys/${id}/duplicate`); navigate(`/admin/s/${r.id}`); } },
           { label: 'Скачать JSON', onClick: () => { window.location.href = `/api/admin/surveys/${id}/export.json`; } },
-          {
+          !readOnly && {
             label: info.archived ? 'Вернуть из архива' : 'Перенести в архив',
             onClick: async () => { await api('POST', `/api/admin/surveys/${id}/archive`, { archived: !info.archived }); await reload(); },
           },
-          {
+          !readOnly && {
             label: 'Удалить анкету', danger: true, onClick: async () => {
               const n = Object.values(info.counts.real).reduce((a, b) => a + b, 0);
               if (!window.confirm(`Удалить анкету${n ? ` и ${n} ответов` : ''}? Это нельзя отменить.`)) return;
@@ -236,6 +239,7 @@ export function Editor({ id }: { id: string }) {
         ]} />
       </div>
 
+      {readOnly && <div className="warn-box readonly-note">Режим просмотра: изменения не сохраняются. Отчёт, выгрузки и предпросмотр доступны.</div>}
       <div className="tabs-row">
         <div className="tabs">
           {([['builder', 'Конструктор'], ['logic', 'Логика'], ['json', 'JSON'], ['settings', 'Настройки'], ['report', 'Отчёт'], ['data', 'Данные']] as [Tab, string][]).map(([t, label]) => (
@@ -270,12 +274,11 @@ export function Editor({ id }: { id: string }) {
         <VersionsModal id={id} current={info.version} onClose={() => setShowVersions(false)}
           onRestore={(v, restored) => { update(restored); setShowVersions(false); changeTab('builder'); toast(`Черновик заменён версией ${v}. Отменить — Ctrl+Z`); }} />
       )}
-      <Toaster />
     </div>
   );
 }
 
-interface VersionRow { version: number; publishedAt: string; questions: number }
+interface VersionRow { version: number; publishedAt: string; publishedBy: string | null; questions: number }
 
 /** Опубликованные версии: скачать или вернуть в черновик (возврат можно отменить через Ctrl+Z) */
 function VersionsModal({ id, current, onClose, onRestore }: {
@@ -291,7 +294,7 @@ function VersionsModal({ id, current, onClose, onRestore }: {
             {rows.map((r) => (
               <tr key={r.version}>
                 <td><strong>Версия {r.version}</strong>{r.version === current && <span className="badge active" style={{ marginLeft: 8 }}>сейчас в опросе</span>}</td>
-                <td className="muted">{new Date(r.publishedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                <td className="muted">{new Date(r.publishedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}{r.publishedBy ? ` · ${r.publishedBy}` : ''}</td>
                 <td className="muted">вопросов: {r.questions}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <a className="btn-link" href={`/api/admin/surveys/${id}/versions/${r.version}`} download={`version-${r.version}.json`}>JSON</a>

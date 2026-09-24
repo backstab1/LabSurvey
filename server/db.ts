@@ -55,6 +55,18 @@ db.exec(`
 const surveyCols = (db.prepare('PRAGMA table_info(surveys)').all() as { name: string }[]).map((c) => c.name);
 if (!surveyCols.includes('archived')) db.exec('ALTER TABLE surveys ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
 if (!surveyCols.includes('notify')) db.exec('ALTER TABLE surveys ADD COLUMN notify TEXT');
+const versionCols = (db.prepare('PRAGMA table_info(survey_versions)').all() as { name: string }[]).map((c) => c.name);
+if (!versionCols.includes('published_by')) db.exec('ALTER TABLE survey_versions ADD COLUMN published_by TEXT');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    login TEXT PRIMARY KEY COLLATE NOCASE,
+    password TEXT NOT NULL,
+    role TEXT NOT NULL,
+    disabled INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    last_login_at TEXT
+  );
+`);
 
 /** Согласованная копия базы в файл (работает, пока сервис принимает ответы) */
 export function backupTo(file: string): void {
@@ -104,6 +116,7 @@ export interface SurveyRow {
 export interface SurveyVersion {
   version: number;
   publishedAt: string;
+  publishedBy: string | null;
   questions: number;
 }
 
@@ -196,7 +209,7 @@ export const surveys = {
     db.prepare('UPDATE surveys SET draft = ?, title = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(def), def.title, now(), id);
   },
 
-  async publish(id: string): Promise<number> {
+  async publish(id: string, by: string | null = null): Promise<number> {
     const s = (await this.get(id))!;
     const version = s.version + 1;
     const t = now();
@@ -204,8 +217,8 @@ export const surveys = {
     try {
       db.prepare('UPDATE surveys SET published = draft, version = ?, status = CASE status WHEN \'draft\' THEN \'active\' ELSE status END, updated_at = ? WHERE id = ?')
         .run(version, t, id);
-      db.prepare('INSERT INTO survey_versions (survey_id, version, definition, published_at) VALUES (?, ?, ?, ?)')
-        .run(id, version, JSON.stringify(s.draft), t);
+      db.prepare('INSERT INTO survey_versions (survey_id, version, definition, published_at, published_by) VALUES (?, ?, ?, ?, ?)')
+        .run(id, version, JSON.stringify(s.draft), t, by);
       db.exec('COMMIT');
     } catch (e) {
       db.exec('ROLLBACK');
@@ -225,10 +238,13 @@ export const surveys = {
   },
 
   async versions(id: string): Promise<SurveyVersion[]> {
-    const rows = db.prepare('SELECT version, definition, published_at FROM survey_versions WHERE survey_id = ? ORDER BY version DESC').all(id) as Row[];
+    const rows = db.prepare('SELECT version, definition, published_at, published_by FROM survey_versions WHERE survey_id = ? ORDER BY version DESC').all(id) as Row[];
     return rows.map((r) => {
       const def = migrateSurvey(JSON.parse(r.definition as string)) as Survey;
-      return { version: r.version as number, publishedAt: r.published_at as string, questions: def.blocks.reduce((n, b) => n + b.questions.length, 0) };
+      return {
+        version: r.version as number, publishedAt: r.published_at as string, publishedBy: (r.published_by as string) ?? null,
+        questions: def.blocks.reduce((n, b) => n + b.questions.length, 0),
+      };
     });
   },
 
@@ -330,5 +346,47 @@ export const responses = {
 
   async deleteTest(surveyId: string): Promise<number> {
     return Number(db.prepare('DELETE FROM responses WHERE survey_id = ? AND is_test = 1').run(surveyId).changes);
+  },
+};
+
+// ---- Пользователи админки ----
+
+/** admin — всё, включая пользователей и копии базы; editor — анкеты и данные; viewer — только просмотр и выгрузки */
+export type Role = 'admin' | 'editor' | 'viewer';
+
+export interface UserRow {
+  login: string;
+  role: Role;
+  disabled: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+const toUser = (r: Row): UserRow => ({
+  login: r.login as string, role: r.role as Role, disabled: r.disabled === 1,
+  createdAt: r.created_at as string, lastLoginAt: (r.last_login_at as string) ?? null,
+});
+
+export const users = {
+  async list(): Promise<UserRow[]> {
+    return (db.prepare('SELECT * FROM users ORDER BY login').all() as Row[]).map(toUser);
+  },
+  async get(login: string): Promise<(UserRow & { passwordHash: string }) | null> {
+    const r = db.prepare('SELECT * FROM users WHERE login = ?').get(login) as Row | undefined;
+    return r ? { ...toUser(r), passwordHash: r.password as string } : null;
+  },
+  async create(login: string, passwordHash: string, role: Role): Promise<void> {
+    db.prepare('INSERT INTO users (login, password, role, created_at) VALUES (?, ?, ?, ?)').run(login, passwordHash, role, now());
+  },
+  async update(login: string, patch: { passwordHash?: string; role?: Role; disabled?: boolean }): Promise<void> {
+    if (patch.passwordHash !== undefined) db.prepare('UPDATE users SET password = ? WHERE login = ?').run(patch.passwordHash, login);
+    if (patch.role !== undefined) db.prepare('UPDATE users SET role = ? WHERE login = ?').run(patch.role, login);
+    if (patch.disabled !== undefined) db.prepare('UPDATE users SET disabled = ? WHERE login = ?').run(patch.disabled ? 1 : 0, login);
+  },
+  async touch(login: string): Promise<void> {
+    db.prepare('UPDATE users SET last_login_at = ? WHERE login = ?').run(now(), login);
+  },
+  async remove(login: string): Promise<void> {
+    db.prepare('DELETE FROM users WHERE login = ?').run(login);
   },
 };

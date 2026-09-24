@@ -1,6 +1,49 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { config } from './config.ts';
+import { users, type Role } from './db.ts';
+
+export interface SessionUser {
+  login: string;
+  role: Role;
+  /** Главный администратор из .env (ADMIN_LOGIN / ADMIN_PASSWORD) */
+  builtIn: boolean;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest { user?: SessionUser }
+}
+
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex');
+  return `scrypt$${salt}$${scryptSync(password, salt, 32).toString('hex')}`;
+}
+
+function verifyHash(password: string, stored: string): boolean {
+  const [kind, salt, hash] = stored.split('$');
+  if (kind !== 'scrypt' || !salt || !hash) return false;
+  const a = scryptSync(password, salt, 32);
+  const b = Buffer.from(hash, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export const isBuiltInLogin = (login: string) => !!config.adminPassword && login.toLowerCase() === config.adminLogin.toLowerCase();
+
+/** Проверка логина и пароля: главный администратор из .env или пользователь из базы */
+export async function authenticate(login: string, password: string): Promise<SessionUser | null> {
+  if (checkPassword(login, password)) return { login: config.adminLogin, role: 'admin', builtIn: true };
+  if (isBuiltInLogin(login)) return null;
+  const u = await users.get(login);
+  if (!u || u.disabled || !verifyHash(password, u.passwordHash)) return null;
+  await users.touch(u.login);
+  return { login: u.login, role: u.role, builtIn: false };
+}
+
+/** Пароль пользователя из базы (для смены пароля) */
+export async function checkUserPassword(login: string, password: string): Promise<boolean> {
+  const u = await users.get(login);
+  return !!u && verifyHash(password, u.passwordHash);
+}
 
 const COOKIE = 'sl_admin';
 const TTL_DAYS = 14;
@@ -40,7 +83,7 @@ export function clearSession(reply: FastifyReply): void {
   reply.clearCookie(COOKIE, { path: '/' });
 }
 
-export function isAdmin(req: FastifyRequest): string | null {
+function sessionLogin(req: FastifyRequest): string | null {
   const raw = req.cookies[COOKIE];
   if (!raw) return null;
   const res = req.unsignCookie(raw);
@@ -48,6 +91,15 @@ export function isAdmin(req: FastifyRequest): string | null {
   const [login, exp] = res.value.split('|');
   if (Number(exp) < Date.now()) return null;
   return login;
+}
+
+/** Текущий пользователь; отключённый или удалённый пользователь сразу теряет доступ */
+export async function currentUser(req: FastifyRequest): Promise<SessionUser | null> {
+  const login = sessionLogin(req);
+  if (!login) return null;
+  if (isBuiltInLogin(login)) return { login: config.adminLogin, role: 'admin', builtIn: true };
+  const u = await users.get(login);
+  return u && !u.disabled ? { login: u.login, role: u.role, builtIn: false } : null;
 }
 
 /** Ключ тестовой ссылки анкеты: открывает предпросмотр черновика без входа в админку */
@@ -62,8 +114,17 @@ export function checkTestToken(surveyId: string, token: unknown): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-export async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  if (!isAdmin(req)) {
-    await reply.code(401).send({ error: 'Требуется вход' });
+/** Любой вошедший; наблюдатель может только читать (GET) */
+export async function requireUser(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const user = await currentUser(req);
+  if (!user) return reply.code(401).send({ error: 'Требуется вход' });
+  req.user = user;
+  if (user.role === 'viewer' && req.method !== 'GET' && !req.url.startsWith('/api/admin/me/')) {
+    return reply.code(403).send({ error: 'Недостаточно прав: у вас доступ только на просмотр' });
   }
+}
+
+/** Только администратор (пользователи, резервные копии) */
+export async function requireAdminRole(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (req.user?.role !== 'admin') return reply.code(403).send({ error: 'Только для администратора' });
 }

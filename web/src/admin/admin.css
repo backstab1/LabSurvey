@@ -495,3 +495,7 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
 .report-texts summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .report-texts ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; max-height: 260px; overflow: auto; }
 @media (max-width: 640px) { .bar-row { grid-template-columns: 1fr 70px; } .bar-track { grid-column: 1 / -1; grid-row: 2; } }
+
+/* Пользователи */
+.user-menu { font-weight: 500; }
+.readonly-note { margin-bottom: 10px; }

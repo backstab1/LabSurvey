@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { checkPassword, clearSession, isAdmin, loginBlocked, loginFailed, requireAdmin, setSession, testToken } from '../auth.ts';
-import { responses, surveys, type NotifyConfig, type SheetsConfig, type SurveyStatus } from '../db.ts';
+import {
+  authenticate, checkUserPassword, clearSession, currentUser, hashPassword, isBuiltInLogin, loginBlocked, loginFailed,
+  requireAdminRole, requireUser, setSession, testToken,
+} from '../auth.ts';
+import { responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig, type SurveyStatus } from '../db.ts';
 import { buildTable } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
 import { writeSav } from '../export/sav.ts';
@@ -46,12 +49,13 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post<{ Body: { login: string; password: string } }>('/api/admin/login', async (req, reply) => {
     const { login, password } = req.body ?? ({} as { login: string; password: string });
     if (loginBlocked(req.ip)) return reply.code(429).send({ error: 'Слишком много неудачных попыток. Подождите 15 минут.' });
-    if (!checkPassword(String(login ?? ''), String(password ?? ''))) {
+    const user = await authenticate(String(login ?? '').trim(), String(password ?? ''));
+    if (!user) {
       loginFailed(req.ip);
       return reply.code(401).send({ error: 'Неверный логин или пароль' });
     }
-    setSession(reply, login);
-    return { login };
+    setSession(reply, user.login);
+    return user;
   });
 
   app.post('/api/admin/logout', async (_req, reply) => {
@@ -59,24 +63,79 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.get('/api/admin/me', async (req) => ({ login: isAdmin(req) }));
+  app.get('/api/admin/me', async (req) => {
+    const u = await currentUser(req);
+    return u ?? { login: null };
+  });
 
   // Всё ниже — только для команды
   app.register(async (priv) => {
-    priv.addHook('preHandler', requireAdmin);
+    priv.addHook('preHandler', requireUser);
+
+    priv.post<{ Body: { current: string; next: string } }>('/api/admin/me/password', async (req, reply) => {
+      const u = req.user!;
+      if (u.builtIn) return reply.code(400).send({ error: 'Пароль главного администратора меняется в .env (ADMIN_PASSWORD)' });
+      if (!(await checkUserPassword(u.login, String(req.body?.current ?? '')))) return reply.code(400).send({ error: 'Текущий пароль неверен' });
+      const next = String(req.body?.next ?? '');
+      if (next.length < 8) return reply.code(400).send({ error: 'Новый пароль — не короче 8 символов' });
+      await users.update(u.login, { passwordHash: hashPassword(next) });
+      return { ok: true };
+    });
+
+    // ---- Пользователи (только администратор) ----
+    const ROLES: Role[] = ['admin', 'editor', 'viewer'];
+    priv.register(async (adm) => {
+      adm.addHook('preHandler', requireAdminRole);
+
+      adm.get('/api/admin/users', async () => users.list());
+
+      adm.post<{ Body: { login: string; password: string; role: Role } }>('/api/admin/users', async (req, reply) => {
+        const login = String(req.body?.login ?? '').trim();
+        const password = String(req.body?.password ?? '');
+        const role = req.body?.role;
+        if (!/^[\w.@-]{2,50}$/.test(login)) return reply.code(400).send({ error: 'Логин: 2–50 символов, латиница, цифры, _ . @ -' });
+        if (isBuiltInLogin(login) || (await users.get(login))) return reply.code(400).send({ error: 'Такой логин уже есть' });
+        if (password.length < 8) return reply.code(400).send({ error: 'Пароль — не короче 8 символов' });
+        if (!ROLES.includes(role)) return reply.code(400).send({ error: 'Роль: admin, editor или viewer' });
+        await users.create(login, hashPassword(password), role);
+        return { ok: true };
+      });
+
+      adm.put<{ Params: { login: string }; Body: { role?: Role; password?: string; disabled?: boolean } }>('/api/admin/users/:login', async (req, reply) => {
+        const u = await users.get(req.params.login);
+        if (!u) return reply.code(404).send({ error: 'Пользователь не найден' });
+        const b = req.body ?? {};
+        if (b.role !== undefined && !ROLES.includes(b.role)) return reply.code(400).send({ error: 'Роль: admin, editor или viewer' });
+        if (b.password !== undefined && String(b.password).length < 8) return reply.code(400).send({ error: 'Пароль — не короче 8 символов' });
+        if (u.login === req.user!.login && (b.disabled || (b.role && b.role !== 'admin'))) {
+          return reply.code(400).send({ error: 'Нельзя отключить себя или снять с себя права администратора' });
+        }
+        await users.update(u.login, {
+          role: b.role, disabled: b.disabled, passwordHash: b.password !== undefined ? hashPassword(String(b.password)) : undefined,
+        });
+        return { ok: true };
+      });
+
+      adm.delete<{ Params: { login: string } }>('/api/admin/users/:login', async (req, reply) => {
+        if (req.params.login.toLowerCase() === req.user!.login.toLowerCase()) return reply.code(400).send({ error: 'Нельзя удалить себя' });
+        await users.remove(req.params.login);
+        return { ok: true };
+      });
+
+      // Резервные копии базы: там все данные — только администратору
+      adm.get('/api/admin/backups', async () => ({ list: listBackups(), everyHours: config.backupHours, keep: config.backupKeep }));
+      adm.post('/api/admin/backups', async () => makeBackup());
+      adm.get<{ Params: { name: string } }>('/api/admin/backups/:name', async (req, reply) => {
+        const file = backupPath(req.params.name);
+        if (!file) return reply.code(404).send({ error: 'Копия не найдена' });
+        reply.header('Content-Type', 'application/octet-stream');
+        reply.header('Content-Disposition', attachment(req.params.name));
+        return reply.send(createReadStream(file));
+      });
+    });
 
     priv.get('/api/admin/surveys', async () => surveys.list());
 
-    // Резервные копии базы
-    priv.get('/api/admin/backups', async () => ({ list: listBackups(), everyHours: config.backupHours, keep: config.backupKeep }));
-    priv.post('/api/admin/backups', async () => makeBackup());
-    priv.get<{ Params: { name: string } }>('/api/admin/backups/:name', async (req, reply) => {
-      const file = backupPath(req.params.name);
-      if (!file) return reply.code(404).send({ error: 'Копия не найдена' });
-      reply.header('Content-Type', 'application/octet-stream');
-      reply.header('Content-Disposition', attachment(req.params.name));
-      return reply.send(createReadStream(file));
-    });
 
     priv.post<{ Body: { definition?: unknown; title?: string } }>('/api/admin/surveys', async (req, reply) => {
       const def = req.body?.definition !== undefined ? migrateSurvey(req.body.definition) : blankSurvey(req.body?.title);
@@ -111,7 +170,7 @@ export async function adminRoutes(app: FastifyInstance) {
       if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
       const v = validateSurvey(s.draft);
       if (!v.ok) return reply.code(422).send(v);
-      const version = await surveys.publish(s.id);
+      const version = await surveys.publish(s.id, req.user!.login);
       return { version };
     });
 

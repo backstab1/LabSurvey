@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api.ts';
-import { navigate } from './AdminApp.tsx';
+import { canEdit, navigate, useMe } from './AdminApp.tsx';
 import { IssuesList, Menu, Modal } from './common.tsx';
 import type { Issue } from '../../../shared/validate.ts';
 
@@ -20,6 +20,8 @@ export function SurveyList() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [backupsOpen, setBackupsOpen] = useState(false);
+  const me = useMe();
+  const editable = canEdit(me);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | Row['status'] | 'archived'>('all');
 
@@ -35,9 +37,9 @@ export function SurveyList() {
     <div className="container">
       <div className="row" style={{ marginBottom: 16 }}>
         <h1 className="grow" style={{ margin: 0, fontSize: 24 }}>Анкеты</h1>
-        <button className="btn btn-secondary" onClick={() => setBackupsOpen(true)}>Резервные копии</button>
-        <button className="btn btn-secondary" onClick={() => setImportOpen(true)}>Импорт JSON</button>
-        <button className="btn btn-primary" onClick={createBlank}>+ Новая анкета</button>
+        {me.role === 'admin' && <button className="btn btn-secondary" onClick={() => setBackupsOpen(true)}>Резервные копии</button>}
+        {editable && <button className="btn btn-secondary" onClick={() => setImportOpen(true)}>Импорт JSON</button>}
+        {editable && <button className="btn btn-primary" onClick={createBlank}>+ Новая анкета</button>}
       </div>
       {rows && (rows.length > 3 || rows.some((r) => r.archived)) && (
         <div className="row list-filters">
@@ -72,9 +74,9 @@ export function SurveyList() {
                     <Menu items={[
                       { label: 'Открыть', onClick: () => navigate(`/admin/s/${r.id}`) },
                       { label: 'Предпросмотр', onClick: () => window.open(`/s/${r.id}?preview=1&new=1`, '_blank') },
-                      { label: 'Дублировать', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/duplicate`); load(); } },
-                      { label: r.archived ? 'Вернуть из архива' : 'В архив', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/archive`, { archived: !r.archived }); load(); } },
-                      {
+                      editable && { label: 'Дублировать', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/duplicate`); load(); } },
+                      editable && { label: r.archived ? 'Вернуть из архива' : 'В архив', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/archive`, { archived: !r.archived }); load(); } },
+                      editable && {
                         label: 'Удалить', danger: true, onClick: async () => {
                           const n = Object.values(r.counts).reduce((a, b) => a + b, 0);
                           if (!window.confirm(`Удалить «${r.title}»${n ? ` и ${n} ответов` : ''}? Это нельзя отменить.`)) return;

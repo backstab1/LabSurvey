@@ -1,6 +1,6 @@
 // API прохождения опроса. Сервер — источник истины: он проверяет ответы и решает, куда идти дальше.
 import type { FastifyInstance } from 'fastify';
-import { checkTestToken, isAdmin } from '../auth.ts';
+import { checkTestToken, currentUser } from '../auth.ts';
 import { config } from '../config.ts';
 import { responses, surveys, type StoredResponse, type SurveyRow } from '../db.ts';
 import { queueResponseSync } from '../sheets.ts';
@@ -207,7 +207,7 @@ export async function respondentRoutes(app: FastifyInstance) {
       if (!s) return reply.code(404).send({ error: 'Опрос не найден' });
       // Предпросмотр черновика: команда (после входа) или тестовая ссылка
       const preview = !!req.body?.preview || !!req.body?.test;
-      if (preview && !isAdmin(req) && !checkTestToken(s.id, req.body?.test)) {
+      if (preview && !checkTestToken(s.id, req.body?.test) && !(await currentUser(req))) {
         return reply.code(401).send({ error: req.body?.test ? 'Тестовая ссылка недействительна' : 'Предпросмотр доступен только после входа в админку' });
       }
 
