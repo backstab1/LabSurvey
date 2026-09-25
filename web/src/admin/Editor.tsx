@@ -211,9 +211,9 @@ export function Editor({ id }: { id: string }) {
           <button className="icon-btn" title="Повторить (Ctrl+Shift+Z)" disabled={!hist.current.future.length} onClick={redo}>↷</button>
         </span>
         <button className="btn btn-secondary" onClick={() => preview()}>Предпросмотр</button>
-        {!readOnly && <button className="btn btn-primary" disabled={!validation.ok || !unpublished} onClick={publish}
+        {!readOnly && <button className={`btn ${unpublished ? 'btn-primary' : 'btn-secondary published-btn'}`} disabled={!validation.ok || !unpublished} onClick={publish}
           title={!validation.ok ? 'Сначала исправьте ошибки' : !unpublished ? 'Опубликованная версия совпадает с черновиком' : ''}>
-          {!info.published ? 'Опубликовать' : unpublished ? 'Опубликовать изменения' : 'Опубликовано'}
+          {!info.published ? 'Опубликовать' : unpublished ? 'Опубликовать изменения' : '✓ Опубликовано'}
         </button>}
         <Menu className="btn btn-secondary menu-trigger" items={[
           { label: 'Скопировать ссылку на опрос', onClick: () => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); } },

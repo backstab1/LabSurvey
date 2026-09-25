@@ -61,7 +61,7 @@ export function SurveyList() {
         ) : (
           <table className="table">
             <thead>
-              <tr><th>Название</th><th>Статус</th><th>Завершили</th><th>Начали</th><th>Изменена</th><th /></tr>
+              <tr><th>Название</th><th>Статус</th><th>Завершили</th><th className="wide-only">Начали</th><th className="wide-only">Изменена</th><th /></tr>
             </thead>
             <tbody>
               {rows.filter((r) => (status === 'archived' ? r.archived : !r.archived && (status === 'all' || r.status === status))
@@ -70,8 +70,8 @@ export function SurveyList() {
                   <td><strong>{r.title}</strong><div className="muted" style={{ fontSize: 13 }}>/s/{r.id}{r.version ? ` · версия ${r.version}` : ''}</div></td>
                   <td>{r.archived ? <span className="badge">В архиве</span> : <span className={`badge ${r.status}`}>{STATUS_TEXT[r.status]}</span>}</td>
                   <td>{r.counts.completed ?? 0}</td>
-                  <td>{Object.values(r.counts).reduce((a, b) => a + b, 0)}</td>
-                  <td className="muted">{new Date(r.updatedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                  <td className="wide-only">{Object.values(r.counts).reduce((a, b) => a + b, 0)}</td>
+                  <td className="muted wide-only">{new Date(r.updatedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</td>
                   <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
                     <Menu items={[
                       { label: 'Открыть', onClick: () => navigate(`/admin/s/${r.id}`) },

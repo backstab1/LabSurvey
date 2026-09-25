@@ -283,7 +283,7 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
   const showErrors = (errs: Record<string, string>) => {
     setErrors(errs);
     const first = visible.find((q) => errs[q.id]);
-    if (first) document.getElementById(`q-${first.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (first) document.getElementById(`q-${first.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const send = async (action: 'submit' | 'back' | 'finish') => {

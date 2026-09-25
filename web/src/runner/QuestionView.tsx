@@ -24,9 +24,10 @@ export function QuestionView({ q, ctx, answer, error, onChange }: Props) {
         {rich(text)}
         {!isRequired(q) && <span className="optional"> (необязательно)</span>}
       </legend>
+      {/* Ошибка — сразу под текстом вопроса: на телефоне к ней прокручивается начало вопроса, а не конец длинного списка */}
+      {error && <div className="q-error" role="alert">{error}</div>}
       {q.hint && <div className="q-hint">{rich(pipe(q.hint, ctx))}</div>}
       <Body q={q} ctx={ctx} answer={answer} onChange={onChange} />
-      {error && <div className="q-error" role="alert">{error}</div>}
     </fieldset>
   );
 }
@@ -234,7 +235,8 @@ function Scale({ q, answer, onChange }: { q: ScaleQuestion; answer?: Answer; onC
   const face = (i: number) => SMILEYS[Math.round((i / Math.max(1, points.length - 1)) * (SMILEYS.length - 1))];
   return (
     <div className="scale">
-      <div className={`scale-points ${display}`} style={{ ['--n' as string]: points.length }}>
+      <div className={`scale-points ${display}`}
+        style={{ ['--n' as string]: points.length, ['--nm' as string]: points.length > 7 ? Math.ceil(points.length / 2) : points.length }}>
         {points.map((p, i) => (
           <button type="button" key={p} aria-pressed={value === p} aria-label={labels[String(p)] ? `${p} — ${labels[String(p)]}` : String(p)}
             className={`scale-point${value === p ? ' selected' : ''}${display === 'stars' && inScale && p <= value! ? ' lit' : ''}`}
@@ -343,7 +345,7 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
         </thead>
         <tbody>
           {shownRows.map((r) => (
-            <tr key={r.code} className="fade-in" data-row={r.code}>
+            <tr key={r.code} className={`fade-in${answered(r) ? ' answered' : r.other ? '' : ' unanswered'}`} data-row={r.code}>
               <th scope="row">{rowLabel(r)}</th>
               {q.columns.map((c) => <td key={c.code}>{cell(r, c, c.text)}</td>)}
             </tr>

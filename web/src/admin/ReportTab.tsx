@@ -37,25 +37,24 @@ export function ReportTab({ info }: { info: SurveyInfo }) {
           </label>
         ))}
         <span className="grow" />
+        {!filter && (
+          <button className="btn btn-secondary btn-sm" title="Например, только мужчины или только из VK"
+            onClick={() => setFilter(defaultCondition(def))}>+ Подгруппа</button>
+        )}
         <button className="btn btn-secondary btn-sm" onClick={() => window.print()} title="Печать или сохранение в PDF">Печать / PDF</button>
         <label className="check" title="Отчёт по тестовым ответам черновика (предпросмотр, тестовое заполнение)">
           <input type="checkbox" checked={test} onChange={(e) => setTest(e.target.checked)} />Тестовые ответы
         </label>
       </div>
-      <div className="card stack report-filter">
-        {filter ? (
-          <>
-            <div className="row">
-              <strong className="grow">Подгруппа</strong>
-              <button className="btn-link" onClick={() => setFilter(undefined)}>убрать фильтр</button>
-            </div>
-            <ConditionEditor def={def} value={filter} required onChange={(c) => setFilter(c)} />
-          </>
-        ) : (
-          <button className="btn-link" style={{ alignSelf: 'flex-start', padding: 0 }}
-            onClick={() => setFilter(defaultCondition(def))}>+ Отчёт по подгруппе (например, только мужчины или только из VK)</button>
-        )}
-      </div>
+      {filter && (
+        <div className="card stack report-filter">
+          <div className="row">
+            <strong className="grow">Подгруппа</strong>
+            <button className="btn-link" onClick={() => setFilter(undefined)}>убрать фильтр</button>
+          </div>
+          <ConditionEditor def={def} value={filter} required onChange={(c) => setFilter(c)} />
+        </div>
+      )}
       {error && <div className="error-box">{error}</div>}
       {report && (
         report.total === 0 ? (

@@ -301,7 +301,6 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                 onClick={() => toggleBlock(b.id)}>{collapsed.has(b.id) ? '▸' : '▾'}</button>
               <input className="block-title-input" value={b.title ?? ''} placeholder={`Блок ${bi + 1} (без заголовка)`}
                 title="Заголовок блока — респондент видит его над вопросами блока" onChange={(e) => setBlockTitle(bi, e.target.value)} />
-              <span className="muted small mono" title="ID блока — для перехода «в начало блока»">{b.id}</span>
               {issueFor(b.id) && <span className="chip-error">{issueFor(b.id)!.message}</span>}
               <span className="grow" />
               {b.loop && (
@@ -314,6 +313,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                 </span>
               )}
               {collapsed.has(b.id) && <span className="muted small">вопросов: {b.questions.length}</span>}
+              <span className="block-id" title="ID блока — для перехода «в начало блока»">{b.id}</span>
               <Menu items={[
                 { label: collapsed.has(b.id) ? 'Развернуть' : 'Свернуть', onClick: () => toggleBlock(b.id) },
                 { label: 'Свернуть все блоки', onClick: () => setCollapsed(new Set(def.blocks.map((x) => x.id))) },

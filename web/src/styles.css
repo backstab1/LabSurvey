@@ -27,7 +27,7 @@ h1, h2, h3 { line-height: 1.25; }
 /* ---------- Общие элементы ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 44px; padding: 0 20px; border-radius: var(--radius); border: 1px solid transparent;
+  min-height: 42px; padding: 0 18px; border-radius: var(--radius); border: 1px solid transparent;
   cursor: pointer; font-weight: 600; text-decoration: none; white-space: nowrap;
 }
 .btn:disabled { opacity: .55; cursor: default; }
@@ -56,9 +56,13 @@ textarea.input { resize: vertical; }
 .question.info .q-text { font-weight: 400; }
 .q-text { font-size: 18px; font-weight: 600; margin-bottom: 12px; padding: 0; white-space: pre-line; }
 .optional { font-weight: 400; color: var(--muted); font-size: 15px; }
-.q-hint { color: var(--muted); font-size: 14px; margin: -6px 0 12px; white-space: pre-line; }
-.q-error { color: var(--danger); font-size: 14px; margin-top: 8px; font-weight: 500; }
-.has-error .options, .has-error .matrix-wrap, .has-error > .input, .has-error .scale-points { border-radius: var(--radius); box-shadow: 0 0 0 2px var(--danger-soft); }
+.q-hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; white-space: pre-line; }
+.q-text + .q-hint { margin-top: -6px; }
+.q-hint.range-hint { margin: 6px 0 0; }
+.q-error { color: var(--danger); background: var(--danger-soft); border-radius: 8px; padding: 8px 12px; font-size: 14px; margin: 0 0 12px; font-weight: 500; }
+.question { scroll-margin-top: 16px; }
+.has-error .input:not(.other-input) { border-color: var(--danger); }
+.has-error .matrix tr.unanswered th { color: var(--danger); }
 .options { display: flex; flex-direction: column; gap: 8px; }
 .option {
   display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius);
@@ -91,6 +95,7 @@ textarea.input { resize: vertical; }
 .matrix .cell-label { display: none; }
 
 .nav { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+.nav .btn { min-height: 44px; }
 .nav .btn-primary { min-width: 140px; }
 .early-finish { text-align: center; margin-top: 16px; }
 .final { text-align: center; padding: 48px 24px; }
@@ -100,9 +105,12 @@ textarea.input { resize: vertical; }
   .runner { padding: 8px 8px 32px; }
   .runner-card { padding: 20px 16px; border-radius: 12px; }
   .q-text { font-size: 17px; }
-  .nav { position: sticky; bottom: 0; background: var(--surface); padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); margin-bottom: -12px; }
+  .nav { position: sticky; bottom: 0; z-index: 4; background: var(--surface); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); margin: 0 -16px; box-shadow: 0 -1px 0 var(--border); }
+  .nav:last-child { margin-bottom: -20px; border-radius: 0 0 12px 12px; }
+  .nav .btn { min-height: 48px; }
   .nav .btn { flex: 1; }
-  .scale-points { grid-template-columns: repeat(auto-fit, minmax(40px, 1fr)); }
+  /* Длинная шкала (0–10) — в два ровных ряда вместо рваного переноса */
+  .scale-points { grid-template-columns: repeat(var(--nm, var(--n)), minmax(0, 1fr)); }
   .scale-point { min-height: 44px; }
   /* Матрица на телефоне — карточки: строка сверху, варианты списком */
   .matrix thead { display: none; }
@@ -112,6 +120,8 @@ textarea.input { resize: vertical; }
   .matrix td { padding: 0; border: 0; }
   .matrix .cell { justify-content: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px; min-height: 44px; }
   .matrix .cell.selected { background: var(--accent-soft); }
+  .matrix tr.answered { border-color: #b9cdf5; }
+  .has-error .matrix tr.unanswered { border-color: var(--danger); }
   .matrix .cell-label { display: inline; text-align: left; }
 }
 
@@ -157,6 +167,7 @@ textarea.input { resize: vertical; }
 .runner-footer a { color: inherit; }
 .q-number { font-size: 13px; font-weight: 600; color: var(--accent); margin: 0 0 6px; }
 .password-input { max-width: 280px; margin: 0 auto; display: block; text-align: center; }
+.password-input + .q-error { margin: 12px auto 0; max-width: 280px; }
 .redirect-note { text-align: left; margin-top: 16px; word-break: break-all; }
 
 /* Варианты в несколько колонок (на телефоне — одна) */
