@@ -31,6 +31,9 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
   const total = Object.values(info.counts.real).reduce((a, b) => a + b, 0);
   const minDur = (info.published ?? info.draft).settings?.minDurationSec;
 
+  // При открытии вкладки — свежие счётчики (редактор мог быть открыт давно)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { reload(); }, []);
   useEffect(() => { api<RespRow[]>('GET', `/api/admin/surveys/${info.id}/responses`).then(setRecent); }, [info.id, info.counts]);
 
   const [opts, setOpts] = useState({ from: '', to: '', timings: false, rejected: false });
