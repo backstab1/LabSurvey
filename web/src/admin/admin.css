@@ -540,3 +540,9 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
 .loop-chip { border: 0; cursor: pointer; }
 .loop-help ul { margin: 4px 0 0; padding-left: 18px; font-size: 14px; color: var(--muted); }
 .loop-help code { font-size: 12px; }
+
+/* Циклы на карте логики */
+.lblock.loop { color: #6531c4; }
+.lloop { margin-left: 10px; font-weight: 400; font-size: 12px; color: #6531c4; text-transform: none; letter-spacing: 0; }
+.lrow.in-loop { border-left: 3px solid #d9ccf5; }
+.lchip.loop { background: #f1ebfd; color: #6531c4; }

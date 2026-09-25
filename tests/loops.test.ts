@@ -175,3 +175,15 @@ test('loop structure is validated', () => {
   // Снаружи можно ссылаться на копии: FIN подставляет {{FREQ_1}}
   assert.deepEqual(validateSurvey(loopSurvey).warnings.filter((w) => /FREQ_1/.test(w.message)), []);
 });
+
+test('logic map counts loop repeats in the path length', async () => {
+  const { analyzeFlow } = await import('../shared/flow.ts');
+  const f = analyzeFlow(loopSurvey);
+  // CAT + FIN без повторов; максимум: 4 категории × 3 вопроса + 4×2 оценки марок + 4 «почему» + CAT + FIN
+  assert.equal(f.stats.minPath, 2);
+  assert.equal(f.stats.maxPath, 26);
+  assert.deepEqual(f.nodes.find((n) => n.id === 'RATE')!.repeats, { max: 8, depth: 2 });
+  assert.deepEqual(f.nodes.find((n) => n.id === 'CAT')!.loopSource, ['L_cat']);
+  assert.deepEqual(f.nodes.find((n) => n.id === 'BRAND')!.loopSource, ['L_brand']);
+  assert.ok(f.nodes.every((n) => n.reachable));
+});

@@ -3,6 +3,8 @@ import { Segmented } from './common.tsx';
 import { describeCondition } from './ConditionEditor.tsx';
 import { TYPE_ICONS } from './Builder.tsx';
 import { analyzeFlow, type FlowEdge, type FlowNode } from '../../../shared/flow.ts';
+import { describeLoop, shownTitle } from './LoopEditor.tsx';
+import { loopDepth } from '../../../shared/loops.ts';
 import type { Survey } from '../../../shared/types.ts';
 
 const LANE = 14;
@@ -118,12 +120,20 @@ export function LogicTab({ def, onOpen }: { def: Survey; onOpen: (id: string) =>
         {shown.map((n) => {
           const header = n.blockId !== lastBlock;
           lastBlock = n.blockId;
+          const block = def.blocks.find((b) => b.id === n.blockId);
+          const indent = block ? loopDepth(def, block) * 22 + (block.loop || block.parent ? 10 : 0) : 0;
           const related = hover && (hover === n.id || n.in.some((x) => x.from === hover) || flow.nodes.find((x) => x.id === hover)?.out.some((e) => e.target === n.id));
           return (
             <Fragment key={n.id}>
-              {header && <div className="lblock">{n.blockTitle || n.blockId}</div>}
-              <div data-row={n.id}
-                className={`lrow${n.reachable ? '' : ' unreachable'}${n.q.type === 'hidden' ? ' hidden-q' : ''}${related ? ' related' : ''}`}
+              {header && (
+                <div className={`lblock${block?.loop ? ' loop' : ''}`} style={indent ? { marginLeft: indent } : undefined}>
+                  {shownTitle(n.blockTitle) || n.blockId}
+                  {block?.loop && <span className="lloop">{describeLoop(def, block)}</span>}
+                  {block?.parent && !block.loop && <span className="lloop">повторяется внутри цикла «{block.parent}»</span>}
+                </div>
+              )}
+              <div data-row={n.id} style={indent ? { marginLeft: indent } : undefined}
+                className={`lrow${n.reachable ? '' : ' unreachable'}${n.q.type === 'hidden' ? ' hidden-q' : ''}${related ? ' related' : ''}${n.repeats ? ' in-loop' : ''}`}
                 onMouseEnter={() => setHover(n.id)} onMouseLeave={() => setHover(null)} onClick={() => onOpen(n.id)}>
                 <div className="lhead">
                   <span className="lnum">{n.number ?? '·'}</span>
@@ -134,7 +144,9 @@ export function LogicTab({ def, onOpen }: { def: Survey; onOpen: (id: string) =>
                 <div className="lmeta">
                   {!n.reachable && n.q.type !== 'hidden' && <span className="lchip bad">недостижим</span>}
                   {n.q.showIf && <span className="lchip cond">показ: если {describeCondition(def, n.q.showIf)}</span>}
-                  {!n.q.showIf && n.conditional && <span className="lchip cond">может быть пропущен</span>}
+                  {!n.q.showIf && n.conditional && !n.repeats && <span className="lchip cond">может быть пропущен</span>}
+                  {n.repeats && <span className="lchip loop" title="Сколько раз вопрос может повториться у одного респондента">↻ до {n.repeats.max} повтор{n.repeats.max % 10 === 1 && n.repeats.max % 100 !== 11 ? 'а' : 'ов'}</span>}
+                  {n.loopSource?.map((b) => <span key={b} className="lchip loop">источник цикла «{shownTitle(def.blocks.find((x) => x.id === b)?.title) || b}»</span>)}
                   {n.in.filter((x) => shownIds.has(x.from)).map((x, k) => (
                     <span key={`in${k}`} className="lchip in">← из {x.from}{edgeLabel(x.edge)}</span>
                   ))}

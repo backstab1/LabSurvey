@@ -143,3 +143,8 @@ export function LoopDialog({ def, block, onSave, onClose }: {
     </Modal>
   );
 }
+
+/** Заголовок для конструктора: подстановки цикла — как [элемент] */
+export function shownTitle(title: string | undefined): string {
+  return (title ?? '').replace(/\{\{\s*loop(\d?)(\.code)?\s*\}\}/g, (_m, n: string, code: string) => `[${code ? 'код ' : ''}элемент${n ? ` ур. ${n}` : ''}]`);
+}

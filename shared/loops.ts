@@ -319,7 +319,7 @@ export function loopLevelsOf(survey: Survey, questionId: string | undefined): { 
   const chain = loopChain(survey, block);
   return chain.map((b, i) => ({
     ref: i === chain.length - 1 ? 'LOOP' : `LOOP${i + 1}`,
-    label: `повтор цикла «${b.title?.replace(/\{\{[^}]*\}\}/g, '…') || b.id}»`,
+    label: `повтор цикла «${b.title?.replace(/\{\{[^}]*\}\}/g, '[элемент]') || b.id}»`,
     items: possibleItems(survey, b),
   }));
 }

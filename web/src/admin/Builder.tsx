@@ -5,7 +5,7 @@ import { describeActions } from './ActionsEditor.tsx';
 import { QuestionPreview } from './preview.tsx';
 import { Menu, toast } from './common.tsx';
 import { QUESTION_TYPE_LABELS, type Block, type LoopSpec, type Question, type QuestionType, type Survey } from '../../../shared/types.ts';
-import { LoopDialog, describeLoop } from './LoopEditor.tsx';
+import { LoopDialog, describeLoop, shownTitle } from './LoopEditor.tsx';
 import { loopChain, loopDepth } from '../../../shared/loops.ts';
 import { allIds, nextId, renameId } from '../../../shared/refactor.ts';
 import type { ValidationResult } from '../../../shared/validate.ts';
@@ -261,7 +261,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                 if (collapsed.has(b.id)) toggleBlock(b.id);
                 jumpTo(b.id);
               }}>
-                {b.title || `Блок ${bi + 1}`}
+                {shownTitle(b.title) || `Блок ${bi + 1}`}
               </button>
               {found.map((x) => (
                 <button key={x.id} className={`outline-q${issueFor(x.id) ? ' has-issue' : ''}`} title={x.text} onClick={() => {
@@ -320,7 +320,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                 { label: 'Развернуть все', onClick: () => setCollapsed(new Set()) },
                 { label: 'Цикл', onClick: () => {}, group: true },
                 { label: b.loop ? 'Настроить цикл…' : 'Повторять блок в цикле…', onClick: () => setLoopFor(b.id) },
-                ...nestTargets(def, bi).map((t) => ({ label: `Вложить в цикл «${t.title || t.id}»`, onClick: () => setBlockParent(b.id, t.id) })),
+                ...nestTargets(def, bi).map((t) => ({ label: `Вложить в цикл «${shownTitle(t.title) || t.id}»`, onClick: () => setBlockParent(b.id, t.id) })),
                 !!b.parent && { label: 'Вынести из цикла на уровень выше', onClick: () => setBlockParent(b.id, def.blocks.find((x) => x.id === b.parent)?.parent) },
                 { label: 'Порядок вопросов', onClick: () => {}, group: true },
                 { label: `${!b.order ? '✓ ' : ''}Как в конструкторе`, onClick: () => setBlockOrder(bi, undefined) },

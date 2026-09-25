@@ -1,6 +1,7 @@
 // Анализ маршрутов анкеты: переходы между вопросами, достижимость, длина анкеты.
 // Условия не вычисляются — считается, что каждое может сработать или нет.
 import { allQuestions } from './logic.ts';
+import { loopChain, possibleItems } from './loops.ts';
 import { END, SCREENOUT, type Condition, type Question, type Survey } from './types.ts';
 
 export type Outcome = 'goTo' | 'end' | 'screenout';
@@ -31,6 +32,10 @@ export interface FlowNode {
   /** После правил есть переход к следующему вопросу (нет безусловного перехода/завершения) */
   fallsThrough: boolean;
   reachable: boolean;
+  /** Вопрос внутри цикла: сколько раз может повториться (произведение по уровням) и глубина вложенности */
+  repeats?: { max: number; depth: number };
+  /** Вопрос — источник цикла для этих блоков */
+  loopSource?: string[];
 }
 
 export interface FlowIssue {
@@ -62,6 +67,21 @@ export function analyzeFlow(survey: Survey): FlowAnalysis {
   const blockStart = new Map(survey.blocks.filter((b) => b.questions.length).map((b) => [b.id, b.questions[0].id]));
   const blockOfQ = new Map<string, { id: string; title?: string }>();
   for (const b of survey.blocks) for (const q of b.questions) blockOfQ.set(q.id, { id: b.id, title: b.title });
+  // Циклы: сколько повторов возможно на каждом уровне (с учётом max)
+  const repeatsOf = new Map<string, { max: number; depth: number }>();
+  const loopSources = new Map<string, string[]>();
+  const loopIssues: FlowIssue[] = [];
+  for (const b of survey.blocks) {
+    const chain = loopChain(survey, b);
+    if (b.loop) {
+      const n = possibleItems(survey, b).length;
+      if (!n) loopIssues.push({ id: b.questions[0]?.id, level: 'warning', message: `Цикл «${b.title || b.id}»: нет ни одного возможного элемента` });
+      if (b.loop.question) loopSources.set(b.loop.question, [...(loopSources.get(b.loop.question) ?? []), b.id]);
+    }
+    if (!chain.length) continue;
+    const max = chain.reduce((m, lb) => m * Math.max(0, Math.min(possibleItems(survey, lb).length, lb.loop?.max ?? Infinity)), 1);
+    for (const q of b.questions) repeatsOf.set(q.id, { max, depth: chain.length });
+  }
 
   let n = 0;
   const nodes: FlowNode[] = questions.map((q, index) => {
@@ -86,10 +106,14 @@ export function analyzeFlow(survey: Survey): FlowAnalysis {
     const conditional = !!q.showIf || !!(q as { optionsFrom?: unknown }).optionsFrom || !!(q as { rowsFrom?: unknown }).rowsFrom
       || (q.actions?.before ?? []).some((a) => SKIP_ACTIONS.has(a.do) || a.do === 'hideOptions' || a.do === 'showOnlyOptions' || a.do === 'hideOptionsFrom');
     const block = blockOfQ.get(q.id)!;
+    const repeats = repeatsOf.get(q.id);
     return {
       id: q.id, index, q, blockId: block.id, blockTitle: block.title,
       number: q.type === 'hidden' ? null : ++n,
-      conditional, out, in: [], fallsThrough, reachable: false,
+      // Вопрос цикла может не показаться ни разу — если не выбрано ни одного элемента
+      conditional: conditional || !!repeats, out, in: [], fallsThrough, reachable: false,
+      ...(repeats ? { repeats } : {}),
+      ...(loopSources.has(q.id) ? { loopSource: loopSources.get(q.id) } : {}),
     };
   });
 
@@ -135,7 +159,9 @@ export function analyzeFlow(survey: Survey): FlowAnalysis {
   const value = (s: number | string, arr: number[], empty: number) => (s === END ? 0 : s === SCREENOUT ? empty : arr[s as number]);
   for (let i = nodes.length - 1; i >= 0; i--) {
     const node = nodes[i];
+    // В максимуме вопрос цикла считается столько раз, сколько может повториться
     const cost = node.q.type === 'hidden' ? 0 : 1;
+    const maxCost = node.q.type === 'hidden' ? 0 : node.repeats?.max ?? 1;
     const shownSucc: (number | string)[] = [];
     for (const e of node.out) {
       if (e.backward) continue;
@@ -146,7 +172,7 @@ export function analyzeFlow(survey: Survey): FlowAnalysis {
     let mx = -INF;
     for (const s of shownSucc) {
       mn = Math.min(mn, cost + value(s, minTo, INF));
-      mx = Math.max(mx, cost + value(s, maxTo, -INF));
+      mx = Math.max(mx, maxCost + value(s, maxTo, -INF));
     }
     // Вопрос может быть не показан — тогда сразу к следующему
     if (node.conditional || node.q.type === 'hidden') {
@@ -157,7 +183,7 @@ export function analyzeFlow(survey: Survey): FlowAnalysis {
     maxTo[i] = mx;
   }
 
-  const issues: FlowIssue[] = [];
+  const issues: FlowIssue[] = [...loopIssues];
   for (const node of nodes) {
     if (!node.reachable && node.q.type !== 'hidden') {
       issues.push({ id: node.id, level: 'warning', message: 'До вопроса нельзя дойти: все пути ведут мимо него' });
