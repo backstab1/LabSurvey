@@ -1,3 +1,4 @@
+import { ImageField } from './ImageField.tsx';
 import type { ReactNode } from 'react';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
 import { compact } from './common.tsx';
@@ -90,7 +91,7 @@ export function SettingsTab({ def, onChange }: { def: Survey; onChange: (d: Surv
       <div className="card stack" id="set-design">
         <h2>Оформление</h2>
         <div className="grid2">
-          {text('logoUrl', 'Логотип (адрес картинки)', { placeholder: 'https://…/logo.png', mono: true })}
+          <ImageField label="Логотип над опросом" value={def.settings?.logoUrl} onChange={(logoUrl) => setSettings({ logoUrl })} />
           <label className="field"><span>Основной цвет</span>
             <div className="row" style={{ gap: 8 }}>
               <input type="color" className="color-input" value={st.accentColor ?? '#2f6fed'} onChange={(e) => setSettings({ accentColor: e.target.value })} />

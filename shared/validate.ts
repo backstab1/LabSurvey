@@ -243,6 +243,14 @@ export function validateSurvey(input: unknown): ValidationResult {
     }
   }
 
+  if (s.images !== undefined) {
+    if (!Array.isArray(s.images)) err('images', 'Ожидается массив {url, name}');
+    else s.images.forEach((im, i) => {
+      if (!isObj(im) || typeof im.url !== 'string' || !/^(https?:\/\/|\/)\S+$/i.test(im.url)) err('images', `[${i + 1}]: url — адрес картинки https://… или /media/…`);
+      else if (typeof im.name !== 'string') err('images', `[${i + 1}]: name — строка`);
+    });
+  }
+
   // Квоты: условия могут ссылаться на любые вопросы и параметры ссылки
   if (s.quotas !== undefined) {
     if (!Array.isArray(s.quotas)) err('quotas', 'Ожидается массив');
@@ -443,7 +451,7 @@ const TEXT_SETTINGS = [
   'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'closedMessage', 'overquotaMessage', 'timeoutMessage', 'password', 'footerText',
   'nextLabel', 'backLabel', 'submitLabel', 'earlyFinishLabel',
 ];
-const URL_SETTINGS = ['redirectComplete', 'redirectScreenout', 'redirectEarlyFinish', 'redirectOverquota', 'logoUrl'];
+const URL_SETTINGS = ['redirectComplete', 'redirectScreenout', 'redirectEarlyFinish', 'redirectOverquota'];
 
 function validateSettings(st: Record<string, unknown>, err: (w: string, m: string) => void, warn: (w: string, m: string) => void) {
   const w = (k: string) => `settings.${k}`;
@@ -453,6 +461,8 @@ function validateSettings(st: Record<string, unknown>, err: (w: string, m: strin
     if (st[k] === undefined) continue;
     if (typeof st[k] !== 'string' || !/^https?:\/\/\S+$/i.test(st[k] as string)) err(w(k), 'Адрес должен начинаться с http:// или https://');
   }
+  // Логотип — ссылка или картинка, загруженная в SurveyLAB (/media/…)
+  if (st.logoUrl !== undefined && (typeof st.logoUrl !== 'string' || !/^(https?:\/\/|\/)\S+$/i.test(st.logoUrl))) err(w('logoUrl'), 'Адрес картинки https://… или /media/…');
   for (const k of ['openFrom', 'closeAt']) {
     if (st[k] !== undefined && (typeof st[k] !== 'string' || isNaN(Date.parse(st[k] as string)))) err(w(k), 'Ожидается дата и время (ISO 8601)');
   }

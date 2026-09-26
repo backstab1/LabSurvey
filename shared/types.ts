@@ -565,7 +565,16 @@ export interface Survey {
   /** Свои стили для страницы опроса */
   css?: string;
   scripts?: SurveyScripts;
+  /** Библиотека изображений анкеты: загружены один раз, выбираются в вариантах, уровнях, клике по картинке, логотипе */
+  images?: SurveyImage[];
   blocks: Block[];
+}
+
+export interface SurveyImage {
+  /** Адрес: /media/… (загружено в SurveyLAB) или https://… */
+  url: string;
+  /** Подпись для команды */
+  name: string;
 }
 
 // ---- Ответы ----

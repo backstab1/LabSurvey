@@ -1,3 +1,4 @@
+import { ImageField } from './ImageField.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { Flag, Modal, Segmented, compact } from './common.tsx';
 import { allQuestions } from '../../../shared/logic.ts';
@@ -183,7 +184,7 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
                       {o.shared && <span className="mark">на всю таблицу</span>}
                       {o.fixed && <span className="mark" title="Не подлежит рандомизации">📌</span>}
                       {o.hidden && <span className="mark">скрыт</span>}
-                      {o.image && <span className="mark" title={o.image}>🖼</span>}
+                      {o.image && <img className="list-thumb" src={o.image} alt="" title="Картинка" />}
                       {o.score !== undefined && <span className="mark" title="Баллы">{o.score} б.</span>}
                     </span>
                     <span className="list-tools" onClick={(e) => e.stopPropagation()}>
@@ -239,10 +240,9 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
                             </label>
                           )}
                           {features.image && (
-                            <label className="field list-image-field"><span>Картинка (https://…)</span>
-                              <input className="input mono" value={o.image ?? ''} placeholder="необязательно"
-                                onChange={(e) => setAt(i, { image: e.target.value.trim() || undefined })} />
-                            </label>
+                            <div className="list-image-field">
+                              <ImageField value={o.image} onChange={(image) => setAt(i, { image })} />
+                            </div>
                           )}
                         </div>
                       ) : (

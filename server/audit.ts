@@ -44,6 +44,7 @@ const RULES: Record<string, Rule> = {
   },
   'DELETE /api/admin/users/:login': { action: 'Удалил пользователя', target: (req) => ['user', p(req, 'login')] },
   'POST /api/admin/backups': { action: 'Сделал резервную копию' },
+  'POST /api/admin/media': { action: 'Загрузил картинку', details: (_r, res) => ({ file: res?.url }) },
   'GET /api/admin/backups/:name': { action: 'Скачал резервную копию', details: (req) => ({ file: p(req, 'name') }) },
 
   'POST /api/admin/surveys': { action: 'Создал анкету', target: created('survey') },

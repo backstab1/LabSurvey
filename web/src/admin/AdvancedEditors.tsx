@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react';
 import { Modal, NumField, Segmented, compact } from './common.tsx';
 import { OptionsListDialog } from './OptionsListDialog.tsx';
+import { ImageField } from './ImageField.tsx';
 import { conjointDesignCheck, conjointShape, maxdiffShape, type DesignCheck } from '../../../shared/choiceDesign.ts';
 import type { ConjointAttribute, ConjointQuestion, FileQuestion, HotspotQuestion, MaxDiffQuestion, Option, SliderQuestion } from '../../../shared/types.ts';
 
@@ -66,9 +67,7 @@ export function HotspotBody({ q, set }: { q: HotspotQuestion; set: (p: Patch) =>
 
   return (
     <div className="stack" style={{ gap: 10 }}>
-      <label className="field"><span>Картинка (адрес https://…)</span>
-        <input className="input" placeholder="https://…/pack.png" value={q.image} onChange={(e) => set({ image: e.target.value.trim() })} />
-      </label>
+      <ImageField label="Картинка, на которой отмечают области" value={q.image || undefined} onChange={(image) => set({ image: image ?? '' })} />
       {q.image ? (
         <>
           <p className="muted small" style={{ margin: 0 }}>Обведите мышью область на картинке — появится вариант ответа. Области невидимы для респондента, если не включить «Показывать границы».</p>

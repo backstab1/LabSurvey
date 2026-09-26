@@ -6,11 +6,13 @@ import { SettingsTab } from './SettingsTab.tsx';
 import { LogicTab } from './LogicTab.tsx';
 import { IssuesList, Menu, Modal, toast } from './common.tsx';
 import { canEdit, navigate, useMe } from './AdminApp.tsx';
-import { publishState } from './SurveyList.tsx';
 import { NewProjectModal } from './ProjectPage.tsx';
 import { validateSurvey } from '../../../shared/validate.ts';
+import { imageLibrary } from '../../../shared/images.ts';
+import { ImageLibraryContext } from './ImageField.tsx';
+import { ImagesTab } from './ImagesTab.tsx';
 import { analyzeFlow } from '../../../shared/flow.ts';
-import { PROJECT_STATUS_LABELS, type ProjectStatus, type Survey } from '../../../shared/types.ts';
+import { type ProjectStatus, type Survey } from '../../../shared/types.ts';
 
 export interface SurveyInfo {
   id: string;
@@ -24,7 +26,7 @@ export interface SurveyInfo {
   projects: { id: string; title: string; status: ProjectStatus }[];
 }
 
-type Tab = 'builder' | 'logic' | 'json' | 'settings';
+type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'images';
 type SaveState = 'saved' | 'pending' | 'saving' | 'error';
 
 const SAVE_TEXT: Record<SaveState, string> = {
@@ -39,7 +41,7 @@ export function Editor({ id }: { id: string }) {
   const [def, setDef] = useState<Survey | null>(null);
   const [tab, setTab] = useState<Tab>(() => {
     const t = new URLSearchParams(window.location.search).get('tab') as Tab;
-    return ['builder', 'logic', 'json', 'settings'].includes(t) ? t : 'builder';
+    return ['builder', 'logic', 'json', 'settings', 'images'].includes(t) ? t : 'builder';
   });
   const [save, setSave] = useState<SaveState>('saved');
   const [showIssues, setShowIssues] = useState(false);
@@ -178,13 +180,13 @@ export function Editor({ id }: { id: string }) {
   };
 
   const unpublished = !info.published || JSON.stringify(info.published) !== JSON.stringify(def);
-  const ps = publishState({ version: info.version, unpublished });
   const changeTab = (t: Tab) => {
     setTab(t);
     const u = new URL(window.location.href);
     u.searchParams.set('tab', t);
     window.history.replaceState(null, '', u);
   };
+  const library = imageLibrary(def);
   const errs = validation.errors.length;
   const warns = validation.warnings.length;
 
@@ -194,7 +196,7 @@ export function Editor({ id }: { id: string }) {
         <button className="icon-btn back" title="Все анкеты" onClick={() => navigate('/admin/surveys')}>←</button>
         <input className="title-input" value={def.title} placeholder="Название анкеты" aria-label="Название анкеты"
           onChange={(e) => update({ ...def, title: e.target.value })} />
-        {info.archived ? <span className="badge">В архиве</span> : <span className={`badge ${ps.cls}`}>{ps.text}</span>}
+        {info.archived && <span className="badge">В архиве</span>}
         <span className={`save-state ${save}`} onClick={save === 'error' ? () => flush() : undefined}>{SAVE_TEXT[save]}</span>
         <span className="grow" />
         <span className="undo-group">
@@ -231,15 +233,10 @@ export function Editor({ id }: { id: string }) {
       {readOnly && <div className="warn-box readonly-note">Режим просмотра: изменения не сохраняются. Предпросмотр доступен.</div>}
       <div className="tabs-row">
         <div className="tabs">
-          {([['builder', 'Конструктор'], ['logic', 'Логика'], ['json', 'JSON'], ['settings', 'Настройки анкеты']] as [Tab, string][]).map(([t, label]) => (
+          {([['builder', 'Конструктор'], ['logic', 'Логика'], ['json', 'JSON'], ['settings', 'Настройки анкеты'], ['images', 'Изображения']] as [Tab, string][]).map(([t, label]) => (
             <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => changeTab(t)}>{label}</button>
           ))}
         </div>
-        {info.projects.map((p) => (
-          <button key={p.id} className="link-chip" title="Открыть проект: сбор, квоты, данные и отчёт" onClick={() => navigate(`/admin/p/${p.id}`)}>
-            Проект «{p.title}» · {PROJECT_STATUS_LABELS[p.status].toLowerCase()} →
-          </button>
-        ))}
         {!info.projects.length && !readOnly && (
           <button className="link-chip" title="Проект — запуск анкеты: сбор, квоты, данные и отчёт" onClick={() => setNewProject(true)}>+ Запустить в проекте</button>
         )}
@@ -256,10 +253,13 @@ export function Editor({ id }: { id: string }) {
         </div>
       )}
 
+      <ImageLibraryContext.Provider value={library}>
       {tab === 'builder' && <Builder def={def} onChange={update} issues={validation} focus={focus} onPreview={preview} />}
       {tab === 'logic' && <LogicTab def={def} onOpen={(qid) => { changeTab('builder'); setFocus({ where: qid, n: Date.now() }); }} />}
       {tab === 'json' && <JsonTab def={def} onChange={update} />}
       {tab === 'settings' && <SettingsTab def={def} onChange={update} />}
+      {tab === 'images' && <ImagesTab def={def} onChange={update} readOnly={readOnly} />}
+      </ImageLibraryContext.Provider>
       {newProject && <NewProjectModal surveyId={id} onClose={() => setNewProject(false)} />}
       {showVersions && (
         <VersionsModal id={id} current={info.version} onClose={() => setShowVersions(false)}

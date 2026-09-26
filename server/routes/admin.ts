@@ -11,6 +11,7 @@ import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
 import { simulate } from '../simulate.ts';
 import { dailyStats } from '../daily.ts';
+import { MEDIA_MAX_MB, saveMedia } from '../media.ts';
 import { IMAGE_EXT, MIME, removeUploads, uploadPath } from '../uploads.ts';
 import { designTable } from '../../shared/designExport.ts';
 import { findQuestion } from '../../shared/logic.ts';
@@ -180,6 +181,17 @@ export async function adminRoutes(app: FastifyInstance) {
         reply.header('Content-Disposition', attachment(req.params.name));
         return reply.send(createReadStream(file));
       });
+    });
+
+    // ---- Картинки анкет: загружает команда, видят респонденты (/media/…) ----
+    priv.addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: MEDIA_MAX_MB * 1024 * 1024 + 1024 }, (_req, body, done) => done(null, body));
+    priv.post<{ Body: Buffer }>('/api/admin/media', async (req, reply) => {
+      const buf = req.body;
+      if (!Buffer.isBuffer(buf) || !buf.length) return reply.code(400).send({ error: 'Пустой файл' });
+      if (buf.length > MEDIA_MAX_MB * 1024 * 1024) return reply.code(413).send({ error: `Картинка больше ${MEDIA_MAX_MB} МБ` });
+      const id = saveMedia(buf);
+      if (!id) return reply.code(415).send({ error: 'Нужна картинка JPG, PNG, WEBP или GIF' });
+      return { url: `/media/${id}` };
     });
 
     // ================= Анкеты (конструктор) =================
