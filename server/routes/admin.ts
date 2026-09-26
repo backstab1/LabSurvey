@@ -3,7 +3,7 @@ import {
   authenticate, checkUserPassword, clearSession, currentUser, hashPassword, isBuiltInLogin, loginBlocked, loginFailed,
   requireAdminRole, requireUser, setSession, testToken,
 } from '../auth.ts';
-import { audit, oauth, projects, responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig } from '../db.ts';
+import { audit, invitees, oauth, projects, responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig } from '../db.ts';
 import { defFor, loadProject } from '../projectCtx.ts';
 import { buildTable, cellToText } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
@@ -20,7 +20,7 @@ import { createReadStream } from 'node:fs';
 import { config } from '../config.ts';
 import { validatePanels, validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
-import { PANEL_PARAM, PROJECT_SETTING_KEYS, effectiveSurvey, type Condition, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey } from '../../shared/types.ts';
+import { PANEL_PARAM, PROJECT_SETTING_KEYS, RESERVED_PARAMS, effectiveSurvey, type Condition, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey } from '../../shared/types.ts';
 import { evalCondition } from '../../shared/logic.ts';
 import { expandAllLoops } from '../../shared/loops.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
@@ -317,6 +317,7 @@ export async function adminRoutes(app: FastifyInstance) {
         sheets: p.sheets, notify: p.notify, counts: await responses.counts(p.id),
         sheetsAccount: sheetsStatus(), testToken: testToken(p.id), telegramConfigured: telegramConfigured(),
         daily: dailyStats(await responses.timeline(p.id)),
+        invitees: await invitees.count(p.id),
         createdAt: p.createdAt, updatedAt: p.updatedAt,
       };
       if (req.user!.role !== 'client') return info;
@@ -424,6 +425,48 @@ export async function adminRoutes(app: FastifyInstance) {
       if (!r || r.projectId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
       await responses.update(r.id, { rejected: !!req.body?.rejected });
       resetQuotas(req.params.id);
+      return { ok: true };
+    });
+
+    // ---- Персональные ссылки ----
+    const MAX_INVITEES = 20_000;
+    const FIELD_KEY = /^[A-Za-z][\w.-]{0,49}$/;
+
+    priv.get<{ Params: { id: string } }>('/api/admin/projects/:id/invitees', async (req, reply) => {
+      if (!(await projects.get(req.params.id))) return reply.code(404).send({ error: 'Проект не найден' });
+      return invitees.list(req.params.id);
+    });
+
+    priv.post<{ Params: { id: string }; Body: { people?: { extId?: unknown; fields?: unknown }[] } }>('/api/admin/projects/:id/invitees', async (req, reply) => {
+      if (!(await projects.get(req.params.id))) return reply.code(404).send({ error: 'Проект не найден' });
+      const list = req.body?.people;
+      if (!Array.isArray(list) || !list.length) return reply.code(400).send({ error: 'Список пуст' });
+      if ((await invitees.count(req.params.id)) + list.length > MAX_INVITEES) return reply.code(400).send({ error: `В проекте может быть не больше ${MAX_INVITEES} человек` });
+      const people: { extId: string | null; fields: Record<string, string> }[] = [];
+      for (const [i, p] of list.entries()) {
+        const fields: Record<string, string> = {};
+        const raw = p?.fields && typeof p.fields === 'object' ? Object.entries(p.fields as Record<string, unknown>) : [];
+        if (raw.length > 30) return reply.code(400).send({ error: `Строка ${i + 1}: не больше 30 столбцов` });
+        for (const [k, v] of raw) {
+          if (!FIELD_KEY.test(k) || RESERVED_PARAMS.includes(k) || k === 'panel' || k === 'inv_id') {
+            return reply.code(400).send({ error: `Столбец «${k}»: латиница, цифры, _ . -, начинается с буквы; нельзя ${RESERVED_PARAMS.join(', ')}, panel, inv_id` });
+          }
+          if (v !== undefined && v !== null && String(v).trim() !== '') fields[k] = String(v).trim().slice(0, 300);
+        }
+        const extId = p?.extId === undefined || p.extId === null || String(p.extId).trim() === '' ? null : String(p.extId).trim().slice(0, 100);
+        people.push({ extId, fields });
+      }
+      return invitees.add(req.params.id, people);
+    });
+
+    priv.post<{ Params: { id: string }; Body: { ids?: number[]; all?: boolean } }>('/api/admin/projects/:id/invitees/delete', async (req, reply) => {
+      const ids = req.body?.all ? 'all' as const : Array.isArray(req.body?.ids) ? req.body.ids.filter((x) => Number.isInteger(x)) : null;
+      if (!ids) return reply.code(400).send({ error: 'Укажите ids или all' });
+      return { deleted: await invitees.remove(req.params.id, ids) };
+    });
+
+    priv.post<{ Params: { id: string; iid: string } }>('/api/admin/projects/:id/invitees/:iid/reissue', async (req) => {
+      await invitees.reissue(req.params.id, Number(req.params.iid));
       return { ok: true };
     });
 

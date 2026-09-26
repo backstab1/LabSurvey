@@ -2,7 +2,7 @@
 import type { FastifyInstance } from 'fastify';
 import { checkTestToken, currentUser } from '../auth.ts';
 import { config } from '../config.ts';
-import { responses, surveys, type StoredResponse, type SurveyRow } from '../db.ts';
+import { invitees, responses, surveys, type Invitee, type StoredResponse, type SurveyRow } from '../db.ts';
 import { defFor, loadProject, type Loaded } from '../projectCtx.ts';
 import { queueResponseSync } from '../sheets.ts';
 import { fullQuota, noteCompleted } from '../quotas.ts';
@@ -12,7 +12,7 @@ import {
 } from '../../shared/logic.ts';
 import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
 import { expandAllLoops, withLoops } from '../../shared/loops.ts';
-import { END, PANEL_PARAM, SCREENOUT, settingsOf, type Answer, type Panel, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
+import { END, INVITE_PARAM, PANEL_PARAM, RESERVED_PARAMS as RESERVED, SCREENOUT, settingsOf, type Answer, type Panel, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
 
 export interface RunnerState {
@@ -40,7 +40,7 @@ const isTeam = async (req: Parameters<typeof currentUser>[0]) => {
   return !!u && u.role !== 'client';
 };
 
-const RESERVED_PARAMS = new Set(['preview', 'new', 'rid', 'test', 'survey', 'start']);
+const RESERVED_PARAMS = new Set(RESERVED);
 
 function cleanParams(raw: unknown): Record<string, string> {
   const out: Record<string, string> = {};
@@ -321,11 +321,25 @@ export async function respondentRoutes(app: FastifyInstance) {
         }
       }
 
+      // Персональная ссылка: один человек — одна анкета; начатую продолжаем с любого устройства
+      let invitee: Invitee | null = null;
+      const invToken = !preview && t.projectId ? String((req.body?.params as Record<string, unknown> | undefined)?.[INVITE_PARAM] ?? '').slice(0, 64) : '';
+      if (invToken && t.projectId) {
+        invitee = await invitees.byToken(t.projectId, invToken);
+        const title = (t.loaded?.live ?? s.draft).title;
+        if (!invitee) return { closed: true, title, message: 'Ссылка недействительна. Откройте её из приглашения целиком или попросите новую.' };
+        if (invitee.responseId) {
+          const prev = await load(t.projectId, invitee.responseId);
+          if (prev?.r.status === 'in_progress') return stateOf(prev.survey, prev.r, prev.panels);
+          if (prev) return { closed: true, title, message: 'Вы уже прошли этот опрос. Спасибо!' };
+        }
+      }
+
       const draftDef = definitionFor(t, true)!;
       // Предпросмотр с выбранного вопроса — всегда новая сессия
       const startAt = preview && req.body?.startAt && findPage(draftDef, req.body.startAt) ? req.body.startAt : null;
 
-      if (req.body?.rid && !startAt) {
+      if (req.body?.rid && !startAt && !invitee) {
         const loaded = await load(req.params.id, req.body.rid);
         if (loaded && loaded.r.isTest === preview) {
           const done = loaded.r.status !== 'in_progress';
@@ -336,7 +350,10 @@ export async function respondentRoutes(app: FastifyInstance) {
       }
 
       const survey = definitionFor(t, preview)!;
-      const params = cleanParams(req.body?.params);
+      // Поля из списка важнее параметров в адресе: их нельзя подменить
+      const params = invitee
+        ? { ...cleanParams(req.body?.params), ...invitee.fields, ...(invitee.extId ? { inv_id: invitee.extId } : {}) }
+        : cleanParams(req.body?.params);
       const panels = t.loaded?.project.panels ?? [];
       const panel = panelOf(panels, params);
       let panelFull = false;
@@ -344,6 +361,9 @@ export async function respondentRoutes(app: FastifyInstance) {
         const projectId = t.projectId;
         const st = settingsOf(survey);
         if (panel?.closed) return { closed: true, title: survey.title, message: st.closedMessage };
+        if (st.inviteOnly && !invitee) {
+          return { closed: true, title: survey.title, message: 'Опрос доступен только по персональной ссылке из приглашения.' };
+        }
         // Панель с ID респондента: один ответ на ID внутри панели, начатую анкету продолжаем
         if (panel?.idParam) {
           const value = params[panel.idParam];
@@ -396,6 +416,7 @@ export async function respondentRoutes(app: FastifyInstance) {
         currentPage: null, params, ip: req.ip ?? null, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 500) || null,
         startedAt: new Date().toISOString(),
       });
+      if (invitee) await invitees.attach(invitee.id, created.id);
       const startCtx = ctxOf(survey, created, cleanAnswers(ctxOf(survey, created, initial), []));
       const first = startAt ?? firstPage(startCtx);
       // Лимит панели набран — сразу «Сверх квоты» (с редиректом панели); квоты по параметрам ссылки проверяются сразу

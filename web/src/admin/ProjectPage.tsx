@@ -3,6 +3,7 @@ import { api, ApiError } from '../api.ts';
 import { canEdit, isClient, navigate, useMe } from './AdminApp.tsx';
 import { DataTab } from './DataTab.tsx';
 import { ReportTab } from './ReportTab.tsx';
+import { InviteesTab } from './InviteesTab.tsx';
 import { ConditionField } from './ConditionEditor.tsx';
 import { Menu, Modal, compact, toast } from './common.tsx';
 import { nextId } from '../../../shared/refactor.ts';
@@ -37,6 +38,8 @@ export interface ProjectInfo {
   telegramConfigured: boolean;
   /** Динамика по дням (последние 60 дней с первой анкеты) */
   daily: DayStat[];
+  /** Сколько человек в списке персональных ссылок */
+  invitees: number;
 }
 
 export interface DayStat { day: string; started: number; completed: number; screenedOut: number; overquota: number }
@@ -182,9 +185,9 @@ export function NewProjectModal({ onClose, surveyId }: { onClose: () => void; su
 
 // ======================= Страница проекта =======================
 
-type Tab = 'overview' | 'panels' | 'quotas' | 'data' | 'report' | 'settings';
+type Tab = 'overview' | 'panels' | 'invitees' | 'quotas' | 'data' | 'report' | 'settings';
 const TABS: [Tab, string][] = [
-  ['overview', 'Сводка'], ['panels', 'Панели'], ['quotas', 'Квоты'], ['data', 'Данные'], ['report', 'Отчёт'], ['settings', 'Настройки сбора'],
+  ['overview', 'Сводка'], ['panels', 'Панели'], ['invitees', 'Список'], ['quotas', 'Квоты'], ['data', 'Данные'], ['report', 'Отчёт'], ['settings', 'Настройки сбора'],
 ];
 /** Заказчику — только результаты */
 const CLIENT_TABS: Tab[] = ['overview', 'report', 'data'];
@@ -266,6 +269,7 @@ export function ProjectPage({ id }: { id: string }) {
             <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => changeTab(t)}>
               {label}{t === 'quotas' && info.quotaDefs.length > 0 && <span className="tab-count">{info.quotaDefs.length}</span>}
               {t === 'panels' && info.panels.length > 0 && <span className="tab-count">{info.panels.length}</span>}
+              {t === 'invitees' && info.invitees > 0 && <span className="tab-count">{info.invitees}</span>}
             </button>
           ))}
         </div>
@@ -278,6 +282,7 @@ export function ProjectPage({ id }: { id: string }) {
 
       {tab === 'overview' && <Overview info={info} readOnly={readOnly} client={client} setStatus={setStatus} reload={reload} onTab={changeTab} />}
       {tab === 'panels' && <PanelsTab info={info} readOnly={readOnly} reload={reload} />}
+      {tab === 'invitees' && <InviteesTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'quotas' && <QuotasTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
       {tab === 'report' && <ReportTab info={info} />}

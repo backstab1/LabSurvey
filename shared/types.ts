@@ -426,6 +426,8 @@ export interface SurveySettings {
   allowRetake?: boolean;
   /** Один ответ на значение параметра ссылки (например, pid панелиста); без параметра опрос не открывается */
   uniqueParam?: string;
+  /** Только по персональным ссылкам из списка проекта — общая ссылка не работает */
+  inviteOnly?: boolean;
   /** Не больше N новых анкет с одного IP за час (защита от накрутки) */
   maxStartsPerIpHour?: number;
   /** Завершённые быстрее N секунд помечаются как «спидеры» (переменная speeder в выгрузке) */
@@ -553,8 +555,13 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 
 /** Настройки сбора: живут в проекте и накладываются на настройки анкеты */
 export const PROJECT_SETTING_KEYS = [
-  'openFrom', 'closeAt', 'maxResponses', 'password', 'allowRetake', 'uniqueParam', 'maxStartsPerIpHour', 'minDurationSec',
+  'openFrom', 'closeAt', 'maxResponses', 'password', 'allowRetake', 'uniqueParam', 'maxStartsPerIpHour', 'minDurationSec', 'inviteOnly',
 ] as const;
+
+/** Параметр персональной ссылки: /s/<проект>?inv=<ключ>. В ответ не сохраняется — вместо него поля из списка и inv_id */
+export const INVITE_PARAM = 'inv';
+/** Параметры ссылки, которые занимает сам опрос */
+export const RESERVED_PARAMS = ['preview', 'new', 'rid', 'test', 'survey', 'start', INVITE_PARAM];
 export type ProjectSettings = Pick<SurveySettings, (typeof PROJECT_SETTING_KEYS)[number]>;
 
 /**

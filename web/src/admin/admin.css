@@ -723,3 +723,7 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .daily-key.started { background: #d7e2f7; }
 .badge.ai { background: #efe7fb; color: #6b3fb5; margin-left: 6px; font-size: 11px; }
 .badge.suspect { background: #fff1d6; color: #8a5a00; margin-left: 6px; }
+.badge.inv-none { background: #eef0f3; color: #5b6472; }
+.badge.inv-started { background: #fff1d6; color: #8a5a00; }
+.badge.inv-completed { background: #e3f5e8; color: #1c7c3a; }
+.badge.inv-screened_out, .badge.inv-overquota, .badge.inv-terminated { background: #f3e8e8; color: #9b3434; }

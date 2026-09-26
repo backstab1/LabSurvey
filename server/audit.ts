@@ -81,6 +81,13 @@ const RULES: Record<string, Rule> = {
       return { statuses: q.statuses ?? 'completed', ...(q.test === '1' ? { test: true } : {}), ...(q.panel ? { panel: q.panel } : {}), ...(q.from || q.to ? { period: `${q.from ?? ''}…${q.to ?? ''}` } : {}) };
     },
   },
+  'POST /api/admin/projects/:id/invitees': {
+    action: 'Добавил людей в список', target: project(), details: (_r, res) => ({ added: res?.added, skipped: res?.skipped }),
+  },
+  'POST /api/admin/projects/:id/invitees/delete': {
+    action: (req) => (req.body?.all ? 'Очистил список' : 'Удалил людей из списка'), target: project(), details: (_r, res) => ({ deleted: res?.deleted }),
+  },
+  'POST /api/admin/projects/:id/invitees/:iid/reissue': { action: 'Выдал новую персональную ссылку', target: project(), details: (req) => ({ invitee: p(req, 'iid') }) },
   'PUT /api/admin/projects/:id/notify': { action: 'Настроил уведомления', target: project() },
   'PUT /api/admin/projects/:id/sheets': { action: 'Настроил Google Sheets', target: project() },
   'POST /api/admin/projects/:id/sheets/sync': { action: 'Синхронизировал Google Sheets', target: project() },

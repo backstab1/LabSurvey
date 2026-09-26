@@ -867,3 +867,96 @@ export const audit = {
     return (db.prepare('SELECT DISTINCT login FROM audit WHERE login IS NOT NULL ORDER BY login').all() as Row[]).map((r) => r.login as string);
   },
 };
+
+// ---- Персональные ссылки: список приглашённых проекта ----
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invitees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    ext_id TEXT,
+    fields TEXT NOT NULL DEFAULT '{}',
+    response_id TEXT,
+    opened_at TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS invitees_project ON invitees(project_id);
+`);
+
+export interface Invitee {
+  id: number;
+  projectId: string;
+  token: string;
+  /** ID из списка (табельный номер, ID клиента) */
+  extId: string | null;
+  /** Остальные столбцы списка: имя, e-mail, отдел… — становятся параметрами ответа */
+  fields: Record<string, string>;
+  responseId: string | null;
+  openedAt: string | null;
+  createdAt: string;
+  /** Статус анкеты по ссылке (из ответа) */
+  status: ResponseStatus | null;
+  rejected: boolean;
+  completedAt: string | null;
+}
+
+const toInvitee = (r: Row): Invitee => ({
+  id: r.id as number, projectId: r.project_id as string, token: r.token as string, extId: (r.ext_id as string) ?? null,
+  fields: JSON.parse(r.fields as string), responseId: (r.response_id as string) ?? null, openedAt: (r.opened_at as string) ?? null,
+  createdAt: r.created_at as string, status: (r.status as ResponseStatus) ?? null, rejected: r.rejected === 1,
+  completedAt: (r.completed_at as string) ?? null,
+});
+
+const INVITEE_SELECT = `SELECT i.*, r.status, r.rejected, r.completed_at FROM invitees i LEFT JOIN responses r ON r.id = i.response_id`;
+
+export const invitees = {
+  async list(projectId: string): Promise<Invitee[]> {
+    return (db.prepare(`${INVITEE_SELECT} WHERE i.project_id = ? ORDER BY i.id`).all(projectId) as Row[]).map(toInvitee);
+  },
+  async byToken(projectId: string, token: string): Promise<Invitee | null> {
+    const r = db.prepare(`${INVITEE_SELECT} WHERE i.project_id = ? AND i.token = ?`).get(projectId, token) as Row | undefined;
+    return r ? toInvitee(r) : null;
+  },
+  /** Добавить людей; ext_id не повторяется внутри проекта — повторы пропускаются */
+  async add(projectId: string, people: { extId: string | null; fields: Record<string, string> }[]): Promise<{ added: number; skipped: number }> {
+    const existing = new Set((db.prepare('SELECT ext_id FROM invitees WHERE project_id = ? AND ext_id IS NOT NULL').all(projectId) as Row[])
+      .map((r) => String(r.ext_id).toLowerCase()));
+    const ins = db.prepare('INSERT INTO invitees (project_id, token, ext_id, fields, created_at) VALUES (?, ?, ?, ?, ?)');
+    let added = 0;
+    let skipped = 0;
+    const t = now();
+    db.exec('BEGIN');
+    try {
+      for (const p of people) {
+        const key = p.extId?.toLowerCase();
+        if (key && existing.has(key)) { skipped++; continue; }
+        if (key) existing.add(key);
+        ins.run(projectId, newId(16), p.extId, JSON.stringify(p.fields), t);
+        added++;
+      }
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+    return { added, skipped };
+  },
+  async attach(id: number, responseId: string): Promise<void> {
+    db.prepare('UPDATE invitees SET response_id = ?, opened_at = COALESCE(opened_at, ?) WHERE id = ?').run(responseId, now(), id);
+  },
+  /** Удалить людей из списка (их ответы остаются) */
+  async remove(projectId: string, ids: number[] | 'all'): Promise<number> {
+    if (ids === 'all') return Number(db.prepare('DELETE FROM invitees WHERE project_id = ?').run(projectId).changes);
+    let n = 0;
+    const del = db.prepare('DELETE FROM invitees WHERE project_id = ? AND id = ?');
+    for (const id of ids) n += Number(del.run(projectId, id).changes);
+    return n;
+  },
+  /** Новая ссылка взамен старой (старая перестаёт работать) */
+  async reissue(projectId: string, id: number): Promise<void> {
+    db.prepare('UPDATE invitees SET token = ? WHERE project_id = ? AND id = ?').run(newId(16), projectId, id);
+  },
+  async count(projectId: string): Promise<number> {
+    return (db.prepare('SELECT COUNT(*) AS n FROM invitees WHERE project_id = ?').get(projectId) as Row).n as number;
+  },
+};

@@ -435,7 +435,7 @@ function checkRandomBlocks(s: Survey, err: (w: string, m: string) => void, warn:
   }
 }
 
-const BOOL_SETTINGS = ['showProgress', 'allowBack', 'allowEarlyFinish', 'showQuestionNumbers', 'enterSubmits', 'autoNext', 'noPaste', 'allowRetake'];
+const BOOL_SETTINGS = ['showProgress', 'allowBack', 'allowEarlyFinish', 'showQuestionNumbers', 'enterSubmits', 'autoNext', 'noPaste', 'allowRetake', 'inviteOnly'];
 const TEXT_SETTINGS = [
   'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'closedMessage', 'overquotaMessage', 'timeoutMessage', 'password', 'footerText',
   'nextLabel', 'backLabel', 'submitLabel', 'earlyFinishLabel',
@@ -609,7 +609,7 @@ function validateQuestion(
 const PANEL_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
 const PANEL_URL_KEYS = ['redirectComplete', 'redirectScreenout', 'redirectOverquota', 'redirectEarlyFinish'] as const;
 /** Параметры ссылки, которые занимает сам опрос */
-const RESERVED_LINK_PARAMS = new Set(['preview', 'new', 'rid', 'test', 'survey', 'start', 'panel']);
+const RESERVED_LINK_PARAMS = new Set(['preview', 'new', 'rid', 'test', 'survey', 'start', 'panel', 'inv', 'inv_id']);
 
 /** Проверка панелей проекта; возвращает список ошибок (пусто — всё в порядке) */
 export function validatePanels(panels: unknown): string[] {

@@ -30,7 +30,7 @@
 - Анкеты старого формата (`formatVersion: 1`, `pages`) при импорте переводятся автоматически: страница → блок, переходы страницы → действия последнего вопроса.
 
 > **Проект.** Анкету запускает проект: он решает, идёт ли сбор, и хранит сроки, лимиты, доступ и квоты. Поля `openFrom`, `closeAt`,
-> `maxResponses`, `password`, `allowRetake`, `uniqueParam`, `maxStartsPerIpHour`, `minDurationSec` и массив `quotas` в JSON анкеты
+> `maxResponses`, `password`, `allowRetake`, `uniqueParam`, `maxStartsPerIpHour`, `minDurationSec`, `inviteOnly` и массив `quotas` в JSON анкеты
 > допустимы: при создании проекта они становятся его стартовыми настройками, дальше меняются в проекте.
 
 ### settings
