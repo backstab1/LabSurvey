@@ -56,6 +56,8 @@ export interface SimpleCondition {
  * (см. docs/survey-format.md → «Скрипты»). Сервер их не выполняет и всегда сам проверяет ответы.
  */
 export interface QuestionScripts {
+  /** Перед показом: до отрисовки вопроса (DOM ещё нет) — подготовить значения через sl.set */
+  beforeShow?: string;
   /** При показе вопроса */
   onShow?: string;
   /** При каждом изменении ответа */

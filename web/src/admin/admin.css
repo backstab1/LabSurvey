@@ -190,8 +190,79 @@
 .modal-body { padding: 18px 20px 22px; overflow-y: auto; }
 
 /* Окно вопроса */
-.qdialog { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
-@media (max-width: 960px) { .qdialog { grid-template-columns: 1fr; } .qdialog-preview { display: none; } }
+.modal.modal-medium { width: min(860px, 100%); }
+.modal.list-modal { width: min(760px, 100%); }
+.qdialog { display: flex; flex-direction: column; gap: 14px; }
+.qdialog > .stack { min-width: 0; }
+.qtabs { flex: none; border-bottom: 1px solid var(--border); margin: -8px 0 2px; }
+.tab-count {
+  display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 99px; background: var(--accent-soft);
+  color: #2553b8; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center;
+}
+.qsettings { max-width: 640px; }
+
+/* Кнопка списка вариантов */
+.list-btn {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; text-align: left;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 10px 14px; cursor: pointer; font-size: 14px;
+}
+.list-btn:hover { border-color: var(--accent); background: #fafcff; }
+.list-btn-title { font-weight: 600; white-space: nowrap; }
+.list-btn-summary { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-btn-go { color: var(--muted); font-size: 18px; line-height: 1; }
+
+/* Условие-формула */
+.cond-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cond-field-row { display: flex; gap: 6px; align-items: center; }
+.cond-field-row .input { flex: 1; min-width: 0; }
+.cond-visual-btn { flex: none; }
+.cond-visual-btn.on { background: var(--accent-soft); border-color: #a9c3f6; }
+.cond-field .cond { margin-top: 4px; }
+
+/* Таблица списка (варианты, действия) */
+.list-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+.list-table { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.list-head, .list-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 0 8px 0 12px; }
+.list-head { font-size: 12px; font-weight: 600; color: var(--muted); background: #f7f8fa; min-height: 32px; border-bottom: 1px solid var(--border); }
+.list-head span:last-child { grid-column: 3 / 5; }
+.list-item + .list-item { border-top: 1px solid var(--border); }
+.list-row { min-height: 40px; cursor: pointer; font-size: 14px; }
+.list-row:hover { background: #f6f8fb; }
+.list-item.open > .list-row { background: #eef4ff; }
+.list-item.is-hidden .list-text { color: var(--muted); text-decoration: line-through; }
+.list-code { font-size: 13px; color: var(--muted); }
+.list-code.dup { color: var(--danger); font-weight: 700; }
+.list-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-marks { display: inline-flex; gap: 4px; }
+.mark { font-size: 11px; border-radius: 99px; padding: 1px 7px; background: var(--accent-soft); color: #2553b8; white-space: nowrap; }
+.list-tools { display: inline-flex; opacity: 0; transition: opacity .1s; }
+.list-row:hover .list-tools, .list-item.open .list-tools { opacity: 1; }
+.list-tools .icon-btn { padding: 3px 5px; font-size: 13px; }
+.list-editor { padding: 4px 14px 14px; background: #fbfcfe; border-top: 1px solid #dde6f5; display: flex; flex-direction: column; gap: 10px; }
+.list-tabs { flex: none; border-bottom: 1px solid var(--border); }
+.list-tabs .tab { padding: 8px 12px 7px; font-size: 13px; }
+.list-main { display: flex; gap: 10px; flex-wrap: wrap; align-items: start; }
+.list-main .grow { flex: 1; min-width: 220px; }
+.list-code-field { width: 90px; }
+.list-image-field { flex-basis: 100%; }
+.list-empty { padding: 12px; }
+.carry { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 10px; }
+.carry .input { width: auto; flex: 1; min-width: 200px; min-height: 32px; padding: 4px 8px; font-size: 14px; }
+
+/* Действия */
+.atable { display: flex; flex-direction: column; gap: 8px; }
+.atable-head, .atable-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; }
+.atable-head span:last-child { grid-column: auto; }
+.atable-cond { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atable-do { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.action-editor { padding-top: 12px; }
+.action-field { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 10px; align-items: start; }
+.action-field-label { font-size: 13px; font-weight: 600; color: #4a515b; padding-top: 8px; }
+@media (max-width: 700px) {
+  .action-field { grid-template-columns: 1fr; gap: 4px; }
+  .action-field-label { padding-top: 0; }
+  .list-marks { display: none; }
+}
 .qhead { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
 .switch { display: inline-flex; gap: 8px; align-items: center; min-height: 38px; cursor: pointer; font-size: 14px; user-select: none; }
 .switch input {
@@ -204,7 +275,6 @@
 }
 .switch input:checked { background: var(--accent); }
 .switch input:checked::after { left: 16px; }
-.qdialog-preview { position: sticky; top: 0; }
 .preview-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
 .phone { border: 1px solid var(--border); border-radius: 18px; padding: 16px; background: var(--surface); box-shadow: inset 0 0 0 6px #f4f5f7; max-height: 70vh; overflow-y: auto; }
 .phone .matrix thead { display: none; }
@@ -367,7 +437,7 @@
 .qdialog > .stack, .section-body, .rule, .action, .cond-fields { min-width: 0; }
 @media (max-width: 640px) {
   .modal-backdrop { padding: 0; }
-  .modal, .modal.modal-wide { max-height: 100vh; min-height: 100vh; border-radius: 0; }
+  .modal, .modal.modal-wide, .modal.modal-medium, .modal.list-modal { max-height: 100vh; min-height: 100vh; border-radius: 0; }
   .modal-head { padding: 10px 12px; }
   .modal-title .muted { display: none; }
   .modal-body { padding: 14px 12px 20px; }

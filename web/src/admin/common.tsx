@@ -132,23 +132,34 @@ export function Segmented<T extends string>({ value, options, onChange }: {
   );
 }
 
+/** Открытые окна по порядку: Esc закрывает только верхнее */
+const modalStack: symbol[] = [];
+
 /** Модальное окно: Esc и клик по фону закрывают */
-export function Modal({ onClose, children, wide, title, actions }: {
-  onClose: () => void; children: ReactNode; wide?: boolean; title?: ReactNode; actions?: ReactNode;
+export function Modal({ onClose, children, wide, size, title, actions, className }: {
+  onClose: () => void; children: ReactNode; wide?: boolean; size?: 'medium'; title?: ReactNode; actions?: ReactNode; className?: string;
 }) {
+  const [key] = useState(() => Symbol('modal'));
+  useEffect(() => {
+    modalStack.push(key);
+    return () => { modalStack.splice(modalStack.indexOf(key), 1); };
+  }, [key]);
   useEffect(() => {
     const esc = (e: KeyboardEvent) => {
-      // Esc внутри открытого меню закрывает только меню
-      if (e.key === 'Escape' && !document.querySelector('.menu-list')) onClose();
+      // Esc внутри открытого меню закрывает только меню; вложенное окно — только его
+      if (e.key !== 'Escape' || e.defaultPrevented || document.querySelector('.menu-list') || modalStack[modalStack.length - 1] !== key) return;
+      // Помечаем нажатие обработанным: окно под этим в том же событии уже не закроется
+      e.preventDefault();
+      onClose();
     };
     document.addEventListener('keydown', esc);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = prev; };
-  }, [onClose]);
+  }, [onClose, key]);
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`modal${wide ? ' modal-wide' : ''}`} role="dialog" aria-modal="true">
+      <div className={`modal${wide ? ' modal-wide' : ''}${size ? ` modal-${size}` : ''}${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true">
         {(title || actions) && (
           <div className="modal-head">
             <div className="modal-title">{title}</div>

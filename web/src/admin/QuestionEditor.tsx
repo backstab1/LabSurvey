@@ -1,19 +1,17 @@
 import { useState, type ReactNode } from 'react';
-import { ConditionEditor, defaultCondition, describeCondition } from './ConditionEditor.tsx';
-import { ActionsEditor, actionKinds, describeActions, newAction } from './ActionsEditor.tsx';
+import { ConditionField } from './ConditionEditor.tsx';
+import { ActionsEditor } from './ActionsEditor.tsx';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
-import { OptionsEditor } from './OptionsEditor.tsx';
-import { QuestionPreview } from './preview.tsx';
-import { allQuestions, blockOf } from '../../../shared/logic.ts';
+import { OptionsListDialog, listSummary, type CarryProps, type ListFeatures } from './OptionsListDialog.tsx';
+import { blockOf } from '../../../shared/logic.ts';
 import { CALC_FUNCTIONS, parseCalc } from '../../../shared/calc.ts';
 import { allIds } from '../../../shared/refactor.ts';
 import { ID_RE, RESERVED_IDS } from '../../../shared/validate.ts';
-import { Flag, Menu, Modal, NumField, Section, Segmented, compact } from './common.tsx';
+import { Flag, Menu, Modal, NumField, Segmented, compact } from './common.tsx';
 import { newQuestion, TYPE_ICONS } from './Builder.tsx';
 import {
-  CHOICE_TYPES, OPTION_TYPES, QUESTION_TYPE_LABELS, settingsOf, type Action, type MatrixQuestion, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
+  CHOICE_TYPES, QUESTION_TYPE_LABELS, settingsOf, type Action, type MatrixQuestion, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
 } from '../../../shared/types.ts';
-
 /** Смена типа с сохранением всего, что можно перенести */
 function convert(q: Question, type: QuestionType): Question {
   const fresh = newQuestion(type, q.id) as any;
@@ -56,6 +54,10 @@ interface Props {
   onPreview: () => void;
 }
 
+type Tab = 'main' | 'actions' | 'scripts' | 'settings';
+/** Вкладка сохраняется при переходе ‹ › между вопросами */
+let lastTab: Tab = 'main';
+
 export function QuestionDialog({ def, q, prevId, position, onChange, onClose, onDelete, onDuplicate, onNav, hasPrev, hasNext, onCreateVar, onRename, onPreview }: Props) {
   const set = (patch: Patch) => onChange(compact({ ...q, ...patch } as Question));
   const [showHint, setShowHint] = useState(!!q.hint);
@@ -72,9 +74,22 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
     onRename(next);
   };
   const answerable = q.type !== 'info' && q.type !== 'hidden';
+  const settings = questionSettings(def, q, set);
+  const actionCount = (q.actions?.before?.length ?? 0) + (q.actions?.after?.length ?? 0);
+  const scriptCount = Object.values(q.scripts ?? {}).filter(Boolean).length;
+  const tabs: [Tab, string, number][] = [['main', 'Основное', 0]];
+  if (q.type !== 'hidden') tabs.push(['actions', 'Действия', actionCount], ['scripts', 'Скрипты', scriptCount]);
+  if (settings.body.length) tabs.push(['settings', 'Настройки', settings.on.length]);
+  const [tab, setTabState] = useState<Tab>(lastTab);
+  const setTab = (t: Tab) => { lastTab = t; setTabState(t); };
+  const current = tabs.some(([t]) => t === tab) ? tab : 'main';
+  const setActions = (phase: 'before' | 'after', list: Action[] | undefined) => {
+    const next = compact({ ...q.actions, [phase]: list });
+    set({ actions: Object.keys(next).length ? next : undefined });
+  };
 
   return (
-    <Modal wide onClose={onClose}
+    <Modal size="medium" onClose={onClose}
       title={<><span className="type-icon">{TYPE_ICONS[q.type]}</span> {q.id} <span className="muted" style={{ fontWeight: 400 }}>· {position}</span></>}
       actions={<>
         <button className="icon-btn" title="Предыдущий вопрос" disabled={!hasPrev} onClick={() => onNav(-1)}>‹</button>
@@ -88,211 +103,161 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
         <button className="btn btn-primary btn-sm" onClick={onClose}>Готово</button>
       </>}>
       <div className="qdialog">
-        <div className="stack">
-          <div className="qhead">
-            <label className="field grow"><span>Тип</span>
-              <select className="input" value={q.type} onChange={(e) => onChange(convert(q, e.target.value as QuestionType))}>
-                {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => (
-                  <option key={t} value={t}>{TYPE_ICONS[t]}  {QUESTION_TYPE_LABELS[t]}</option>
-                ))}
-              </select>
-            </label>
-            <label className="field" style={{ width: 130 }}><span>ID / переменная</span>
-              <input className={`input mono${idError ? ' invalid' : ''}`} value={idDraft} title="Все ссылки на вопрос обновятся автоматически"
-                onChange={(e) => setIdDraft(e.target.value)} onBlur={commitId}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitId(); } if (e.key === 'Escape') { setIdDraft(q.id); setIdError(''); } }} />
-              {idError && <span className="field-error">{idError}</span>}
-            </label>
-            {answerable && (
-              <label className="switch" title="Без ответа нельзя перейти дальше">
-                <input type="checkbox" checked={q.required !== false} onChange={(e) => set({ required: e.target.checked ? undefined : false })} />
-                <span>Обязательный</span>
-              </label>
-            )}
-          </div>
-
-          <label className="field">
-            <span>{q.type === 'hidden' ? 'Подпись для выгрузки' : q.type === 'info' ? 'Текст' : 'Текст вопроса'}</span>
-            <textarea className="input autogrow" rows={Math.min(8, Math.max(2, q.text.split('\n').length))} value={q.text} autoFocus={!q.text}
-              placeholder={q.type === 'hidden' ? 'Например: ID панелиста' : 'Введите вопрос. Подставить ответ: {{Q1}}'}
-              onChange={(e) => set({ text: e.target.value })} />
-            {q.type !== 'hidden' && <span className="field-help">**жирный**, *курсив*, [ссылка](https://…), ![картинка](https://…), ответ на вопрос — {'{{Q1}}'}</span>}
-          </label>
-          {answerable && (showHint ? (
-            <label className="field"><span>Подсказка под вопросом</span>
-              <input className="input" value={q.hint ?? ''} autoFocus={!q.hint} onChange={(e) => set({ hint: e.target.value || undefined })} />
-            </label>
-          ) : null)}
-          {showNote && (
-            <label className="field"><span>Комментарий для команды (респондент не видит)</span>
-              <textarea className="input note-input" rows={2} value={q.note ?? ''} autoFocus={!q.note}
-                placeholder="Например: из ТЗ заказчика, согласовать формулировку" onChange={(e) => set({ note: e.target.value || undefined })} />
-            </label>
-          )}
-          {(!showHint && answerable) || !showNote ? (
-            <div className="row" style={{ gap: 14 }}>
-              {answerable && !showHint && <button className="btn-link" style={{ padding: 0 }} onClick={() => setShowHint(true)}>+ подсказка</button>}
-              {!showNote && <button className="btn-link" style={{ padding: 0 }} onClick={() => setShowNote(true)}>+ комментарий для команды</button>}
-            </div>
-          ) : null}
-
-          <TypeBody q={q} set={set} />
-
-          <div className="sections">
-            {q.type !== 'hidden' && <ActionsBlock def={def} q={q} prevId={prevId} set={set} onCreateVar={onCreateVar} />}
-            <SettingsSection def={def} q={q} set={set} />
-          </div>
+        <div className="tabs qtabs" role="tablist">
+          {tabs.map(([t, label, n]) => (
+            <button key={t} type="button" role="tab" aria-selected={current === t} className={`tab${current === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+              {label}{n > 0 && <span className="tab-count">{n}</span>}
+            </button>
+          ))}
         </div>
 
-        <aside className="qdialog-preview">
-          <div className="preview-label">Так увидит респондент</div>
-          <div className="phone">
-            <QuestionPreview key={JSON.stringify(q)} def={def} q={q} interactive />
+        {current === 'main' && (
+          <div className="stack">
+            <div className="qhead">
+              <label className="field" style={{ width: 130 }}><span>ID / переменная</span>
+                <input className={`input mono${idError ? ' invalid' : ''}`} value={idDraft} title="Все ссылки на вопрос обновятся автоматически"
+                  onChange={(e) => setIdDraft(e.target.value)} onBlur={commitId}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitId(); } if (e.key === 'Escape') { setIdDraft(q.id); setIdError(''); } }} />
+                {idError && <span className="field-error">{idError}</span>}
+              </label>
+              <label className="field grow"><span>Тип</span>
+                <select className="input" value={q.type} onChange={(e) => onChange(convert(q, e.target.value as QuestionType))}>
+                  {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => (
+                    <option key={t} value={t}>{TYPE_ICONS[t]}  {QUESTION_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </label>
+              {answerable && (
+                <label className="switch" title="Без ответа нельзя перейти дальше">
+                  <input type="checkbox" checked={q.required !== false} onChange={(e) => set({ required: e.target.checked ? undefined : false })} />
+                  <span>Обязательный</span>
+                </label>
+              )}
+            </div>
+
+            <label className="field">
+              <span>{q.type === 'hidden' ? 'Подпись для выгрузки' : q.type === 'info' ? 'Текст' : 'Текст вопроса'}</span>
+              <textarea className="input autogrow" rows={Math.min(8, Math.max(2, q.text.split('\n').length))} value={q.text} autoFocus={!q.text}
+                placeholder={q.type === 'hidden' ? 'Например: ID панелиста' : 'Введите вопрос. Подставить ответ: {{Q1}}'}
+                onChange={(e) => set({ text: e.target.value })} />
+              {q.type !== 'hidden' && <span className="field-help">**жирный**, *курсив*, [ссылка](https://…), ![картинка](https://…), ответ на вопрос — {'{{Q1}}'}</span>}
+            </label>
+            {answerable && showHint && (
+              <label className="field"><span>Подсказка под вопросом</span>
+                <input className="input" value={q.hint ?? ''} autoFocus={!q.hint} onChange={(e) => set({ hint: e.target.value || undefined })} />
+              </label>
+            )}
+            {showNote && (
+              <label className="field"><span>Комментарий для команды (респондент не видит)</span>
+                <textarea className="input note-input" rows={2} value={q.note ?? ''} autoFocus={!q.note}
+                  placeholder="Например: из ТЗ заказчика, согласовать формулировку" onChange={(e) => set({ note: e.target.value || undefined })} />
+              </label>
+            )}
+            {(!showHint && answerable) || !showNote ? (
+              <div className="row" style={{ gap: 14 }}>
+                {answerable && !showHint && <button className="btn-link" style={{ padding: 0 }} onClick={() => setShowHint(true)}>+ подсказка</button>}
+                {!showNote && <button className="btn-link" style={{ padding: 0 }} onClick={() => setShowNote(true)}>+ комментарий для команды</button>}
+              </div>
+            ) : null}
+
+            {q.type !== 'hidden' && (
+              <div className="field"><span>Условие показа</span>
+                <ConditionField def={def} value={q.showIf} self={q.id} suggest={prevId} placeholder="пусто — показывать всегда"
+                  onChange={(c) => set({ showIf: c })} />
+              </div>
+            )}
+
+            <TypeBody def={def} q={q} set={set} />
           </div>
-        </aside>
+        )}
+
+        {current === 'actions' && (
+          <div className="stack">
+            <div className="block-title">Перед показом</div>
+            <ActionsEditor def={def} q={q} phase="before" value={q.actions?.before} onChange={(v) => setActions('before', v)} onCreateVar={onCreateVar} />
+            {q.type !== 'info' && (
+              <>
+                <div className="block-title">После ответа</div>
+                <ActionsEditor def={def} q={q} phase="after" value={q.actions?.after} onChange={(v) => setActions('after', v)} onCreateVar={onCreateVar} />
+              </>
+            )}
+          </div>
+        )}
+
+        {current === 'scripts' && (
+          <div className="stack">
+            <p className="muted small" style={{ margin: 0 }}>JavaScript в браузере респондента, объект <code>sl</code> — см. docs/survey-format.md → «Скрипты». Обычно хватает действий.</p>
+            <div className="block-title">Перед показом</div>
+            <ScriptsEditor level="question" only={['beforeShow']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
+            <div className="block-title">Во время показа</div>
+            <ScriptsEditor level="question" only={q.type === 'info' ? ['onShow'] : ['onShow', 'onChange']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
+            {q.type !== 'info' && (
+              <>
+                <div className="block-title">После ответа</div>
+                <ScriptsEditor level="question" only={['validate']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
+              </>
+            )}
+          </div>
+        )}
+
+        {current === 'settings' && <div className="flags qsettings">{settings.body}</div>}
       </div>
     </Modal>
   );
 }
 
-/** Одно правило в блоке «Действия»: заголовок, крестик и содержимое */
-function Rule({ title, onRemove, children }: { title: string; onRemove: () => void; children: ReactNode }) {
+/** Кнопка списка вариантов: название, количество и начало списка */
+function ListButton({ title, options, from, onClick }: { title: string; options: Option[]; from?: OptionsFrom; onClick: () => void }) {
   return (
-    <div className="rule">
-      <div className="rule-head">
-        <span className="rule-title">{title}</span>
-        <button className="icon-btn" title="Убрать" onClick={onRemove}>✕</button>
-      </div>
-      {children}
-    </div>
+    <button type="button" className="list-btn" onClick={onClick}>
+      <span className="list-btn-title">{title}<span className="tab-count">{options.length}</span></span>
+      <span className="list-btn-summary">{listSummary(options, from)}</span>
+      <span className="list-btn-go">›</span>
+    </button>
   );
 }
+type ListKind = 'options' | 'rows' | 'columns' | 'extra';
 
-/**
- * «Действия»: что происходит перед показом вопроса и после ответа.
- * Показывается только то, что настроено; всё остальное — в меню «+ Добавить».
- */
-function ActionsBlock({ def, q, prevId, set, onCreateVar }: {
-  def: Survey; q: Question; prevId?: string; set: (p: Patch) => void; onCreateVar: () => string;
-}) {
-  const before = q.actions?.before;
-  const after = q.actions?.after;
-  const scripts = (q.scripts ?? {}) as Record<string, string | undefined>;
-  const [jsBefore, setJsBefore] = useState(!!scripts.onShow);
-  const [jsAfter, setJsAfter] = useState(!!(scripts.onChange || scripts.validate));
-  const setActions = (phase: 'before' | 'after', list: typeof before) => {
-    const next = compact({ ...q.actions, [phase]: list });
-    set({ actions: Object.keys(next).length ? next : undefined });
-  };
-  const addAction = (phase: 'before' | 'after', kind: Action['do']) =>
-    setActions(phase, [...(q.actions?.[phase] ?? []), newAction(def, q, phase, kind)]);
-  const clearScripts = (keys: string[]) => {
-    const next = { ...scripts };
-    for (const k of keys) delete next[k];
-    set({ scripts: Object.values(next).some(Boolean) ? next : undefined });
-  };
-
-  const from = q.type === 'matrix' ? q.rowsFrom : 'optionsFrom' in q ? q.optionsFrom : undefined;
-  const fromKey = q.type === 'matrix' ? 'rowsFrom' : 'optionsFrom';
-  const idx = allQuestions(def).findIndex((x) => x.id === q.id);
-  const sources = allQuestions(def).slice(0, Math.max(0, idx)).filter((x) => OPTION_TYPES.includes(x.type));
-  const canCarry = OPTION_TYPES.includes(q.type);
-  const what = q.type === 'matrix' ? 'Строки' : 'Варианты';
-
-  const beforeParts = [
-    q.showIf && `показывать, если ${describeCondition(def, q.showIf)}`,
-    from && `${what.toLowerCase()} из ${from.question}`,
-    describeActions(def, q, before),
-    scripts.onShow && 'JS',
-  ].filter(Boolean);
-  const afterParts = [describeActions(def, q, after), (scripts.onChange || scripts.validate) && 'JS'].filter(Boolean);
-  const beforeEmpty = !q.showIf && !from && !before?.length && !jsBefore;
-  const afterEmpty = !after?.length && !jsAfter;
-
-  return (
-    <div className="actions-block">
-      <div className="block-title">Действия</div>
-      <Section title="Перед показом" active={beforeParts.length > 0} summary={beforeParts.length ? beforeParts.join(' · ') : 'показывать всегда'}>
-        {beforeEmpty && <p className="empty-rules">Вопрос показывается всегда.</p>}
-        {q.showIf && (
-          <Rule title="Показывать вопрос" onRemove={() => set({ showIf: undefined })}>
-            <ConditionEditor def={def} value={q.showIf} suggest={prevId} self={q.id} onChange={(c) => set({ showIf: c })} />
-          </Rule>
-        )}
-        {from && (
-          <Rule title={`${what} из другого вопроса`} onRemove={() => set({ [fromKey]: undefined })}>
-            <CarryForward def={def} self={q.id} value={from} onChange={(v) => set({ [fromKey]: v })} />
-          </Rule>
-        )}
-        <ActionsEditor def={def} q={q} phase="before" value={before} onChange={(v) => setActions('before', v)} onCreateVar={onCreateVar} />
-        {jsBefore && (
-          <Rule title="JS при показе" onRemove={() => { clearScripts(['onShow']); setJsBefore(false); }}>
-            <ScriptsEditor level="question" only={['onShow']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
-          </Rule>
-        )}
-        <Menu align="left" className="btn-link add-menu" label="+ Добавить" title="Добавить правило" items={[
-          !q.showIf && { label: 'Условие показа', onClick: () => set({ showIf: defaultCondition(def, prevId) }) },
-          canCarry && !from && { label: `${what} из другого вопроса`, disabled: !sources.length,
-            onClick: () => set({ [fromKey]: { question: sources[sources.length - 1].id, filter: 'selected' } }) },
-          { label: 'Действие', onClick: () => {}, group: true },
-          ...actionKinds('before', q).map(([k, l]) => ({ label: l, onClick: () => addAction('before', k) })),
-          !jsBefore && { label: 'Скрипт', onClick: () => {}, group: true },
-          !jsBefore && { label: 'JS-скрипт при показе', onClick: () => setJsBefore(true) },
-        ]} />
-      </Section>
-
-      {q.type !== 'info' && (
-        <Section title="После ответа" active={afterParts.length > 0} summary={afterParts.length ? afterParts.join(' · ') : 'к следующему вопросу'}>
-          {afterEmpty && <p className="empty-rules">Дальше — следующий вопрос.</p>}
-          <ActionsEditor def={def} q={q} phase="after" value={after} onChange={(v) => setActions('after', v)} onCreateVar={onCreateVar} />
-          {jsAfter && (
-            <Rule title="JS-скрипты" onRemove={() => { clearScripts(['onChange', 'validate']); setJsAfter(false); }}>
-              <ScriptsEditor level="question" only={['onChange', 'validate']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
-            </Rule>
-          )}
-          <Menu align="left" className="btn-link add-menu" label="+ Добавить" title="Добавить действие" items={[
-            ...actionKinds('after', q).map(([k, l]) => ({ label: l, onClick: () => addAction('after', k) })),
-            !jsAfter && { label: 'Скрипт', onClick: () => {}, group: true },
-            !jsAfter && { label: 'JS-проверка или реакция на ответ', onClick: () => setJsAfter(true) },
-          ]} />
-        </Section>
-      )}
-    </div>
+/** Главное содержимое по типу: кнопки списков вариантов, строк и столбцов, шкала и т. п. */
+function TypeBody({ def, q, set }: { def: Survey; q: Question; set: (p: Patch) => void }) {
+  const [list, setList] = useState<ListKind | null>(null);
+  const carry = (key: 'optionsFrom' | 'rowsFrom', value: OptionsFrom | undefined): CarryProps =>
+    ({ def, self: q.id, value, onChange: (v) => set({ [key]: v }) });
+  const dialog = (title: string, options: Option[], key: string, features: ListFeatures, extra: { placeholder?: string; carry?: CarryProps } = {}) => (
+    <OptionsListDialog title={`${q.id} · ${title}`} options={options} features={features} onClose={() => setList(null)} {...extra}
+      onChange={(o) => set({ [key]: key === 'extraOptions' && !o.length ? undefined : o })} />
   );
-}
 
-const FILTER_LABELS = { selected: 'выбранные', notSelected: 'невыбранные', all: 'все' } as const;
-
-/** Главное содержимое по типу: варианты, строки и столбцы, шкала и т. п. */
-function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
   switch (q.type) {
     case 'ranking':
       return (
-        <Block title="Варианты для ранжирования" note={q.optionsFrom ? `+ варианты из ${q.optionsFrom.question}` : undefined}>
-          <OptionsEditor options={q.options} onChange={(options) => set({ options })} allowFlags />
-        </Block>
+        <>
+          <ListButton title="Список вариантов" options={q.options} from={q.optionsFrom} onClick={() => setList('options')} />
+          {list === 'options' && dialog('Список вариантов', q.options, 'options', { flags: true, image: true }, { carry: carry('optionsFrom', q.optionsFrom) })}
+        </>
       );
     case 'single':
     case 'multi':
     case 'dropdown':
       return (
-        <Block title="Варианты ответа" note={q.optionsFrom ? `+ варианты из ${q.optionsFrom.question}` : undefined}>
-          <OptionsEditor options={q.options} onChange={(options) => set({ options })} allowOther allowExclusive={q.type === 'multi'} allowFlags allowScores quickAdd />
-        </Block>
+        <>
+          <ListButton title="Список ответов" options={q.options} from={q.optionsFrom} onClick={() => setList('options')} />
+          {list === 'options' && dialog('Список ответов', q.options, 'options',
+            { other: true, exclusive: q.type === 'multi', flags: true, scores: true, image: q.type !== 'dropdown', quickAdd: true },
+            { carry: carry('optionsFrom', q.optionsFrom) })}
+        </>
       );
     case 'matrix':
       return (
         <>
           <Segmented value={q.mode} onChange={(mode) => set({ mode })}
             options={[{ value: 'single', label: 'Один ответ в строке' }, { value: 'multi', label: 'Несколько ответов в строке' }]} />
-          <div className="grid2 matrix-editor">
-            <Block title="Строки" note={q.rowsFrom ? `+ из ${q.rowsFrom.question}` : undefined}>
-              <OptionsEditor options={q.rows} onChange={(rows) => set({ rows })} allowOther allowFlags placeholder="Утверждение" />
-            </Block>
-            <Block title="Столбцы">
-              <OptionsEditor options={q.columns} onChange={(columns) => set({ columns })} placeholder="Ответ" allowScores />
-            </Block>
+          <div className="grid2">
+            <ListButton title="Список строк" options={q.rows} from={q.rowsFrom} onClick={() => setList('rows')} />
+            <ListButton title="Список столбцов" options={q.columns} onClick={() => setList('columns')} />
           </div>
+          {list === 'rows' && dialog('Список строк', q.rows, 'rows', { other: true, flags: true }, { placeholder: 'Утверждение', carry: carry('rowsFrom', q.rowsFrom) })}
+          {list === 'columns' && dialog('Список столбцов', q.columns, 'columns', { scores: true }, { placeholder: 'Ответ' })}
         </>
       );
     case 'scale':
@@ -320,11 +285,13 @@ function TypeBody({ q, set }: { q: Question; set: (p: Patch) => void }) {
             <Segmented value={q.display ?? 'buttons'} onChange={(v) => set({ display: v === 'buttons' ? undefined : v })}
               options={[{ value: 'buttons', label: 'Числа' }, { value: 'stars', label: '★ Звёзды' }, { value: 'smileys', label: '🙂 Смайлики' }]} />
           </div>
-          <div className="sub-title">Варианты вне шкалы</div>
-          <OptionsEditor options={q.extraOptions ?? []} onChange={(extraOptions) => set({ extraOptions: extraOptions.length ? extraOptions : undefined })}
-            emptyHint="Например, «Затрудняюсь ответить»" quickAdd />
+          <div style={{ marginTop: 10 }}>
+            <ListButton title="Варианты вне шкалы" options={q.extraOptions ?? []} onClick={() => setList('extra')} />
+          </div>
+          {list === 'extra' && dialog('Варианты вне шкалы', q.extraOptions ?? [], 'extraOptions', { quickAdd: true }, { placeholder: 'Например, «Затрудняюсь ответить»' })}
         </Block>
       );
+
     case 'number':
       return (
         <div className="row">
@@ -395,8 +362,8 @@ function Block({ title, note, children }: { title: string; note?: string; childr
   );
 }
 
-/** Флажки и мелкие параметры — всё, что не нужно видеть постоянно */
-function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: Patch) => void }) {
+/** Вкладка «Настройки»: флажки и мелкие параметры вопроса; on — включённые (для счётчика на вкладке) */
+function questionSettings(def: Survey, q: Question, set: (p: Patch) => void): { body: ReactNode[]; on: string[] } {
   const a = q as any;
   const on: string[] = [];
   const body: ReactNode[] = [];
@@ -564,31 +531,5 @@ function SettingsSection({ def, q, set }: { def: Survey; q: Question; set: (p: P
     flag('hideFinish', 'Скрыть кнопку «Завершить»');
   }
 
-  if (body.length === 0) return null;
-  return (
-    <Section title="Настройки" active={on.length > 0} summary={on.length ? on.join(' · ') : 'по умолчанию'}>
-      <div className="flags">{body}</div>
-    </Section>
-  );
-}
-
-function CarryForward({ def, self, value, onChange }: {
-  def: Survey; self: string; value: OptionsFrom | undefined; onChange: (v: OptionsFrom | undefined) => void;
-}) {
-  const sources = allQuestions(def)
-    .filter((x) => x.id !== self && OPTION_TYPES.includes(x.type));
-  return (
-    <div className="row">
-      <label className="field grow"><span>Из вопроса</span>
-        <select className="input" value={value?.question ?? ''} onChange={(e) => onChange(e.target.value ? { question: e.target.value, filter: value?.filter ?? 'selected' } : undefined)}>
-          <option value="">— не переносить —</option>
-          {sources.map((s) => <option key={s.id} value={s.id}>{s.id}{s.text ? ` · ${s.text.slice(0, 50)}` : ''}</option>)}
-        </select>
-      </label>
-      {value && (
-        <Segmented value={value.filter} onChange={(filter) => onChange({ ...value, filter })}
-          options={[{ value: 'selected', label: 'Выбранные' }, { value: 'notSelected', label: 'Невыбранные' }, { value: 'all', label: 'Все' }]} />
-      )}
-    </div>
-  );
+  return { body, on };
 }

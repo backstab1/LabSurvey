@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { FORMULA_HELP, FormulaError, formatFormula, parseFormula, referencedIds } from '../../../shared/condFormula.ts';
 import { allOptions, allQuestions, allRows, findQuestion } from '../../../shared/logic.ts';
 import { LOOP_REF, loopLevelsOf, withInstances } from '../../../shared/loops.ts';
 import type { Condition, ConditionOp, Option, Question, SimpleCondition, Survey } from '../../../shared/types.ts';
@@ -258,4 +259,48 @@ export function describeCondition(def: Survey, c: Condition | undefined): string
   };
   const value = Array.isArray(c.value) ? c.value.map(label).join(', ') : label(c.value);
   return `${subject} ${OP_LABELS[c.op]} ${value}`;
+}
+
+/**
+ * Условие одной строкой-формулой (Q1 = 1 and S1 >= 18) + кнопка визуального конструктора.
+ * Формула и конструктор синхронны: оба меняют одно и то же условие.
+ */
+export function ConditionField({ def, value, onChange, self, suggest, placeholder = 'например, Q1 = 1', autoFocus }: {
+  def: Survey; value: Condition | undefined; onChange: (c: Condition | undefined) => void;
+  self?: string; suggest?: string; placeholder?: string; autoFocus?: boolean;
+}) {
+  const [draft, setDraft] = useState(() => formatFormula(value));
+  const [error, setError] = useState('');
+  const [visual, setVisual] = useState(false);
+  const [hasFocus, setHasFocus] = useState(false);
+  const focused = useRef(false);
+  const formatted = formatFormula(value);
+  // Условие поменяли снаружи (конструктором) — показываем его формулой
+  useEffect(() => { if (!focused.current) { setDraft(formatted); setError(''); } }, [formatted]);
+
+  const known = new Set(allQuestions(withInstances(def)).map((q) => q.id.toLowerCase()));
+  const unknown = error ? [] : [...new Set(referencedIds(value))].filter((id) => !LOOP_REF.test(id) && !known.has(id.toLowerCase()));
+
+  return (
+    <div className="cond-field">
+      <div className="cond-field-row">
+        <input className={`input mono${error ? ' invalid' : ''}`} value={draft} placeholder={placeholder} spellCheck={false} autoFocus={autoFocus}
+          onFocus={() => { focused.current = true; setHasFocus(true); }}
+          onBlur={() => { focused.current = false; setHasFocus(false); if (!error) setDraft(formatted); }}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            try { onChange(parseFormula(e.target.value)); setError(''); } catch (err) {
+              if (err instanceof FormulaError) setError(err.message); else throw err;
+            }
+          }} />
+        <button type="button" className={`btn btn-secondary btn-sm cond-visual-btn${visual ? ' on' : ''}`} title="Собрать условие из списков"
+          onClick={() => setVisual(!visual)}>{visual ? 'Скрыть конструктор' : 'Конструктор'}</button>
+      </div>
+      {error ? <span className="field-error">{error}</span>
+        : unknown.length ? <span className="field-error">Нет вопроса {unknown.join(', ')}</span>
+          : hasFocus ? <span className="field-help">{FORMULA_HELP}</span>
+            : value ? <span className="field-help">{describeCondition(def, value)}</span> : null}
+      {visual && <ConditionEditor def={def} value={value} self={self} suggest={suggest} onChange={onChange} />}
+    </div>
+  );
 }

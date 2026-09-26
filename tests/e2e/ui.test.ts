@@ -96,12 +96,20 @@ test('builder: add a question, type options with the keyboard, see it in JSON, u
   await page.locator('.type-picker button', { hasText: 'Несколько ответов' }).click();
   const dialog = page.locator('.qdialog');
   await dialog.getByPlaceholder(/Введите вопрос/).fill('Какие соцсети вы используете?');
-  const first = dialog.locator('.opt-text').first();
+  // Условие показа — формулой; ссылка на первый вопрос анкеты
+  await dialog.getByPlaceholder('пусто — показывать всегда').fill('answered(Q1) and not Q1 = 99');
+  // Варианты — в отдельном окне списка
+  await dialog.locator('.list-btn', { hasText: 'Список ответов' }).click();
+  const list = page.locator('.list-modal');
+  const first = list.locator('.opt-text');
   await first.fill('Телеграм');
   await first.press('Enter');
   await page.keyboard.type('ВКонтакте');
   await page.keyboard.press('Enter');
   await page.keyboard.type('Одноклассники');
+  await page.keyboard.press('Escape'); // закрывает только окно списка
+  await list.waitFor({ state: 'detached' });
+  await dialog.locator('.list-btn', { hasText: 'Телеграм, ВКонтакте, Одноклассники' }).waitFor();
   await page.getByRole('button', { name: 'Готово' }).click();
   await page.locator('.save-state', { hasText: 'Черновик сохранён' }).waitFor();
 
@@ -111,6 +119,7 @@ test('builder: add a question, type options with the keyboard, see it in JSON, u
   assert.equal(q.type, 'multi');
   assert.deepEqual(q.options.map((o: { text: string }) => o.text), ['Телеграм', 'ВКонтакте', 'Одноклассники']);
   assert.deepEqual(q.options.map((o: { code: number }) => o.code), [1, 2, 3]);
+  assert.deepEqual(q.showIf, { all: [{ q: 'Q1', op: 'answered' }, { not: { q: 'Q1', op: 'eq', value: 99 } }] });
 
   // Отмена возвращает анкету к состоянию до правок (кнопка ↶)
   await page.getByRole('button', { name: 'Конструктор' }).click();

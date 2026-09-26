@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../api.ts';
 import { QuestionView } from './QuestionView.tsx';
 import { runScript, type ScriptEnv } from './scripts.ts';
@@ -219,12 +219,26 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
   const shown = useRef(new Set<string>());
   const envRef = useRef(env);
   envRef.current = env;
+  // init и beforeShow — до отрисовки (layout effect), чтобы значения из sl.set успели попасть на экран
+  const prepared = useRef(new Set<string>());
+  const visibleKey = visible.map((q) => q.id).join(',');
+  const initDone = useRef(false);
+  useLayoutEffect(() => {
+    if (!initDone.current) {
+      initDone.current = true;
+      runScript(survey.scripts?.init, 'init (анкета)', envRef.current());
+    }
+    for (const q of visible) {
+      if (prepared.current.has(q.id)) continue;
+      prepared.current.add(q.id);
+      runScript(q.scripts?.beforeShow, `beforeShow (${q.id})`, envRef.current(), { question: q.id, value: answers[q.id]?.v });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleKey]);
   useEffect(() => {
-    runScript(survey.scripts?.init, 'init (анкета)', envRef.current());
     runScript(page.scripts?.onShow, `onShow (${page.id})`, envRef.current());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const visibleKey = visible.map((q) => q.id).join(',');
   useEffect(() => {
     for (const q of visible) {
       if (shown.current.has(q.id)) continue;

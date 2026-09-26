@@ -25,7 +25,7 @@ export const RESERVED_IDS = new Set([
 const TYPES = new Set(['single', 'multi', 'dropdown', 'ranking', 'text', 'number', 'scale', 'matrix', 'date', 'phone', 'info', 'hidden']);
 const SCRIPT_KEYS = {
   survey: ['init'],
-  question: ['onShow', 'onChange', 'validate'],
+  question: ['beforeShow', 'onShow', 'onChange', 'validate'],
 } as const;
 
 function checkScripts(scripts: unknown, level: keyof typeof SCRIPT_KEYS, where: string, err: (w: string, m: string) => void) {

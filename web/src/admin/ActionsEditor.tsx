@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ConditionEditor, defaultCondition, describeCondition, isIncomplete } from './ConditionEditor.tsx';
+import { ConditionField, describeCondition } from './ConditionEditor.tsx';
+import { formatFormula } from '../../../shared/condFormula.ts';
 import { Segmented } from './common.tsx';
 import { allOptions, allQuestions, allRows } from '../../../shared/logic.ts';
 import { END, OPTION_TYPES, SCREENOUT, type Action, type Option, type Question, type Survey } from '../../../shared/types.ts';
@@ -35,12 +36,6 @@ export function actionKinds(phase: Phase, q: Question): [Action['do'], string][]
     .map(([k, l]) => [k, q.type === 'matrix' ? l.replace('вариант', 'строк') : l]);
 }
 
-/** Новое действие: после ответа — с условием на этот вопрос, перед показом — без условия */
-export function newAction(def: Survey, q: Question, phase: Phase, kind: Action['do']): Action {
-  const cond = phase === 'after' && q.type !== 'info' ? defaultCondition(def, q.id) : undefined;
-  return { ...(cond ? { if: cond } : {}), do: kind, ...(kind === 'skipIfFewer' ? { n: 2 } : {}) };
-}
-
 export function actionLabel(a: Action, q?: Question): string {
   const all = [...LABELS.before, ...LABELS.after];
   let label = all.find(([k]) => k === a.do)?.[1] ?? a.do;
@@ -58,6 +53,16 @@ export function describeActions(def: Survey, q: Question, list: Action[] | undef
   }).join('; ');
 }
 
+const GROUPS: Record<Action['do'], string> = {
+  hideOptions: 'Варианты ответа', showOnlyOptions: 'Варианты ответа', hideOptionsFrom: 'Варианты ответа', skipIfFewer: 'Варианты ответа',
+  answer: 'Ответ и пропуск', setValue: 'Переменные',
+  goTo: 'Переходы и завершение', end: 'Переходы и завершение', screenout: 'Переходы и завершение', error: 'Проверка ответа',
+};
+
+/**
+ * Список действий как в Survey Studio: строки «Условие → Действие». Клик по строке раскрывает её:
+ * условие формулой (или конструктором), выбор действия и его параметры.
+ */
 export function ActionsEditor({ def, q, phase, value, onChange, onCreateVar }: {
   def: Survey;
   q: Question;
@@ -69,36 +74,69 @@ export function ActionsEditor({ def, q, phase, value, onChange, onCreateVar }: {
 }) {
   const list = value ?? [];
   const kinds = actionKinds(phase, q);
+  const [open, setOpen] = useState<number | null>(null);
   const set = (i: number, a: Action) => onChange(list.map((x, k) => (k === i ? a : x)));
   const move = (i: number, dir: -1 | 1) => {
     const next = list.slice();
     [next[i], next[i + dir]] = [next[i + dir], next[i]];
     onChange(next);
+    if (open === i) setOpen(i + dir); else if (open === i + dir) setOpen(i);
+  };
+  const insert = (i: number, a: Action) => {
+    const next = list.slice();
+    next.splice(i, 0, a);
+    onChange(next);
+    setOpen(i);
+  };
+  const remove = (i: number) => {
+    const next = list.filter((_, k) => k !== i);
+    onChange(next.length ? next : undefined);
+    setOpen(open === i ? null : open !== null && open > i ? open - 1 : open);
   };
 
   return (
-    <div className="actions">
-      {list.map((a, i) => (
-        <ActionRow key={i} def={def} q={q} a={a} kinds={kinds} onChange={(na) => set(i, na)} onCreateVar={onCreateVar}
-          tools={<>
-            <button className="icon-btn" title="Выше" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-            <button className="icon-btn" title="Ниже" disabled={i === list.length - 1} onClick={() => move(i, 1)}>↓</button>
-            <button className="icon-btn" title="Удалить действие" onClick={() => {
-              const next = list.filter((_, k) => k !== i);
-              onChange(next.length ? next : undefined);
-            }}>✕</button>
-          </>} />
-      ))}
+    <div className="atable">
+      <div className="list-toolbar">
+        <button type="button" className="btn btn-secondary btn-sm" disabled={!kinds.length}
+          onClick={() => insert(list.length, { do: phase === 'after' ? 'goTo' : kinds[0][0] })}>+ Добавить</button>
+      </div>
+      {list.length === 0 ? <p className="empty-rules">{phase === 'before' ? 'Действий нет — вопрос показывается как есть.' : 'Действий нет — дальше следующий вопрос.'}</p> : (
+        <div className="list-table">
+          <div className="list-head atable-head"><span>Условие</span><span>Действие</span><span /></div>
+          {list.map((a, i) => (
+            <ActionRow key={i} def={def} q={q} a={a} kinds={kinds} open={open === i} onToggle={() => setOpen(open === i ? null : i)}
+              onChange={(na) => set(i, na)} onCreateVar={onCreateVar}
+              tools={<>
+                <button type="button" className="icon-btn" title="Выше" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
+                <button type="button" className="icon-btn" title="Ниже" disabled={i === list.length - 1} onClick={() => move(i, 1)}>↓</button>
+                <button type="button" className="icon-btn" title="Копировать действие" onClick={() => insert(i + 1, structuredClone(a))}>⧉</button>
+                <button type="button" className="icon-btn" title="Удалить действие" onClick={() => remove(i)}>✕</button>
+              </>} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function ActionRow({ def, q, a, kinds, onChange, onCreateVar, tools }: {
-  def: Survey; q: Question; a: Action; kinds: [Action['do'], string][];
+/** Параметр действия одной строкой: «Q5», «коды 1, 2», «H1 = 3» */
+function paramSummary(a: Action): string {
+  switch (a.do) {
+    case 'goTo': return a.target ?? '— куда? —';
+    case 'setValue': return `${a.target ?? '?'} = ${a.value ?? ''}`;
+    case 'hideOptions': case 'showOnlyOptions': return a.codes?.length ? a.codes.join(', ') : '— какие? —';
+    case 'hideOptionsFrom': return `${a.filter === 'notSelected' ? 'невыбранные' : 'выбранные'} в ${a.question ?? '?'}`;
+    case 'skipIfFewer': return `< ${a.n ?? 2}`;
+    case 'answer': return a.value === undefined ? '' : Array.isArray(a.value) ? a.value.join(', ') : String(a.value);
+    case 'error': case 'end': case 'screenout': return a.message ? `«${a.message.length > 30 ? a.message.slice(0, 29) + '…' : a.message}»` : '';
+    default: return '';
+  }
+}
+
+function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, tools }: {
+  def: Survey; q: Question; a: Action; kinds: [Action['do'], string][]; open: boolean; onToggle: () => void;
   onChange: (a: Action) => void; onCreateVar: () => string; tools: React.ReactNode;
 }) {
-  const [editCond, setEditCond] = useState(false);
-  const condOpen = editCond || isIncomplete(a.if);
   const set = (patch: Partial<Action>) => {
     const next = { ...a, ...patch } as Record<string, unknown>;
     for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
@@ -108,22 +146,32 @@ function ActionRow({ def, q, a, kinds, onChange, onCreateVar, tools }: {
   const questions = allQuestions(def);
   const hiddenVars = questions.filter((x) => x.type === 'hidden');
   const selfIdx = questions.findIndex((x) => x.id === q.id);
+  const groups = [...new Set(kinds.map(([k]) => GROUPS[k]))];
+  const param = paramSummary(a);
 
   return (
-    <div className="action">
-      <div className="action-main">
-        <select className="input action-kind" value={a.do}
-          onChange={(e) => onChange({ ...(a.if ? { if: a.if } : {}), do: e.target.value as Action['do'] })}>
-          {kinds.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-        </select>
-        <button type="button" className={`cond-chip${a.if ? ' on' : ''}`} onClick={() => setEditCond(!editCond)}
-          title={a.if ? 'Изменить условие' : 'Добавить условие'}>
-          {a.if ? `если ${describeCondition(def, a.if)}` : 'всегда'}
-        </button>
-        <span className="grow" />
-        <span className="row-tools">{tools}</span>
+    <div className={`list-item${open ? ' open' : ''}`}>
+      <div className="list-row atable-row" onClick={onToggle}>
+        <span className={`atable-cond mono${a.if ? '' : ' muted'}`} title={a.if ? describeCondition(def, a.if) : undefined}>{a.if ? formatFormula(a.if) : 'всегда'}</span>
+        <span className="atable-do">{actionLabel(a, q)}{param && <span className="muted"> · {param}</span>}</span>
+        <span className="list-tools" onClick={(e) => e.stopPropagation()}>{tools}</span>
       </div>
-
+      {open && (
+      <div className="list-editor action-editor">
+        <div className="action-field"><span className="action-field-label">Условие</span>
+          <ConditionField def={def} value={a.if} self={q.id} suggest={q.type !== 'info' && q.type !== 'hidden' ? q.id : undefined}
+            placeholder="пусто — выполнять всегда" onChange={(c) => set({ if: c })} />
+        </div>
+        <div className="action-field"><span className="action-field-label">Действие</span>
+          <div className="stack" style={{ gap: 8 }}>
+            <select className="input action-kind" value={a.do}
+              onChange={(e) => onChange({ ...(a.if ? { if: a.if } : {}), do: e.target.value as Action['do'], ...(e.target.value === 'skipIfFewer' ? { n: 2 } : {}) })}>
+              {groups.map((g) => (
+                <optgroup key={g} label={g}>
+                  {kinds.filter(([k]) => GROUPS[k] === g).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </optgroup>
+              ))}
+            </select>
       {/* Параметры действия */}
       {(a.do === 'hideOptions' || a.do === 'showOnlyOptions') && (
         <CodePick options={ownOptions} value={a.codes ?? []} onChange={(codes) => set({ codes })} />
@@ -213,12 +261,9 @@ function ActionRow({ def, q, a, kinds, onChange, onCreateVar, tools }: {
         </div>
       )}
 
-      {condOpen && (
-        <div className="action-cond">
-          <ConditionEditor def={def} value={a.if} self={q.id} suggest={q.type !== 'info' && q.type !== 'hidden' ? q.id : undefined}
-            onChange={(c) => set({ if: c })} />
-          {editCond && <button className="btn-link done-link" onClick={() => setEditCond(false)}>готово</button>}
+          </div>
         </div>
+      </div>
       )}
     </div>
   );
