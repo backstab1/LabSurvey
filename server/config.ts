@@ -36,6 +36,8 @@ export const config = {
   /** За прокси (nginx) — брать IP из X-Forwarded-For */
   trustProxy: process.env.TRUST_PROXY === '1',
   isProduction: process.env.NODE_ENV === 'production',
+  /** Внешний адрес сервиса (https://surveys.example.ru) — для ИИ-коннектора; по умолчанию берётся из запроса */
+  publicUrl: process.env.PUBLIC_URL ?? '',
 };
 
 if (!config.adminPassword) {

@@ -6,6 +6,8 @@ import { resolve } from 'node:path';
 import { config } from './config.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { respondentRoutes } from './routes/respondent.ts';
+import { oauthRoutes } from './oauth.ts';
+import { mcpRoutes } from './mcp.ts';
 
 export async function buildApp() {
   const app = Fastify({
@@ -17,6 +19,11 @@ export async function buildApp() {
   await app.register(cookie, { secret: config.sessionSecret });
   await app.register(adminRoutes);
   await app.register(respondentRoutes);
+  // ИИ-коннекторы: OAuth и MCP в одном контексте (свой разбор форм)
+  await app.register(async (ai) => {
+    await ai.register(oauthRoutes);
+    await ai.register(mcpRoutes);
+  });
 
   app.get('/api/health', async () => ({ ok: true }));
 
@@ -26,7 +33,7 @@ export async function buildApp() {
     // Файлы ищутся при каждом запросе — пересборка фронтенда не требует перезапуска сервера
     await app.register(fastifyStatic, { root: dist });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api/') || req.url.startsWith('/assets/')) return reply.code(404).send({ error: 'Не найдено' });
+      if (req.url.startsWith('/api/') || req.url.startsWith('/assets/') || req.url.startsWith('/oauth/') || req.url.startsWith('/.well-known/')) return reply.code(404).send({ error: 'Не найдено' });
       return reply.sendFile('index.html');
     });
   }

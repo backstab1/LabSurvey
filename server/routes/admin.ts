@@ -3,7 +3,7 @@ import {
   authenticate, checkUserPassword, clearSession, currentUser, hashPassword, isBuiltInLogin, loginBlocked, loginFailed,
   requireAdminRole, requireUser, setSession, testToken,
 } from '../auth.ts';
-import { projects, responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig } from '../db.ts';
+import { oauth, projects, responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig } from '../db.ts';
 import { defFor, loadProject } from '../projectCtx.ts';
 import { buildTable, cellToText } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
@@ -25,7 +25,7 @@ import { expandAllLoops } from '../../shared/loops.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
 
 /** Черновик можно сохранить с ошибками логики, но не с поломанной структурой */
-function draftShapeOk(def: unknown): boolean {
+export function draftShapeOk(def: unknown): boolean {
   const d = def as Survey;
   return !!d && typeof d === 'object' && typeof d.title === 'string' && Array.isArray(d.blocks) && d.blocks.length > 0
     && d.blocks.every((b) => b && typeof b === 'object' && Array.isArray(b.questions));
@@ -84,6 +84,12 @@ export async function adminRoutes(app: FastifyInstance) {
       await users.update(u.login, { passwordHash: hashPassword(next) });
       return { ok: true };
     });
+
+    // ---- ИИ-коннектор: приложения, которым пользователь дал доступ ----
+    priv.get('/api/admin/me/connections', async (req) => oauth.connections(req.user!.login));
+    priv.delete<{ Params: { clientId: string } }>('/api/admin/me/connections/:clientId', async (req) => ({
+      revoked: await oauth.revoke(req.user!.login, req.params.clientId),
+    }));
 
     // ---- Пользователи (только администратор) ----
     const ROLES: Role[] = ['admin', 'editor', 'viewer', 'client'];

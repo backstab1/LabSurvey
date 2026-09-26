@@ -653,3 +653,106 @@ export const users = {
     db.prepare('DELETE FROM users WHERE login = ?').run(login);
   },
 };
+
+// ---- OAuth для ИИ-коннекторов (Claude, ChatGPT) ----
+db.exec(`
+  CREATE TABLE IF NOT EXISTS oauth_clients (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    secret_hash TEXT,
+    redirect_uris TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS oauth_codes (
+    code_hash TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL REFERENCES oauth_clients(id) ON DELETE CASCADE,
+    login TEXT NOT NULL,
+    redirect_uri TEXT NOT NULL,
+    challenge TEXT NOT NULL,
+    scope TEXT,
+    expires_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS oauth_tokens (
+    token_hash TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    client_id TEXT NOT NULL REFERENCES oauth_clients(id) ON DELETE CASCADE,
+    login TEXT NOT NULL COLLATE NOCASE,
+    scope TEXT,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_used_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS oauth_tokens_login ON oauth_tokens(login);
+`);
+
+export interface OAuthClient { id: string; name: string; secretHash: string | null; redirectUris: string[]; createdAt: string }
+export interface OAuthGrant { clientId: string; login: string; scope: string | null; expiresAt: string }
+
+const toClient = (r: Row): OAuthClient => ({
+  id: r.id as string, name: r.name as string, secretHash: (r.secret_hash as string) ?? null,
+  redirectUris: JSON.parse(r.redirect_uris as string), createdAt: r.created_at as string,
+});
+
+/** Коды, токены и секреты хранятся только как хэши */
+export const oauth = {
+  async createClient(c: { name: string; secretHash: string | null; redirectUris: string[] }): Promise<OAuthClient> {
+    const id = `sl_${newId(20)}`;
+    db.prepare('INSERT INTO oauth_clients (id, name, secret_hash, redirect_uris, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(id, c.name, c.secretHash, JSON.stringify(c.redirectUris), now());
+    return (await this.client(id))!;
+  },
+  async client(id: string): Promise<OAuthClient | null> {
+    const r = db.prepare('SELECT * FROM oauth_clients WHERE id = ?').get(id) as Row | undefined;
+    return r ? toClient(r) : null;
+  },
+  async saveCode(codeHash: string, g: OAuthGrant & { redirectUri: string; challenge: string }): Promise<void> {
+    db.prepare('DELETE FROM oauth_codes WHERE expires_at < ?').run(now());
+    db.prepare('INSERT INTO oauth_codes (code_hash, client_id, login, redirect_uri, challenge, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(codeHash, g.clientId, g.login, g.redirectUri, g.challenge, g.scope, g.expiresAt);
+  },
+  /** Код одноразовый: читается и сразу удаляется */
+  async takeCode(codeHash: string): Promise<(OAuthGrant & { redirectUri: string; challenge: string }) | null> {
+    const r = db.prepare('SELECT * FROM oauth_codes WHERE code_hash = ?').get(codeHash) as Row | undefined;
+    if (!r) return null;
+    db.prepare('DELETE FROM oauth_codes WHERE code_hash = ?').run(codeHash);
+    if ((r.expires_at as string) < now()) return null;
+    return {
+      clientId: r.client_id as string, login: r.login as string, scope: (r.scope as string) ?? null,
+      expiresAt: r.expires_at as string, redirectUri: r.redirect_uri as string, challenge: r.challenge as string,
+    };
+  },
+  async saveToken(tokenHash: string, kind: 'access' | 'refresh', g: OAuthGrant): Promise<void> {
+    db.prepare('INSERT INTO oauth_tokens (token_hash, kind, client_id, login, scope, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(tokenHash, kind, g.clientId, g.login, g.scope, g.expiresAt, now());
+  },
+  /** Действующий токен (просроченные удаляются) */
+  async token(tokenHash: string, kind: 'access' | 'refresh'): Promise<OAuthGrant | null> {
+    const r = db.prepare('SELECT * FROM oauth_tokens WHERE token_hash = ? AND kind = ?').get(tokenHash, kind) as Row | undefined;
+    if (!r) return null;
+    if ((r.expires_at as string) < now()) {
+      db.prepare('DELETE FROM oauth_tokens WHERE token_hash = ?').run(tokenHash);
+      return null;
+    }
+    if (kind === 'access') db.prepare('UPDATE oauth_tokens SET last_used_at = ? WHERE token_hash = ?').run(now(), tokenHash);
+    return { clientId: r.client_id as string, login: r.login as string, scope: (r.scope as string) ?? null, expiresAt: r.expires_at as string };
+  },
+  async deleteToken(tokenHash: string): Promise<void> {
+    db.prepare('DELETE FROM oauth_tokens WHERE token_hash = ?').run(tokenHash);
+  },
+  /** Подключённые приложения пользователя: по клиенту — когда выдан доступ и когда им пользовались */
+  async connections(login: string): Promise<{ clientId: string; name: string; since: string; lastUsedAt: string | null }[]> {
+    const rows = db.prepare(`SELECT t.client_id, c.name, MIN(t.created_at) AS since, MAX(t.last_used_at) AS last_used
+      FROM oauth_tokens t JOIN oauth_clients c ON c.id = t.client_id WHERE t.login = ? AND t.expires_at >= ?
+      GROUP BY t.client_id, c.name ORDER BY since`).all(login, now()) as Row[];
+    return rows.map((r) => ({
+      clientId: r.client_id as string, name: r.name as string, since: r.since as string, lastUsedAt: (r.last_used as string) ?? null,
+    }));
+  },
+  /** Отозвать доступ приложения (или всех приложений, если clientId не задан) */
+  async revoke(login: string, clientId?: string): Promise<number> {
+    const res = clientId
+      ? db.prepare('DELETE FROM oauth_tokens WHERE login = ? AND client_id = ?').run(login, clientId)
+      : db.prepare('DELETE FROM oauth_tokens WHERE login = ?').run(login);
+    return Number(res.changes);
+  },
+};
