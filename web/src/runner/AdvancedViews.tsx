@@ -259,7 +259,19 @@ export function Conjoint({ q, ctx, answer, onChange }: { q: ConjointQuestion; ct
     if (t < design.length - 1) setTimeout(() => setIdx((x) => (x === t ? t + 1 : x)), 350);
   };
   useEffect(() => { if (idx >= design.length) setIdx(design.length - 1); }, [idx, design.length]);
-  const level = (ai: number, code: number) => attrs[ai].levels.find((l) => l.code === code)?.text ?? String(code);
+  // Уровень: картинка и/или текст
+  const level = (ai: number, code: number, big = false) => {
+    const l = attrs[ai].levels.find((x) => x.code === code);
+    if (!l) return String(code);
+    return (
+      <span className={`cj-level${big ? ' big' : ''}`}>
+        {l.image && <img src={l.image} alt={l.hideText ? l.text : ''} loading="lazy" />}
+        {!(l.image && l.hideText) && <span>{rich(l.text)}</span>}
+      </span>
+    );
+  };
+  const headerIdx = attrs.findIndex((a) => a.header);
+  const rows = attrs.map((a, ai) => ({ a, ai })).filter(({ ai }) => ai !== headerIdx);
 
   return (
     <div className="conjoint">
@@ -267,14 +279,21 @@ export function Conjoint({ q, ctx, answer, onChange }: { q: ConjointQuestion; ct
       <div className="conjoint-wrap">
         <table className="conjoint-table" style={{ ['--cards' as string]: design[t].length }}>
           <thead>
-            <tr><th />{design[t].map((_, k) => <th key={k} className={chosen === k + 1 ? 'chosen' : ''}>Вариант {k + 1}</th>)}</tr>
+            <tr>
+              <th />
+              {design[t].map((card, k) => (
+                <th key={k} className={`${chosen === k + 1 ? 'chosen' : ''}${headerIdx >= 0 ? ' cj-head' : ''}`} onClick={() => choose(k + 1)}>
+                  {headerIdx >= 0 ? level(headerIdx, card[headerIdx], true) : `Вариант ${k + 1}`}
+                </th>
+              ))}
+            </tr>
           </thead>
           <tbody>
-            {attrs.map((a, ai) => (
+            {rows.map(({ a, ai }) => (
               <tr key={a.id}>
                 <th scope="row">{rich(a.text)}</th>
                 {design[t].map((card, k) => (
-                  <td key={k} className={chosen === k + 1 ? 'chosen' : ''} onClick={() => choose(k + 1)}>{rich(level(ai, card[ai]))}</td>
+                  <td key={k} className={chosen === k + 1 ? 'chosen' : ''} onClick={() => choose(k + 1)}>{level(ai, card[ai])}</td>
                 ))}
               </tr>
             ))}

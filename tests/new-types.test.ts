@@ -197,3 +197,41 @@ test('new types end to end: upload, submit, export, design CSV, cleanup', async 
   await call('DELETE', `/api/admin/projects/${pid}/responses/${rid}`);
   assert.equal((await call('GET', `/api/admin/projects/${pid}/files/${rid}/${file.id}`)).status, 404);
 });
+
+test('conjoint: header and fixed attributes, universal balance check', async () => {
+  const { conjointDesignCheck } = await import('../shared/choiceDesign.ts');
+  const lv = (xs: string[]) => xs.map((t, i) => ({ code: i + 1, text: t, image: `https://example.com/${i + 1}.png` }));
+  const services = ['Яндекс', 'Самокат', 'Delivery', 'Купер', 'ВкусВилл', 'Озон', 'Магнит', 'Перекрёсток', 'Лента', 'Пятёрочка'];
+  const base = {
+    id: 'CJ2', type: 'conjoint' as const, text: 'Какую доставку выберете?', tasks: 8, alternatives: 3,
+    attributes: [
+      { id: 'SRV', text: 'Сервис', header: true, levels: lv(services) },
+      { id: 'PRICE', text: 'Доставка', levels: lv(['0 ₽', '99 ₽', '199 ₽']) },
+      { id: 'TIME', text: 'Срок', levels: lv(['15 мин', '30 мин', '60 мин', '2 часа']) },
+    ],
+  };
+  const surveyOf = (q: object) => ({ formatVersion: 2, title: 't', blocks: [{ id: 'B1', questions: [q] }] });
+  assert.ok(validateSurvey(surveyOf(base)).ok);
+
+  // 10 сервисов со случайным назначением: поровну, без повторов в задании, сочетания близки к равным
+  const c = conjointDesignCheck(base, 400);
+  assert.ok(c.levels.every((l) => l.maxDeviation <= 1), JSON.stringify(c.levels.map((l) => l.maxDeviation)));
+  assert.ok(c.overlap.every((o) => o.share === 0));
+  assert.equal(c.duplicates, 0);
+  assert.ok(c.pairs.every((p) => p.spread < 35), JSON.stringify(c.pairs.map((p) => p.spread)));
+
+  // Закреплённый сервис: карточка k — всегда сервис k; цена и срок сбалансированы внутри каждого сервиса
+  const fixed = { ...base, attributes: [{ ...base.attributes[0], fixed: true, levels: lv(['Яндекс', 'Самокат', 'Купер']) }, ...base.attributes.slice(1)] };
+  assert.ok(validateSurvey(surveyOf(fixed)).ok, JSON.stringify(validateSurvey(surveyOf(fixed)).errors));
+  for (let r = 0; r < 20; r++) for (const task of conjointDesign(fixed, `r${r}`)) assert.deepEqual(task.map((card) => card[0]), [1, 2, 3]);
+  const cf = conjointDesignCheck(fixed, 400);
+  assert.ok(cf.pairs.filter((p) => p.a === 'Сервис').every((p) => p.spread < 10), JSON.stringify(cf.pairs.map((p) => p.spread)));
+
+  // Ошибки: закреплённый с неверным числом уровней, два заголовка, все закреплены
+  const bad = validateSurvey(surveyOf({ ...base, attributes: [
+    { ...base.attributes[0], fixed: true },
+    { ...base.attributes[1], header: true },
+  ] })).errors.map((e) => e.message).join(' | ');
+  assert.match(bad, /столько же, сколько карточек/);
+  assert.match(bad, /только один атрибут/);
+});

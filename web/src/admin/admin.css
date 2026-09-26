@@ -762,3 +762,6 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .report-files { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .report-files img { width: 96px; height: 96px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
 .report-file { font-size: 13px; }
+.design-check h3 { margin: 6px 0 0; font-size: 15px; }
+.dc-ok { color: var(--ok, #1c7c3a); }
+.dc-warn { color: #b26a00; font-weight: 600; }

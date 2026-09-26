@@ -104,18 +104,25 @@ export function conjointDesign(q: ConjointQuestion, seed: string): number[][][] 
   const rnd = rng(`${seed}:conjoint:${q.id}`);
   const count = attrs.map((a) => new Map(a.levels.map((l) => [l.code, 0])));
   const co = new Map<string, number>();
-  const ck = (ai: number, la: number, bi: number, lb: number) => `${ai}:${la}|${bi}:${lb}`;
-  const shuffle = <T>(arr: T[]) => {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-    return a;
-  };
+  // Сочетание уровней двух атрибутов (ключ не зависит от порядка атрибутов)
+  const ck = (ai: number, la: number, bi: number, lb: number) => (ai < bi ? `${ai}:${la}|${bi}:${lb}` : `${bi}:${lb}|${ai}:${la}`);
+  // Сначала закреплённые и заголовок — остальные атрибуты балансируются относительно них (цена внутри каждого сервиса)
+  const rank = (i: number) => (attrs[i].fixed ? 0 : attrs[i].header ? 1 : 2);
+  const order = attrs.map((_, i) => i).sort((a, b) => rank(a) - rank(b) || a - b);
   const out: number[][][] = [];
   for (let t = 0; t < tasks; t++) {
     let task: number[][] = [];
     for (let attempt = 0; attempt < 30; attempt++) {
       const cols: number[][] = []; // [атрибут][карточка]
-      attrs.forEach((a, ai) => {
+      const placed: number[] = [];
+      for (const ai of order) {
+        const a = attrs[ai];
+        if (a.fixed) {
+          // Карточка k — уровень k
+          cols[ai] = a.levels.slice(0, K).map((l) => l.code);
+          placed.push(ai);
+          continue;
+        }
         // Уровни для K карточек: реже показанные первыми, без повторов внутри задания, пока уровней хватает
         const used = new Map<number, number>();
         const chosen: number[] = [];
@@ -125,17 +132,17 @@ export function conjointDesign(q: ConjointQuestion, seed: string): number[][][] 
           used.set(pick, (used.get(pick) ?? 0) + 1);
           chosen.push(pick);
         }
-        // Раскладка по карточкам: из нескольких случайных перестановок — та, где сочетания с прежними атрибутами встречались реже
-        let best = shuffle(chosen);
+        // Раскладка по карточкам: перебор всех перестановок — та, где сочетания с уже разложенными атрибутами встречались реже
+        let best = chosen;
         let bestScore = Infinity;
-        for (let tries = 0; tries < (ai ? 12 : 1); tries++) {
-          const perm = tries ? shuffle(chosen) : best;
-          let score = 0;
-          for (let k = 0; k < K; k++) for (let bi = 0; bi < ai; bi++) score += co.get(ck(bi, cols[bi][k], ai, perm[k])) ?? 0;
+        for (const perm of permutations(chosen, rnd)) {
+          let score = rnd() * 0.5;
+          for (let k = 0; k < K; k++) for (const bi of placed) score += co.get(ck(bi, cols[bi][k], ai, perm[k])) ?? 0;
           if (score < bestScore) { bestScore = score; best = perm; }
         }
-        cols.push(best);
-      });
+        cols[ai] = best;
+        placed.push(ai);
+      }
       task = Array.from({ length: K }, (_, k) => attrs.map((_, ai) => cols[ai][k]));
       const cards = new Set(task.map((c) => c.join('.')));
       if (cards.size === K) break;
@@ -149,4 +156,67 @@ export function conjointDesign(q: ConjointQuestion, seed: string): number[][][] 
     out.push(task);
   }
   return out;
+}
+
+export interface DesignCheck {
+  respondents: number;
+  /** Доля показов каждого уровня (в % от всех карточек) и отклонение от равной доли */
+  levels: { attr: string; text: string; levels: { text: string; share: number }[]; maxDeviation: number }[];
+  /** Сочетания уровней пар атрибутов: сколько раз встретились, разброс в % от ожидаемого */
+  pairs: { a: string; b: string; rows: string[]; cols: string[]; counts: number[][]; spread: number }[];
+  /** Доля заданий, где уровень атрибута повторился на разных карточках (при достаточном числе уровней должно быть 0) */
+  overlap: { attr: string; share: number }[];
+  /** Одинаковые карточки в одном задании */
+  duplicates: number;
+}
+
+/**
+ * Проверка дизайна: генерирует задания для n условных респондентов и считает частоты уровней, сочетания пар атрибутов
+ * и пересечения внутри заданий. Нужна, чтобы увидеть баланс до запуска.
+ */
+export function conjointDesignCheck(q: ConjointQuestion, n = 500): DesignCheck {
+  const { attrs, alternatives: K } = conjointShape(q);
+  const lv = attrs.map((a) => new Map(a.levels.map((l) => [l.code, 0])));
+  const pairKeys: [number, number][] = [];
+  for (let i = 0; i < attrs.length; i++) for (let j = i + 1; j < attrs.length; j++) pairKeys.push([i, j]);
+  const pc = pairKeys.map(([i, j]) => attrs[i].levels.map(() => attrs[j].levels.map(() => 0)));
+  const overlap = attrs.map(() => 0);
+  let tasksTotal = 0;
+  let cards = 0;
+  let duplicates = 0;
+  for (let r = 0; r < n; r++) {
+    for (const task of conjointDesign(q, `check-${r}`)) {
+      tasksTotal++;
+      if (new Set(task.map((c) => c.join('.'))).size < task.length) duplicates++;
+      attrs.forEach((a, ai) => {
+        if (new Set(task.map((c) => c[ai])).size < Math.min(K, a.levels.length)) overlap[ai]++;
+      });
+      for (const card of task) {
+        cards++;
+        card.forEach((code, ai) => lv[ai].set(code, lv[ai].get(code)! + 1));
+        pairKeys.forEach(([i, j], p) => {
+          const x = attrs[i].levels.findIndex((l) => l.code === card[i]);
+          const y = attrs[j].levels.findIndex((l) => l.code === card[j]);
+          pc[p][x][y]++;
+        });
+      }
+    }
+  }
+  const pct = (x: number, total: number) => Math.round((x / total) * 1000) / 10;
+  return {
+    respondents: n,
+    levels: attrs.map((a, ai) => {
+      const shares = a.levels.map((l) => pct(lv[ai].get(l.code)!, cards));
+      const even = 100 / a.levels.length;
+      return { attr: a.text, text: a.id, levels: a.levels.map((l, i) => ({ text: l.text, share: shares[i] })), maxDeviation: Math.round(Math.max(...shares.map((s) => Math.abs(s - even))) * 10) / 10 };
+    }),
+    pairs: pairKeys.map(([i, j], p) => {
+      const flat = pc[p].flat();
+      const expected = cards / (attrs[i].levels.length * attrs[j].levels.length);
+      const spread = Math.round(((Math.max(...flat) - Math.min(...flat)) / expected) * 1000) / 10;
+      return { a: attrs[i].text, b: attrs[j].text, rows: attrs[i].levels.map((l) => l.text), cols: attrs[j].levels.map((l) => l.text), counts: pc[p], spread };
+    }),
+    overlap: attrs.map((a, ai) => ({ attr: a.text, share: pct(overlap[ai], tasksTotal) })),
+    duplicates,
+  };
 }

@@ -1,7 +1,8 @@
 // Настройки новых типов вопросов в конструкторе: слайдер, загрузка файла, клик по картинке, MaxDiff, конджойнт
 import { useRef, useState } from 'react';
-import { NumField, Segmented, compact } from './common.tsx';
-import { conjointShape, maxdiffShape } from '../../../shared/choiceDesign.ts';
+import { Modal, NumField, Segmented, compact } from './common.tsx';
+import { OptionsListDialog } from './OptionsListDialog.tsx';
+import { conjointDesignCheck, conjointShape, maxdiffShape, type DesignCheck } from '../../../shared/choiceDesign.ts';
 import type { ConjointAttribute, ConjointQuestion, FileQuestion, HotspotQuestion, MaxDiffQuestion, Option, SliderQuestion } from '../../../shared/types.ts';
 
 type Patch = Record<string, unknown>;
@@ -144,16 +145,15 @@ export function MaxDiffBody({ q, set, listButton }: { q: MaxDiffQuestion; set: (
   );
 }
 
+/** Атрибуты конджойнта: уровни — списком (с картинками), заголовок карточки, закрепление за карточкой; проверка дизайна */
 export function ConjointBody({ q, set }: { q: ConjointQuestion; set: (p: Patch) => void }) {
   const { attrs, tasks, alternatives } = conjointShape(q);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [check, setCheck] = useState<DesignCheck | null>(null);
   const setAttrs = (attributes: ConjointAttribute[]) => set({ attributes });
-  const updateAttr = (i: number, patch: Partial<ConjointAttribute>) => setAttrs(q.attributes.map((a, k) => (k === i ? { ...a, ...patch } : a)));
-  const levelsText = (a: ConjointAttribute) => a.levels.map((l) => l.text).join('\n');
-  const parseLevels = (a: ConjointAttribute, text: string): Option[] => text.split('\n').map((t, i) => ({
-    // Код уровня — по месту в списке: правка текста не меняет коды
-    ...(a.levels[i] ?? {}), code: a.levels[i]?.code ?? Math.max(0, ...a.levels.map((l) => l.code)) + 1 + (i - a.levels.length), text: t,
-  })).filter((l, i, arr) => l.text.trim() || i < arr.length - 1);
-  const minShows = attrs.length ? Math.min(...attrs.map((a) => Math.floor((tasks * alternatives) / a.levels.length))) : 0;
+  const updateAttr = (i: number, patch: Partial<ConjointAttribute>) => setAttrs(q.attributes.map((a, k) => (k === i ? compact({ ...a, ...patch }) : a)));
+  const varying = attrs.filter((a) => !a.fixed);
+  const minShows = varying.length ? Math.min(...varying.map((a) => Math.floor((tasks * alternatives) / a.levels.length))) : 0;
 
   return (
     <div className="stack" style={{ gap: 10 }}>
@@ -163,11 +163,35 @@ export function ConjointBody({ q, set }: { q: ConjointQuestion; set: (p: Patch) 
             <div className="row" style={{ gap: 6 }}>
               <input className="input mono" style={{ width: 90 }} title="ID атрибута — в выгрузке дизайна" value={a.id}
                 onChange={(e) => updateAttr(i, { id: e.target.value.replace(/[^A-Za-z0-9_]/g, '') })} />
-              <input className="input grow" placeholder="Атрибут, например «Цена»" value={a.text} onChange={(e) => updateAttr(i, { text: e.target.value })} />
+              <input className="input grow" placeholder="Атрибут, например «Сервис» или «Цена»" value={a.text} onChange={(e) => updateAttr(i, { text: e.target.value })} />
               <button className="icon-btn" title="Удалить атрибут" onClick={() => setAttrs(q.attributes.filter((_, k) => k !== i))}>✕</button>
             </div>
-            <textarea className="input" rows={Math.max(2, a.levels.length)} placeholder={'Уровни — по одному в строке:\n199 ₽\n249 ₽'}
-              value={levelsText(a)} onChange={(e) => updateAttr(i, { levels: parseLevels(a, e.target.value) })} />
+            <button type="button" className="list-btn" onClick={() => setEditing(i)}>
+              <span className="list-btn-title">Уровни<span className="tab-count">{a.levels.length}</span></span>
+              <span className="list-btn-summary">
+                {a.levels.slice(0, 6).map((l) => `${l.image ? '🖼 ' : ''}${l.text || '—'}`).join(' · ')}{a.levels.length > 6 ? ' …' : ''}
+              </span>
+              <span className="list-btn-go">›</span>
+            </button>
+            <div className="row" style={{ gap: 14, flexWrap: 'wrap' }}>
+              <label className="check small" title="Показывать сверху карточки крупно — например, сервис или бренд с логотипом">
+                <input type="checkbox" checked={!!a.header}
+                  onChange={(e) => setAttrs(q.attributes.map((x, k) => compact({ ...x, header: k === i ? e.target.checked || undefined : e.target.checked ? undefined : x.header })))} />
+                Заголовок карточки
+              </label>
+              <label className="check small" title={`Карточка 1 — первый уровень, карточка 2 — второй…; уровней должно быть ${alternatives}`}>
+                <input type="checkbox" checked={!!a.fixed} onChange={(e) => updateAttr(i, { fixed: e.target.checked || undefined })} />
+                Закреплён за карточкой
+              </label>
+              {a.fixed && a.levels.filter((l) => !l.hidden).length !== alternatives && (
+                <span className="small" style={{ color: 'var(--danger)' }}>нужно {alternatives} уровня — по числу карточек</span>
+              )}
+            </div>
+            {editing === i && (
+              <OptionsListDialog title={`${q.id} · ${a.text || a.id}: уровни`} options={a.levels} placeholder="Уровень, например «199 ₽»"
+                features={{ image: true, hideText: true, quickAdd: true }} onClose={() => setEditing(null)}
+                onChange={(levels) => updateAttr(i, { levels })} />
+            )}
           </div>
         ))}
         <button className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => {
@@ -183,13 +207,57 @@ export function ConjointBody({ q, set }: { q: ConjointQuestion; set: (p: Patch) 
         <label className="field grow"><span>Вариант «ничего не выберу»</span>
           <input className="input" placeholder="нет — не показывать" value={q.none ?? ''} onChange={(e) => set({ none: e.target.value || undefined })} />
         </label>
+        <button className="btn btn-secondary btn-sm" disabled={attrs.length < 2} title="Сгенерировать задания для 500 условных респондентов и посмотреть баланс"
+          onClick={() => setCheck(conjointDesignCheck(q, 500))}>Проверить дизайн</button>
       </div>
       <p className="muted small" style={{ margin: 0 }}>
-        Дизайн свой у каждого респондента и сбалансирован: уровни каждого атрибута показываются поровну (сейчас — от {minShows} раз),
-        в одном задании уровни атрибута не повторяются, пока их хватает на все карточки, сочетания уровней разных атрибутов
-        распределяются равномерно, одинаковых карточек нет. После начала сбора не меняйте атрибуты и уровни.
-        Выгрузка: выбранная карточка по заданиям ({q.id}_t1…) и файл дизайна — по строке на карточку.
+        Картинки у уровней — в списке уровней (логотип, фото товара); текст можно скрыть. Любой атрибут можно сделать заголовком карточки
+        и/или закрепить за карточкой — остальные атрибуты тогда балансируются внутри каждой карточки. Дизайн свой у каждого респондента:
+        уровни показываются поровну (сейчас — от {minShows} раз), в задании уровни атрибута не повторяются, пока их хватает на все карточки,
+        сочетания уровней разных атрибутов распределяются равномерно, одинаковых карточек нет. Не меняйте атрибуты и уровни после начала сбора.
       </p>
+      {check && <DesignCheckModal check={check} onClose={() => setCheck(null)} />}
     </div>
+  );
+}
+
+function DesignCheckModal({ check, onClose }: { check: DesignCheck; onClose: () => void }) {
+  const ok = (x: number, limit: number) => (x <= limit ? 'ok' : 'warn');
+  return (
+    <Modal onClose={onClose} title="Проверка дизайна" wide actions={<button className="btn btn-primary" onClick={onClose}>Закрыть</button>}>
+      <div className="stack design-check">
+        <p className="muted small" style={{ margin: 0 }}>
+          Задания сгенерированы для {check.respondents} условных респондентов так же, как для настоящих. Разброс сочетаний —
+          (максимум − минимум) / ожидаемое; при 500 респондентах 10–20% — обычный случайный разброс, с ростом выборки он сужается.
+        </p>
+        <div className="row small" style={{ gap: 16, flexWrap: 'wrap' }}>
+          <span className={`dc-${check.duplicates ? 'warn' : 'ok'}`}>Одинаковых карточек в задании: {check.duplicates}</span>
+          {check.overlap.map((o) => <span key={o.attr} className={`dc-${ok(o.share, 0)}`}>Повтор «{o.attr}» в задании: {o.share}%</span>)}
+        </div>
+        <h3>Частота уровней</h3>
+        <div className="grid2">
+          {check.levels.map((a) => (
+            <div key={a.text}>
+              <strong>{a.attr}</strong> <span className={`small dc-${ok(a.maxDeviation, 1)}`}>отклонение до {a.maxDeviation} п.п.</span>
+              <table className="table small">
+                <tbody>{a.levels.map((l, i) => <tr key={i}><td>{l.text}</td><td style={{ textAlign: 'right' }}>{l.share}%</td></tr>)}</tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+        <h3>Сочетания уровней</h3>
+        {check.pairs.map((p) => (
+          <details key={`${p.a}-${p.b}`}>
+            <summary>{p.a} × {p.b} <span className={`small dc-${ok(p.spread, 25)}`}>разброс {p.spread}%</span></summary>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table small">
+                <thead><tr><th />{p.cols.map((c, j) => <th key={j}>{c}</th>)}</tr></thead>
+                <tbody>{p.rows.map((r, i) => <tr key={i}><td>{r}</td>{p.counts[i].map((n, j) => <td key={j} style={{ textAlign: 'right' }}>{n}</td>)}</tr>)}</tbody>
+              </table>
+            </div>
+          </details>
+        ))}
+      </div>
+    </Modal>
   );
 }

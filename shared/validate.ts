@@ -661,7 +661,13 @@ function validateQuestion(
           if (typeof a.text !== 'string' || !a.text.trim()) err(aw, 'Нужно название атрибута');
           validateOptions(a.levels, aw, 'levels', err);
           if (Array.isArray(a.levels) && a.levels.filter((l) => !l?.hidden).length < 2) err(aw, 'Нужно хотя бы 2 уровня');
+          for (const k of ['header', 'fixed'] as const) if (a[k] !== undefined && typeof a[k] !== 'boolean') err(aw, `${k}: true или false`);
+          if (a.fixed && Array.isArray(a.levels) && a.levels.filter((l) => !l?.hidden).length !== (q.alternatives ?? 3)) {
+            err(aw, `Закреплённый атрибут: уровней должно быть столько же, сколько карточек в задании (${q.alternatives ?? 3})`);
+          }
         });
+        if (q.attributes.filter((a) => isObj(a) && a.header).length > 1) err(w, 'Заголовком карточки может быть только один атрибут');
+        if (q.attributes.every((a) => isObj(a) && a.fixed)) err(w, 'Хотя бы один атрибут должен меняться (не закреплённый)');
       }
       if (q.tasks !== undefined && (!isInt(q.tasks) || q.tasks < 1 || q.tasks > 30)) err(w, 'tasks: от 1 до 30');
       if (q.alternatives !== undefined && (!isInt(q.alternatives) || q.alternatives < 2 || q.alternatives > 5)) err(w, 'alternatives: от 2 до 5');
