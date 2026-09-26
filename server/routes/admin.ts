@@ -427,6 +427,13 @@ export async function adminRoutes(app: FastifyInstance) {
       return { ok: true };
     });
 
+    priv.post<{ Params: { id: string } }>('/api/admin/projects/:id/reject-suspect', async (req, reply) => {
+      if (!(await projects.get(req.params.id))) return reply.code(404).send({ error: 'Проект не найден' });
+      const rejected = await responses.rejectSuspect(req.params.id);
+      resetQuotas(req.params.id);
+      return { rejected };
+    });
+
     priv.delete<{ Params: { id: string; rid: string } }>('/api/admin/projects/:id/responses/:rid', async (req, reply) => {
       const r = await responses.get(req.params.rid);
       if (!r || r.projectId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
@@ -439,7 +446,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const list = await responses.list(req.params.id, { includeTest: true, includeRejected: true });
       return list.slice(-200).reverse().map((r) => ({
         id: r.id, status: r.status, isTest: r.isTest, rejected: r.rejected, startedAt: r.startedAt, completedAt: r.completedAt,
-        durationSec: r.durationSec, answered: Object.keys(r.answers).length, params: r.params,
+        durationSec: r.durationSec, answered: Object.keys(r.answers).length, params: r.params, flags: r.flags ?? [],
       }));
     });
 

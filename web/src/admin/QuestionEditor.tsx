@@ -539,6 +539,32 @@ function questionSettings(def: Survey, q: Question, set: (p: Patch) => void): { 
     textLine('prefillParam', 'Взять ответ из параметра ссылки', 'например, age', (v) => `Из ссылки ?${v}`);
     if (q.prefillParam) flag('prefillSkip', 'Не показывать вопрос, если ответ пришёл из ссылки');
   }
+  // ---- Качество ответов ----
+  if (answerable) {
+    group('Качество ответов');
+    if (q.attention) on.push(q.attention.onFail === 'screenout' ? 'Контрольный: отсев' : 'Контрольный вопрос');
+    body.push(
+      <div key="attention" className="flag-line stack" style={{ alignItems: 'stretch', gap: 6 }}>
+        <span>Контрольный вопрос<small className="muted"> — правильный ответ; при ошибке анкета помечается как подозрительная</small></span>
+        <ConditionField def={def} value={q.attention?.correct} self={q.id} placeholder={`пусто — не проверять; например, ${q.id} = 3`}
+          onChange={(c) => set({ attention: c ? { correct: c, ...(q.attention?.onFail ? { onFail: q.attention.onFail } : {}) } : undefined })} />
+        {q.attention && (
+          <Segmented value={q.attention.onFail ?? 'flag'} onChange={(v) => set({ attention: { correct: q.attention!.correct, ...(v === 'screenout' ? { onFail: 'screenout' as const } : {}) } })}
+            options={[{ value: 'flag', label: 'Пометить' }, { value: 'screenout', label: 'Отсеять' }]} />
+        )}
+      </div>,
+    );
+    if (q.type === 'matrix') {
+      if (q.straightline) on.push(q.straightline === 'screenout' ? 'Прямолинейные: отсев' : 'Прямолинейные: пометка');
+      body.push(
+        <div key="straightline" className="flag-line">
+          <span>Одинаковый ответ во всех строках<small className="muted"> (от 3 строк)</small></span>
+          <Segmented value={q.straightline ?? 'off'} onChange={(v) => set({ straightline: v === 'off' ? undefined : v as 'flag' | 'screenout' })}
+            options={[{ value: 'off', label: 'Не проверять' }, { value: 'flag', label: 'Пометить' }, { value: 'screenout', label: 'Отсеять' }]} />
+        </div>,
+      );
+    }
+  }
   if (answerable && q.required !== false) textLine('requiredMessage', 'Сообщение, если нет ответа', 'Пожалуйста, ответьте на вопрос', () => 'Своё сообщение');
   if (answerable || q.type === 'info') {
     if (!answerable) group('Отображение');

@@ -722,3 +722,4 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .daily-key.done { background: var(--accent); }
 .daily-key.started { background: #d7e2f7; }
 .badge.ai { background: #efe7fb; color: #6b3fb5; margin-left: 6px; font-size: 11px; }
+.badge.suspect { background: #fff1d6; color: #8a5a00; margin-left: 6px; }

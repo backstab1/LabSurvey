@@ -31,7 +31,7 @@ export interface ProjectInfo {
     webhookUrl?: string; telegramChatId?: string; everyN?: number; quotaFull?: boolean; limitReached?: boolean;
     lastError?: string | null; lastSentAt?: string;
   } | null;
-  counts: { real: Record<string, number>; test: number; rejected: number };
+  counts: { real: Record<string, number>; test: number; rejected: number; suspect: number };
   sheetsAccount: { configured: boolean; email: string | null };
   testToken: string;
   telegramConfigured: boolean;

@@ -8,7 +8,7 @@ import { queueResponseSync } from '../sheets.ts';
 import { fullQuota, noteCompleted } from '../quotas.ts';
 import { afterComplete } from '../notify.ts';
 import {
-  actionError, allQuestions, cleanAnswers, endingAction, findPage, firstPage, paramAnswer, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
+  actionError, allQuestions, answerRows, cleanAnswers, endingAction, evalCondition, findPage, firstPage, paramAnswer, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
 } from '../../shared/logic.ts';
 import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
 import { expandAllLoops, withLoops } from '../../shared/loops.ts';
@@ -195,6 +195,39 @@ function checkPage(survey: Survey, r: StoredResponse, pageId: string, submitted:
   return { errors, working, pageAnswers, page };
 }
 
+/** Прямолинейные ответы в матрице: от 3 заполненных строк, и во всех — одно и то же */
+function straightlined(ctx: RespondentContext, q: Extract<Survey['blocks'][number]['questions'][number], { type: 'matrix' }>): boolean {
+  const v = ctx.answers[q.id]?.v;
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const rows = answerRows(ctx, q).filter((r) => !r.other);
+  const values = rows.map((r) => (v as Record<string, number | number[]>)[String(r.code)])
+    .filter((x) => x !== undefined && !(Array.isArray(x) && !x.length))
+    .map((x) => JSON.stringify(Array.isArray(x) ? [...x].sort((a, b) => a - b) : x));
+  return values.length >= 3 && values.every((x) => x === values[0]);
+}
+
+/**
+ * Качество ответов на странице: ловушка для ботов, контрольные вопросы, прямолинейные ответы.
+ * Возвращает новые пометки и нужно ли отсеять респондента.
+ */
+function qualityCheck(ctx: RespondentContext, questions: Survey['blocks'][number]['questions'], hp: unknown, prev: string[]) {
+  const flags = new Set(prev);
+  let screenout = false;
+  if (typeof hp === 'string' && hp.trim()) flags.add('bot');
+  for (const q of questions) {
+    if (!ctx.answers[q.id] || !isQuestionVisible(ctx, q)) continue;
+    if (q.attention && !evalCondition(q.attention.correct, ctx)) {
+      flags.add(`attention:${q.id}`);
+      if (q.attention.onFail === 'screenout') screenout = true;
+    }
+    if (q.type === 'matrix' && q.straightline && straightlined(ctx, q)) {
+      flags.add(`straightline:${q.id}`);
+      if (q.straightline === 'screenout') screenout = true;
+    }
+  }
+  return { flags: [...flags], screenout };
+}
+
 /** Ответы страницы заменяют прежние ответы на её вопросы */
 function mergePage(stored: Answers, page: { questions: { id: string; type: string }[] }, pageAnswers: Answers): Answers {
   const out = { ...stored };
@@ -377,7 +410,7 @@ export async function respondentRoutes(app: FastifyInstance) {
     },
   );
 
-  app.post<{ Params: { id: string }; Body: { rid: string; page: string; answers: Answers } }>(
+  app.post<{ Params: { id: string }; Body: { rid: string; page: string; answers: Answers; hp?: string } }>(
     '/api/s/:id/submit',
     async (req, reply) => {
       const loaded = await load(req.params.id, req.body?.rid);
@@ -397,9 +430,14 @@ export async function respondentRoutes(app: FastifyInstance) {
       await responses.update(r.id, { timings });
       // Навигация — по ответам с учётом действий «после ответа» (переменные)
       const nav = ctxOf(survey, r, cleanAnswers(ctxOf(survey, r, answers), visited));
+      const quality = qualityCheck(nav, page.questions, req.body.hp, r.flags ?? []);
+      if (quality.flags.length !== (r.flags ?? []).length) await responses.update(r.id, { flags: quality.flags });
       const next = nextPage(nav, page.id);
-      // Респондент подошёл под квоту, которая уже набрана (отсев важнее квоты)
-      if (next !== SCREENOUT && (await fullQuota(ownerOf(r), survey, r.isTest, nav))) {
+      if (quality.screenout) {
+        // Контрольный вопрос или прямолинейные ответы с отсевом
+        await finalize(survey, r, answers, visited, 'screened_out');
+      } else if (next !== SCREENOUT && (await fullQuota(ownerOf(r), survey, r.isTest, nav))) {
+        // Респондент подошёл под квоту, которая уже набрана (отсев важнее квоты)
         await finalize(survey, r, answers, visited, 'overquota');
       } else if (next === END || next === SCREENOUT) {
         const act = endingAction(nav, page.id);

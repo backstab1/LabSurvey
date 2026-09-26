@@ -333,7 +333,7 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
     if (action === 'finish' && !window.confirm('Завершить опрос? Вернуться к нему будет нельзя.')) return;
     setBusy(true);
     try {
-      onState(await api('POST', `/api/s/${surveyId}/${action}`, { rid: state.rid, page: page.id, answers: payload() }));
+      onState(await api('POST', `/api/s/${surveyId}/${action}`, { rid: state.rid, page: page.id, answers: payload(), hp: hpRef.current?.value || undefined }));
     } catch (e) {
       if (e instanceof ApiError && e.status === 422 && e.data?.errors) showErrors(e.data.errors);
       else setPageError(e instanceof Error ? e.message : 'Ошибка сети. Попробуйте ещё раз.');
@@ -343,6 +343,8 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
   };
 
   sendRef.current = send;
+  // Ловушка для ботов: поле, которое человек не видит и не заполняет
+  const hpRef = useRef<HTMLInputElement>(null);
 
   const numbered = settings.showQuestionNumbers && visible.some((q) => q.type !== 'info');
 
@@ -369,6 +371,9 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
           <QuestionView key={q.id} q={q} ctx={ctx} answer={local[q.id]} error={errors[q.id]} onChange={(a) => setAnswer(q.id, a)} />
         ))}
         {pageError && <div className="q-error page-error" role="alert">{pageError}</div>}
+        <label className="hp-field" aria-hidden="true">Не заполняйте это поле
+          <input ref={hpRef} name="website" type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
+        </label>
         <div className="nav">
           {state.canBack && !hideBack && <button className="btn btn-secondary" disabled={busy} onClick={() => send('back')}>{settings.backLabel}</button>}
           <button className="btn btn-primary" disabled={busy} onClick={() => send('submit')}>{isLast ? settings.submitLabel : settings.nextLabel}</button>

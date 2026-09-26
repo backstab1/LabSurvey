@@ -196,6 +196,20 @@ export function validateSurvey(input: unknown): ValidationResult {
       const info = qIndex.get(q?.id);
       if (!info || !isObj(q)) continue;
       if (q.showIf) checkCondition(q.showIf, `${q.id} → условие показа`, info, true);
+      const att = (q as { attention?: unknown }).attention;
+      if (att !== undefined) {
+        if (!isObj(att) || att.correct === undefined) err(q.id, 'attention: укажите correct — условие правильного ответа');
+        else {
+          checkCondition(att.correct as Condition, `${q.id} → контрольный вопрос`, null, true);
+          if (att.onFail !== undefined && att.onFail !== 'flag' && att.onFail !== 'screenout') err(q.id, 'attention.onFail: flag или screenout');
+        }
+        if (q.type === 'info' || q.type === 'hidden') err(q.id, 'Контрольным может быть только вопрос с ответом');
+      }
+      const sl = (q as { straightline?: unknown }).straightline;
+      if (sl !== undefined) {
+        if (q.type !== 'matrix') err(q.id, 'straightline работает только у матрицы');
+        else if (sl !== 'flag' && sl !== 'screenout') err(q.id, 'straightline: flag или screenout');
+      }
       const from = (q as { optionsFrom?: { question: string; filter: string } }).optionsFrom
         ?? (q as { rowsFrom?: { question: string; filter: string } }).rowsFrom;
       if (from) {

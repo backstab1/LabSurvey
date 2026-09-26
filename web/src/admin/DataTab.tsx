@@ -7,13 +7,13 @@ import { allQuestions, answerText, pipe } from '../../../shared/logic.ts';
 import { expandAllLoops } from '../../../shared/loops.ts';
 import type { Answers, Survey } from '../../../shared/types.ts';
 import type { ProjectInfo } from './ProjectPage.tsx';
-import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
+import { STATUS_LABELS, flagLabel, type ResponseStatus } from '../../../shared/variables.ts';
 
 const EXPORT_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
 
 interface RespRow {
   id: string; status: ResponseStatus; isTest: boolean; rejected: boolean; startedAt: string; completedAt: string | null;
-  durationSec: number | null; answered: number; params: Record<string, string>;
+  durationSec: number | null; answered: number; params: Record<string, string>; flags?: string[];
 }
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
@@ -65,6 +65,20 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
         <div className="card"><div className="stat">{info.counts.real.terminated ?? 0}</div><div className="stat-label">Досрочно</div></div>
         <div className="card"><div className="stat">{info.counts.real.in_progress ?? 0}</div><div className="stat-label">В процессе / бросили</div></div>
         {info.counts.rejected > 0 && <div className="card"><div className="stat">{info.counts.rejected}</div><div className="stat-label">Брак</div></div>}
+        {info.counts.suspect > 0 && (
+          <div className="card">
+            <div className="stat">{info.counts.suspect}</div>
+            <div className="stat-label">Подозрительные</div>
+            {editable && (
+              <button className="btn-link small" style={{ padding: 0, marginTop: 4 }} onClick={async () => {
+                if (!window.confirm(`Забраковать подозрительные анкеты (${info.counts.suspect})? Они перестанут считаться в квотах, лимите, отчёте и выгрузке. Брак можно снять по одной.`)) return;
+                const r = await api('POST', `/api/admin/projects/${info.id}/reject-suspect`);
+                toast(`Забраковано: ${r.rejected}`);
+                await refresh();
+              }}>забраковать все</button>
+            )}
+          </div>
+        )}
         <div className="card"><div className="stat">{total}</div><div className="stat-label">Всего начали</div></div>
       </div>
 
@@ -139,7 +153,10 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
               {recent.filter((r) => (showTest || !r.isTest) && matchPanel(r)).slice(0, 100).map((r) => (
                 <tr key={r.id} className={`clickable${r.rejected ? ' muted' : ''}`} onClick={() => setViewing(r.id)} title="Открыть ответ">
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{r.id}</td>
-                  <td>{STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}{r.rejected && <span className="badge closed">брак</span>}</td>
+                  <td>
+                    {STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}{r.rejected && <span className="badge closed">брак</span>}
+                    {!!r.flags?.length && <span className="badge suspect" title={r.flags.map(flagLabel).join('\n')}>подозрительная</span>}
+                  </td>
                   <td>{fmt(r.startedAt)}</td>
                   <td>{fmt(r.completedAt)}</td>
                   <td>
@@ -238,6 +255,7 @@ function ResponseModal({ editable, surveyId, rid, onClose, onDeleted, onChanged 
           {r.durationSec !== null && <span>Время: {Math.floor(r.durationSec / 60)} мин {r.durationSec % 60} с</span>}
           {Object.entries(r.params).map(([k, v]) => <span key={k} className="mono">{k}={v}</span>)}
         </div>
+        {!!r.flags?.length && <div className="warn-box small">Подозрительная анкета: {r.flags.map(flagLabel).join('; ')}</div>}
         {qs.length === 0 ? <p className="muted">Ответов нет</p> : (
           <table className="table answers-table">
             <tbody>

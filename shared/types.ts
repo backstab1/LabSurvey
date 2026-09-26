@@ -168,6 +168,11 @@ interface QuestionBase {
   prefillParam?: string;
   /** Если ответ пришёл из ссылки — не показывать вопрос */
   prefillSkip?: boolean;
+  /**
+   * Контрольный вопрос на внимательность: correct — условие правильного ответа (например, Q5 = 3).
+   * Если ответ есть и условие не выполнено — анкета помечается (flag, по умолчанию) или отсеивается (screenout).
+   */
+  attention?: { correct: Condition; onFail?: 'flag' | 'screenout' };
 }
 
 /** Порядок вариантов: random — перемешать, rotate — циклический сдвиг с сохранением порядка */
@@ -272,6 +277,8 @@ export interface MatrixQuestion extends QuestionBase {
   carousel?: boolean;
   /** Без кружков и квадратиков в ячейках */
   hideMarker?: boolean;
+  /** Прямолинейные ответы (во всех строках, от 3, — один и тот же столбец): пометить или отсеять */
+  straightline?: 'flag' | 'screenout';
   /** all — обязательны все строки, none — ни одна, число — минимум заполненных строк */
   requiredRows?: 'all' | 'none' | number;
 }

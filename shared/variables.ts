@@ -36,6 +36,17 @@ export interface ResponseRecord {
   timings?: Record<string, number>;
   /** Анкета забракована командой */
   rejected?: boolean;
+  /** Пометки качества: bot, attention:Q5, straightline:M1 */
+  flags?: string[];
+}
+
+/** Пометка качества — по-человечески */
+export function flagLabel(flag: string): string {
+  if (flag === 'bot') return 'бот (заполнено скрытое поле)';
+  const [kind, id] = flag.split(':');
+  if (kind === 'attention') return `ошибка в контрольном вопросе ${id}`;
+  if (kind === 'straightline') return `одинаковые ответы в матрице ${id}`;
+  return flag;
 }
 
 export type Cell = number | string | Date | null;
@@ -121,6 +132,14 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
       name: 'rejected', label: 'Брак', kind: 'numeric', measure: 'nominal',
       valueLabels: [{ value: 0, label: 'Нет' }, { value: 1, label: 'Да' }], get: (r) => (r.rejected ? 1 : 0),
     });
+  }
+
+  if (responses.some((r) => r.flags?.length)) {
+    add({
+      name: 'suspect', label: 'Подозрительная анкета (бот, контрольный вопрос, прямолинейные ответы)', kind: 'numeric', measure: 'nominal',
+      valueLabels: [{ value: 0, label: 'Нет' }, { value: 1, label: 'Да' }], get: (r) => (r.flags?.length ? 1 : 0),
+    });
+    add({ name: 'quality_flags', label: 'Пометки качества', kind: 'string', measure: 'nominal', get: (r) => (r.flags?.length ? r.flags.join(',') : null) });
   }
 
   // Параметры ссылки (utm_source, src, ...) — по всем ответам

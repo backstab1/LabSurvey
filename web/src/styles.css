@@ -85,6 +85,7 @@ textarea.input { resize: vertical; }
 .scale-labels { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 14px; margin-top: 6px; }
 .scale-labels span:last-child { text-align: right; }
 
+.hp-field { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
 .matrix-wrap { overflow-x: auto; }
 .matrix { width: 100%; border-collapse: collapse; }
 .matrix th, .matrix td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border); }

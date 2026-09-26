@@ -77,6 +77,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS projects_survey ON projects(survey_id);
 `);
 migrateToProjects();
+// Пометки качества ответа (после перехода на проекты — он пересоздаёт таблицу ответов)
+if (!(db.prepare('PRAGMA table_info(responses)').all() as { name: string }[]).some((c) => c.name === 'flags')) {
+  db.exec('ALTER TABLE responses ADD COLUMN flags TEXT');
+}
 if (!(db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).some((c) => c.name === 'panels')) {
   db.exec('ALTER TABLE projects ADD COLUMN panels TEXT');
 }
@@ -326,6 +330,7 @@ function toResponse(r: Row): StoredResponse {
     ending: r.ending ? JSON.parse(r.ending as string) : null,
     timings: r.timings ? JSON.parse(r.timings as string) : {},
     rejected: r.rejected === 1,
+    flags: r.flags ? JSON.parse(r.flags as string) : [],
   };
 }
 
@@ -485,7 +490,7 @@ export const responses = {
     answers?: Answers; history?: string[]; currentPage?: string | null; status?: ResponseStatus;
     completedAt?: string | null; durationSec?: number | null; version?: number;
     ending?: { message?: string; redirect?: string } | null;
-    timings?: Record<string, number>; rejected?: boolean;
+    timings?: Record<string, number>; rejected?: boolean; flags?: string[];
   }): Promise<void> {
     const sets: string[] = ['updated_at = ?'];
     const vals: (string | number | null)[] = [now()];
@@ -498,6 +503,7 @@ export const responses = {
     if (patch.version !== undefined) { sets.push('version = ?'); vals.push(patch.version); }
     if (patch.timings !== undefined) { sets.push('timings = ?'); vals.push(JSON.stringify(patch.timings)); }
     if (patch.rejected !== undefined) { sets.push('rejected = ?'); vals.push(patch.rejected ? 1 : 0); }
+    if (patch.flags !== undefined) { sets.push('flags = ?'); vals.push(patch.flags.length ? JSON.stringify(patch.flags) : null); }
     if (patch.ending !== undefined) { sets.push('ending = ?'); vals.push(patch.ending ? JSON.stringify(patch.ending) : null); }
     vals.push(id);
     db.prepare(`UPDATE responses SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
@@ -582,18 +588,28 @@ export const responses = {
   },
 
   /** Счётчики по статусам; бракованные анкеты считаются отдельно (rejected) и в статусы не входят */
-  async counts(projectId: string): Promise<{ real: Record<string, number>; test: number; rejected: number }> {
-    const rows = db.prepare('SELECT is_test, status, rejected, COUNT(*) AS n FROM responses WHERE project_id = ? GROUP BY is_test, status, rejected')
-      .all(projectId) as Row[];
+  async counts(projectId: string): Promise<{ real: Record<string, number>; test: number; rejected: number; suspect: number }> {
+    const rows = db.prepare(`SELECT is_test, status, rejected, flags IS NOT NULL AS flagged, COUNT(*) AS n FROM responses WHERE project_id = ?
+      GROUP BY is_test, status, rejected, flagged`).all(projectId) as Row[];
     const real: Record<string, number> = {};
     let test = 0;
     let rejected = 0;
+    let suspect = 0;
     for (const r of rows) {
       if (r.is_test === 1) test += r.n as number;
       else if (r.rejected === 1) rejected += r.n as number;
-      else real[r.status as string] = (real[r.status as string] ?? 0) + (r.n as number);
+      else {
+        real[r.status as string] = (real[r.status as string] ?? 0) + (r.n as number);
+        if (r.flagged === 1) suspect += r.n as number;
+      }
     }
-    return { real, test, rejected };
+    return { real, test, rejected, suspect };
+  },
+
+  /** Забраковать все настоящие анкеты с пометками качества; возвращает, сколько забраковано */
+  async rejectSuspect(projectId: string): Promise<number> {
+    return Number(db.prepare('UPDATE responses SET rejected = 1, updated_at = ? WHERE project_id = ? AND is_test = 0 AND rejected = 0 AND flags IS NOT NULL')
+      .run(now(), projectId).changes);
   },
 
   async remove(id: string): Promise<void> {
