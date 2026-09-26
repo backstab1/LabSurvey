@@ -729,3 +729,24 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .badge.inv-started { background: #fff1d6; color: #8a5a00; }
 .badge.inv-completed { background: #e3f5e8; color: #1c7c3a; }
 .badge.inv-screened_out, .badge.inv-overquota, .badge.inv-terminated { background: #f3e8e8; color: #9b3434; }
+/* Таблицы (кросс-таблицы) */
+.xchips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.xchips:empty { display: none; }
+.xchip { display: inline-flex; align-items: center; gap: 4px; background: #eef3fd; color: #24407a; border-radius: 6px; padding: 2px 4px 2px 8px; font-size: 13px; max-width: 100%; }
+.xchip.banner { background: #f1ecfa; color: #4b2d86; }
+.xchip .icon-btn { width: 22px; height: 22px; min-height: 0; font-size: 11px; }
+.xtab-card { padding: 12px 14px; }
+.xtab-title { font-weight: 600; margin-bottom: 8px; }
+.xtab-wrap { overflow-x: auto; }
+.xtab { border-collapse: collapse; font-size: 13px; min-width: 100%; }
+.xtab th, .xtab td { border-bottom: 1px solid var(--border); padding: 5px 8px; text-align: right; white-space: nowrap; vertical-align: top; }
+.xtab th:first-child, .xtab td:first-child { text-align: left; white-space: normal; min-width: 180px; max-width: 360px; position: sticky; left: 0; background: var(--surface); }
+.xtab thead th { font-weight: 500; color: var(--muted); vertical-align: bottom; white-space: normal; min-width: 70px; }
+.xtab .xtab-banner { text-align: center; color: #4b2d86; border-bottom: 2px solid #d9cdf0; }
+.xtab .xtab-letter { display: block; font-size: 11px; color: #6b3fb5; font-weight: 600; }
+.xtab .xtab-total { background: #fafbfc; }
+.xtab-base td { color: var(--muted); font-style: italic; }
+.xtab .small-base { color: #a0a6b0; }
+.xtab-sig { color: #1c7c3a; font-weight: 700; margin-left: 2px; }
+.xtab-count, .xtab-rowPct { color: var(--muted); font-size: 12px; }
+.xtab-stat td { font-weight: 500; }

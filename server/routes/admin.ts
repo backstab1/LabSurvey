@@ -3,7 +3,7 @@ import {
   authenticate, checkUserPassword, clearSession, currentUser, hashPassword, isBuiltInLogin, loginBlocked, loginFailed,
   requireAdminRole, requireUser, setSession, testToken,
 } from '../auth.ts';
-import { audit, invitees, oauth, projects, responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig } from '../db.ts';
+import { audit, invitees, oauth, projects, responses, surveys, users, type NotifyConfig, type TableSet, type Role, type SheetsConfig } from '../db.ts';
 import { defFor, loadProject } from '../projectCtx.ts';
 import { buildTable, cellToText } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
@@ -11,6 +11,8 @@ import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
 import { simulate } from '../simulate.ts';
 import { dailyStats } from '../daily.ts';
+import { buildCrosstabs, type CrosstabSpec } from '../../shared/crosstab.ts';
+import { writeCrosstabXlsx, type Measure } from '../export/crosstabXlsx.ts';
 import { auditHooks, auditLogin } from '../audit.ts';
 import { quotaCounts, resetQuotas } from '../quotas.ts';
 import { buildReport } from '../../shared/report.ts';
@@ -308,7 +310,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const { project: p, survey: s } = l;
       const counts = l.live && p.quotas.length ? await quotaCounts(p.id, l.live, false) : null;
       const info = {
-        id: p.id, title: p.title, status: p.status, settings: p.settings, quotaDefs: p.quotas, panels: p.panels,
+        id: p.id, title: p.title, status: p.status, settings: p.settings, quotaDefs: p.quotas, panels: p.panels, tableSets: p.tables,
         panelCounts: await responses.countsByPanel(p.id),
         quotas: p.quotas.map((q) => ({ id: q.id, title: q.title, limit: q.limit, count: counts?.get(q.id) ?? 0 })),
         survey: { id: s.id, title: s.draft.title, version: s.version, published: !!s.published, unpublished: !s.published || JSON.stringify(s.published) !== JSON.stringify(s.draft) },
@@ -337,7 +339,7 @@ export async function adminRoutes(app: FastifyInstance) {
       return { id: copy.id };
     });
 
-    priv.put<{ Params: { id: string }; Body: { title?: string; surveyId?: string; settings?: ProjectSettings; quotas?: Quota[]; panels?: Panel[] } }>(
+    priv.put<{ Params: { id: string }; Body: { title?: string; surveyId?: string; settings?: ProjectSettings; quotas?: Quota[]; panels?: Panel[]; tables?: TableSet[] } }>(
       '/api/admin/projects/:id',
       async (req, reply) => {
         const l = await loadProject(req.params.id);
@@ -370,6 +372,13 @@ export async function adminRoutes(app: FastifyInstance) {
           const errs = validatePanels(b.panels);
           if (errs.length) return reply.code(422).send({ error: errs.join('; ') });
           patch.panels = b.panels;
+        }
+        if (b.tables !== undefined) {
+          if (!Array.isArray(b.tables) || b.tables.length > 50
+            || !b.tables.every((t) => t && typeof t.name === 'string' && t.name.trim() && t.spec && Array.isArray(t.spec.rows) && Array.isArray(t.spec.cols))) {
+            return reply.code(400).send({ error: 'Наборы таблиц: список {name, spec} (не больше 50)' });
+          }
+          patch.tables = b.tables.map((t) => ({ name: t.name.trim().slice(0, 100), spec: t.spec }));
         }
         // Настройки и квоты проверяются вместе с анкетой — условия квот ссылаются на её вопросы
         const next = { settings: patch.settings ?? l.project.settings, quotas: patch.quotas ?? l.project.quotas };
@@ -491,6 +500,48 @@ export async function adminRoutes(app: FastifyInstance) {
         id: r.id, status: r.status, isTest: r.isTest, rejected: r.rejected, startedAt: r.startedAt, completedAt: r.completedAt,
         durationSec: r.durationSec, answered: Object.keys(r.answers).length, params: r.params, flags: r.flags ?? [],
       }));
+    });
+
+    // ---- Таблицы (кросс-таблицы) ----
+    function parseSpec(raw: string | undefined): CrosstabSpec | string {
+      let s: CrosstabSpec;
+      try { s = JSON.parse(raw ?? ''); } catch { return 'spec: некорректный JSON'; }
+      const refOk = (x: unknown) => !!x && typeof x === 'object'
+        && ((typeof (x as { q?: unknown }).q === 'string') || (typeof (x as { param?: unknown }).param === 'string'));
+      if (!s || !Array.isArray(s.rows) || !Array.isArray(s.cols) || !s.rows.every(refOk) || !s.cols.every(refOk)) return 'spec: rows и cols — списки переменных';
+      if (s.rows.length > 100 || s.cols.length > 10) return 'Не больше 100 строк и 10 переменных в шапке';
+      return s;
+    }
+    async function crosstab(id: string, spec: CrosstabSpec) {
+      const l = await loadProject(id);
+      if (!l) return null;
+      const def = defFor(l, !!spec.test);
+      const statuses = (spec.statuses?.filter((x) => ALL_STATUSES.includes(x)) ?? ['completed']) as ResponseStatus[];
+      const list = (await responses.list(l.project.id, { includeTest: !!spec.test, statuses: statuses.length ? statuses : ['completed'] }))
+        .filter((r) => r.isTest === !!spec.test)
+        .filter((r) => !spec.filter || evalCondition(spec.filter, { survey: def, answers: r.answers, params: r.params, seed: r.id }));
+      return { l, result: buildCrosstabs(expandAllLoops(def), spec, list) };
+    }
+
+    priv.get<{ Params: { id: string }; Querystring: { spec?: string } }>('/api/admin/projects/:id/crosstab', async (req, reply) => {
+      const spec = parseSpec(req.query.spec);
+      if (typeof spec === 'string') return reply.code(400).send({ error: spec });
+      const out = await crosstab(req.params.id, spec);
+      return out ? out.result : reply.code(404).send({ error: 'Проект не найден' });
+    });
+
+    priv.get<{ Params: { id: string }; Querystring: { spec?: string; measures?: string } }>('/api/admin/projects/:id/crosstab.xlsx', async (req, reply) => {
+      const spec = parseSpec(req.query.spec);
+      if (typeof spec === 'string') return reply.code(400).send({ error: spec });
+      const out = await crosstab(req.params.id, spec);
+      if (!out) return reply.code(404).send({ error: 'Проект не найден' });
+      const measures = (req.query.measures?.split(',').filter((m) => ['colPct', 'rowPct', 'count'].includes(m)) ?? ['colPct']) as Measure[];
+      const sig = spec.sig === 0 ? 'значимость не проверялась' : `буквы — столбец значимо больше указанных (${Math.round((spec.sig ?? 0.95) * 100)}%, база от ${out.result.minBase})`;
+      const note = `Анкет: ${out.result.total}${spec.test ? ' (тестовые)' : ''}${spec.filter ? ', подгруппа' : ''}; ${sig}`;
+      const date = new Date().toISOString().slice(0, 10);
+      reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      reply.header('Content-Disposition', attachment(`${out.l.project.title.slice(0, 60)}_таблицы_${date}.xlsx`));
+      return reply.send(await writeCrosstabXlsx(out.result, out.l.project.title, measures.length ? measures : ['colPct'], note));
     });
 
     // Отчёт: распределения ответов и места, где бросают анкету

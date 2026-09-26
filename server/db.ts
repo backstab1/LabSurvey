@@ -6,6 +6,7 @@ import { config } from './config.ts';
 import { PANEL_PARAM, stripProjectFields, type Answers, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey } from '../shared/types.ts';
 import { migrateSurvey } from '../shared/migrate.ts';
 import type { ResponseRecord, ResponseStatus } from '../shared/variables.ts';
+import type { CrosstabSpec } from '../shared/crosstab.ts';
 
 const db = new DatabaseSync(config.dbFile);
 db.exec(`
@@ -83,6 +84,9 @@ if (!(db.prepare('PRAGMA table_info(responses)').all() as { name: string }[]).so
 }
 if (!(db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).some((c) => c.name === 'panels')) {
   db.exec('ALTER TABLE projects ADD COLUMN panels TEXT');
+}
+if (!(db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).some((c) => c.name === 'tables')) {
+  db.exec('ALTER TABLE projects ADD COLUMN tables TEXT');
 }
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -230,11 +234,16 @@ export interface ProjectRow {
   settings: ProjectSettings;
   quotas: Quota[];
   panels: Panel[];
+  /** Сохранённые наборы таблиц */
+  tables: TableSet[];
   sheets: SheetsConfig | null;
   notify: NotifyConfig | null;
   createdAt: string;
   updatedAt: string;
 }
+
+/** Набор таблиц: строки, шапка, фильтры — сохраняется в проекте */
+export interface TableSet { name: string; spec: CrosstabSpec }
 
 /** Счётчики одного источника: panel = null — прямая ссылка без панели */
 export interface PanelCounts {
@@ -302,6 +311,7 @@ function toProject(r: Row): ProjectRow {
     settings: r.settings ? JSON.parse(r.settings as string) : {},
     quotas: r.quotas ? JSON.parse(r.quotas as string) : [],
     panels: r.panels ? JSON.parse(r.panels as string) : [],
+    tables: r.tables ? JSON.parse(r.tables as string) : [],
     sheets: r.sheets ? JSON.parse(r.sheets as string) : null,
     notify: r.notify ? JSON.parse(r.notify as string) : null,
     createdAt: r.created_at as string,
@@ -434,7 +444,7 @@ export const projects = {
     return (await this.get(id))!;
   },
 
-  async update(id: string, patch: { title?: string; surveyId?: string; status?: ProjectStatus; settings?: ProjectSettings; quotas?: Quota[]; panels?: Panel[] }): Promise<void> {
+  async update(id: string, patch: { title?: string; surveyId?: string; status?: ProjectStatus; settings?: ProjectSettings; quotas?: Quota[]; panels?: Panel[]; tables?: TableSet[] }): Promise<void> {
     const sets: string[] = ['updated_at = ?'];
     const vals: (string | null)[] = [now()];
     if (patch.title !== undefined) { sets.push('title = ?'); vals.push(patch.title); }
@@ -443,6 +453,7 @@ export const projects = {
     if (patch.settings !== undefined) { sets.push('settings = ?'); vals.push(Object.keys(patch.settings).length ? JSON.stringify(patch.settings) : null); }
     if (patch.quotas !== undefined) { sets.push('quotas = ?'); vals.push(patch.quotas.length ? JSON.stringify(patch.quotas) : null); }
     if (patch.panels !== undefined) { sets.push('panels = ?'); vals.push(patch.panels.length ? JSON.stringify(patch.panels) : null); }
+    if (patch.tables !== undefined) { sets.push('tables = ?'); vals.push(patch.tables.length ? JSON.stringify(patch.tables) : null); }
     vals.push(id);
     db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
   },
@@ -451,7 +462,7 @@ export const projects = {
   async copy(id: string, title: string): Promise<ProjectRow> {
     const src = (await this.get(id))!;
     const p = await this.create({ title, surveyId: src.surveyId });
-    await this.update(p.id, { settings: src.settings, quotas: src.quotas, panels: src.panels });
+    await this.update(p.id, { settings: src.settings, quotas: src.quotas, panels: src.panels, tables: src.tables });
     return (await this.get(p.id))!;
   },
 

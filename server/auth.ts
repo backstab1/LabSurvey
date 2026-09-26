@@ -135,7 +135,7 @@ export function clientAllowed(method: string, url: string, projects: string[]): 
   if (method === 'POST') return path === '/api/admin/me/password';
   if (method !== 'GET') return false;
   if (path === '/api/admin/projects') return true;
-  const m = path.match(/^\/api\/admin\/projects\/([\w-]+)(?:\/(report|responses(?:\/[\w-]+)?|export\.\w+))?$/);
+  const m = path.match(/^\/api\/admin\/projects\/([\w-]+)(?:\/(report|crosstab(?:\.xlsx)?|responses(?:\/[\w-]+)?|export\.\w+))?$/);
   return !!m && projects.includes(m[1]);
 }
 

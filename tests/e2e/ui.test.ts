@@ -239,7 +239,7 @@ test('client sees only results of assigned projects; admin sees panels, sources 
   await cp.goto(`${base}/admin/p/${pid}?tab=settings`);
   await cp.getByRole('heading', { name: 'Источники' }).waitFor();
   const tabs = await cp.locator('.tabs .tab').allInnerTexts();
-  assert.deepEqual(tabs.map((x) => x.trim()), ['Сводка', 'Данные', 'Отчёт']);
+  assert.deepEqual(tabs.map((x) => x.trim()), ['Сводка', 'Данные', 'Отчёт', 'Таблицы']);
   assert.equal(await cp.getByRole('heading', { name: 'Анкета' }).count(), 0);
   assert.equal(await cp.locator('.editor-head .menu-trigger').count(), 0);
   await cp.getByRole('button', { name: 'Данные' }).click();

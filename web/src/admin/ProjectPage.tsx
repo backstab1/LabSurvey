@@ -4,6 +4,7 @@ import { canEdit, isClient, navigate, useMe } from './AdminApp.tsx';
 import { DataTab } from './DataTab.tsx';
 import { ReportTab } from './ReportTab.tsx';
 import { InviteesTab } from './InviteesTab.tsx';
+import { TablesTab, type TableSet } from './TablesTab.tsx';
 import { ConditionField } from './ConditionEditor.tsx';
 import { Menu, Modal, compact, toast } from './common.tsx';
 import { nextId } from '../../../shared/refactor.ts';
@@ -19,6 +20,8 @@ export interface ProjectInfo {
   settings: ProjectSettings;
   quotaDefs: Quota[];
   panels: Panel[];
+  /** Сохранённые наборы таблиц */
+  tableSets: TableSet[];
   /** Счётчики настоящих анкет по панелям; panel = null — прямая ссылка */
   panelCounts: PanelCounts[];
   /** Прогресс квот по опубликованной версии */
@@ -185,12 +188,12 @@ export function NewProjectModal({ onClose, surveyId }: { onClose: () => void; su
 
 // ======================= Страница проекта =======================
 
-type Tab = 'overview' | 'panels' | 'invitees' | 'quotas' | 'data' | 'report' | 'settings';
+type Tab = 'overview' | 'panels' | 'invitees' | 'quotas' | 'data' | 'report' | 'tables' | 'settings';
 const TABS: [Tab, string][] = [
-  ['overview', 'Сводка'], ['panels', 'Панели'], ['invitees', 'Список'], ['quotas', 'Квоты'], ['data', 'Данные'], ['report', 'Отчёт'], ['settings', 'Настройки сбора'],
+  ['overview', 'Сводка'], ['panels', 'Панели'], ['invitees', 'Список'], ['quotas', 'Квоты'], ['data', 'Данные'], ['report', 'Отчёт'], ['tables', 'Таблицы'], ['settings', 'Настройки сбора'],
 ];
 /** Заказчику — только результаты */
-const CLIENT_TABS: Tab[] = ['overview', 'report', 'data'];
+const CLIENT_TABS: Tab[] = ['overview', 'report', 'tables', 'data'];
 
 export function ProjectPage({ id }: { id: string }) {
   const [info, setInfo] = useState<ProjectInfo | null>(null);
@@ -286,6 +289,7 @@ export function ProjectPage({ id }: { id: string }) {
       {tab === 'quotas' && <QuotasTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
       {tab === 'report' && <ReportTab info={info} />}
+      {tab === 'tables' && <TablesTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'settings' && <CollectionSettings info={info} readOnly={readOnly} reload={reload} />}
     </div>
   );

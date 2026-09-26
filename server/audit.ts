@@ -20,7 +20,9 @@ const survey = (k = 'id') => (req: Req) => ['survey', p(req, k)] as [string, str
 const project = (k = 'id') => (req: Req) => ['project', p(req, k)] as [string, string];
 const created = (type: string) => (_req: Req, res: Record<string, unknown> | null) => [type, res?.id as string | undefined] as [string, string | undefined];
 
-const PROJECT_FIELDS: Record<string, string> = { title: 'название', surveyId: 'анкета', settings: 'настройки сбора', quotas: 'квоты', panels: 'панели' };
+const PROJECT_FIELDS: Record<string, string> = {
+  title: 'название', surveyId: 'анкета', settings: 'настройки сбора', quotas: 'квоты', panels: 'панели', tables: 'наборы таблиц',
+};
 
 const RULES: Record<string, Rule> = {
   'POST /api/admin/me/password': { action: 'Сменил свой пароль' },
@@ -88,6 +90,7 @@ const RULES: Record<string, Rule> = {
     action: (req) => (req.body?.all ? 'Очистил список' : 'Удалил людей из списка'), target: project(), details: (_r, res) => ({ deleted: res?.deleted }),
   },
   'POST /api/admin/projects/:id/invitees/:iid/reissue': { action: 'Выдал новую персональную ссылку', target: project(), details: (req) => ({ invitee: p(req, 'iid') }) },
+  'GET /api/admin/projects/:id/crosstab.xlsx': { action: 'Выгрузил таблицы (XLSX)', target: project() },
   'PUT /api/admin/projects/:id/notify': { action: 'Настроил уведомления', target: project() },
   'PUT /api/admin/projects/:id/sheets': { action: 'Настроил Google Sheets', target: project() },
   'POST /api/admin/projects/:id/sheets/sync': { action: 'Синхронизировал Google Sheets', target: project() },
