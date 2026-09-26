@@ -57,7 +57,7 @@ export function AdminApp() {
     <MeContext.Provider value={me}>
       <div className="admin">
         <header className="topbar">
-          <a className="logo" href="/admin" onClick={go('/admin')}>Survey<span>LAB</span></a>
+          <a className="logo" href="/admin" onClick={go('/admin')}><img src="/surveylab-logo.svg" alt="SurveyLAB" /></a>
           <nav className="top-nav">
             <a href="/admin" className={section === 'projects' ? 'active' : ''} onClick={go('/admin')}>Проекты</a>
             {!isClient(me) && <a href="/admin/surveys" className={section === 'surveys' ? 'active' : ''} onClick={go('/admin/surveys')}>Анкеты</a>}
@@ -99,7 +99,7 @@ function Login({ onDone }: { onDone: (me: Me) => void }) {
         setError((err as Error).message);
       }
     }}>
-      <h2>Survey<span style={{ color: 'var(--accent)' }}>LAB</span></h2>
+      <h2 className="login-logo"><img src="/surveylab-logo.svg" alt="SurveyLAB" /></h2>
       <label className="field"><span>Логин</span>
         <input className="input" autoComplete="username" autoFocus value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} />
       </label>

@@ -4,8 +4,8 @@
   display: flex; align-items: center; gap: 16px; padding: 0 20px; height: 52px; background: var(--surface);
   border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20;
 }
-.topbar .logo { font-weight: 700; font-size: 18px; color: var(--text); text-decoration: none; }
-.topbar .logo span { color: var(--accent); }
+.topbar .logo { display: flex; flex-shrink: 0; }
+.topbar .logo img { height: 28px; display: block; }
 .topbar .spacer { flex: 1; }
 .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
@@ -27,6 +27,8 @@
 @media (max-width: 700px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
 
 .login { max-width: 360px; margin: 12vh auto; }
+.login-logo { margin: 0 0 4px; line-height: 0; }
+.login-logo img { height: 44px; }
 .error-box { background: var(--danger-soft); color: var(--danger); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
 .ok-box { background: var(--ok-soft); color: var(--ok); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
 .warn-box { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
@@ -701,7 +703,7 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 @media (max-width: 640px) { .top-nav { margin-left: 8px; } .top-nav a { padding: 6px 8px; } }
 @media (max-width: 640px) {
   .user-menu .muted { display: none; }
-  .topbar .logo { font-size: 16px; }
+  .topbar .logo img { height: 22px; }
 }
 @media (max-width: 420px) {
   .top-nav { margin-left: 4px; }
