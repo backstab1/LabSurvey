@@ -90,6 +90,9 @@ db.exec(`
     last_login_at TEXT
   );
 `);
+if (!(db.prepare('PRAGMA table_info(users)').all() as { name: string }[]).some((c) => c.name === 'projects')) {
+  db.exec('ALTER TABLE users ADD COLUMN projects TEXT');
+}
 
 /**
  * Переход на проекты (один раз): каждая анкета становится проектом с тем же ID — ссылки респондентов и ответы
@@ -439,6 +442,14 @@ export const projects = {
     db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
   },
 
+  /** Копия проекта (новая волна): анкета, настройки сбора, квоты и панели — без ответов, в статусе «Разработка» */
+  async copy(id: string, title: string): Promise<ProjectRow> {
+    const src = (await this.get(id))!;
+    const p = await this.create({ title, surveyId: src.surveyId });
+    await this.update(p.id, { settings: src.settings, quotas: src.quotas, panels: src.panels });
+    return (await this.get(p.id))!;
+  },
+
   async setNotify(id: string, notify: NotifyConfig | null): Promise<void> {
     db.prepare('UPDATE projects SET notify = ? WHERE id = ?').run(notify ? JSON.stringify(notify) : null, id);
   },
@@ -526,6 +537,16 @@ export const responses = {
     return r.n as number;
   },
 
+  /** Настоящие (не бракованные) анкеты для динамики по дням: начало, окончание, статус, панель */
+  async timeline(projectId: string): Promise<{ startedAt: string; completedAt: string | null; status: ResponseStatus; panel: string | null }[]> {
+    return (db.prepare(`SELECT started_at, completed_at, status, json_extract(params, ?) AS panel FROM responses
+      WHERE project_id = ? AND is_test = 0 AND rejected = 0`).all(paramPath(PANEL_PARAM), projectId) as Row[])
+      .map((r) => ({
+        startedAt: r.started_at as string, completedAt: (r.completed_at as string) ?? null, status: r.status as ResponseStatus,
+        panel: r.panel === null || r.panel === '' ? null : String(r.panel),
+      }));
+  },
+
   /** Счётчики настоящих анкет по панелям (источникам) */
   async countsByPanel(projectId: string): Promise<PanelCounts[]> {
     const rows = db.prepare(`SELECT json_extract(params, ?) AS panel, status, rejected, COUNT(*) AS n FROM responses
@@ -586,8 +607,11 @@ export const responses = {
 
 // ---- Пользователи админки ----
 
-/** admin — всё, включая пользователей и копии базы; editor — анкеты и данные; viewer — только просмотр и выгрузки */
-export type Role = 'admin' | 'editor' | 'viewer';
+/**
+ * admin — всё, включая пользователей и копии базы; editor — анкеты и данные; viewer — только просмотр и выгрузки;
+ * client — заказчик: только свои проекты (сводка, отчёт, данные), без анкет и настроек
+ */
+export type Role = 'admin' | 'editor' | 'viewer' | 'client';
 
 export interface UserRow {
   login: string;
@@ -595,11 +619,14 @@ export interface UserRow {
   disabled: boolean;
   createdAt: string;
   lastLoginAt: string | null;
+  /** Для заказчика: проекты, которые он видит */
+  projects: string[];
 }
 
 const toUser = (r: Row): UserRow => ({
   login: r.login as string, role: r.role as Role, disabled: r.disabled === 1,
   createdAt: r.created_at as string, lastLoginAt: (r.last_login_at as string) ?? null,
+  projects: r.projects ? JSON.parse(r.projects as string) : [],
 });
 
 export const users = {
@@ -613,7 +640,8 @@ export const users = {
   async create(login: string, passwordHash: string, role: Role): Promise<void> {
     db.prepare('INSERT INTO users (login, password, role, created_at) VALUES (?, ?, ?, ?)').run(login, passwordHash, role, now());
   },
-  async update(login: string, patch: { passwordHash?: string; role?: Role; disabled?: boolean }): Promise<void> {
+  async update(login: string, patch: { passwordHash?: string; role?: Role; disabled?: boolean; projects?: string[] }): Promise<void> {
+    if (patch.projects !== undefined) db.prepare('UPDATE users SET projects = ? WHERE login = ?').run(patch.projects.length ? JSON.stringify(patch.projects) : null, login);
     if (patch.passwordHash !== undefined) db.prepare('UPDATE users SET password = ? WHERE login = ?').run(patch.passwordHash, login);
     if (patch.role !== undefined) db.prepare('UPDATE users SET role = ? WHERE login = ?').run(patch.role, login);
     if (patch.disabled !== undefined) db.prepare('UPDATE users SET disabled = ? WHERE login = ?').run(patch.disabled ? 1 : 0, login);

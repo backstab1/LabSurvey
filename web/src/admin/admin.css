@@ -708,3 +708,16 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
   .top-nav a { padding: 6px; font-size: 13px; }
   .user-menu { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
 }
+.project-picker { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.daily { display: flex; flex-direction: column; gap: 4px; }
+.daily-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; border-bottom: 1px solid var(--border); }
+.daily-col { flex: 1; min-width: 3px; height: 100%; position: relative; }
+.daily-col:hover { background: #f0f3f8; }
+.daily-started, .daily-done { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 2px 2px 0 0; }
+.daily-started { background: #d7e2f7; }
+.daily-done { background: var(--accent); }
+.daily-axis { display: flex; gap: 2px; font-size: 11px; color: var(--muted); height: 14px; }
+.daily-axis span { flex: 1; min-width: 3px; white-space: nowrap; }
+.daily-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+.daily-key.done { background: var(--accent); }
+.daily-key.started { background: #d7e2f7; }

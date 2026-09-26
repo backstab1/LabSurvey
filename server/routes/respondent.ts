@@ -34,6 +34,12 @@ export interface RunnerState {
   deadline?: string;
 }
 
+/** Команда (не заказчик) может открыть предпросмотр черновика */
+const isTeam = async (req: Parameters<typeof currentUser>[0]) => {
+  const u = await currentUser(req);
+  return !!u && u.role !== 'client';
+};
+
 const RESERVED_PARAMS = new Set(['preview', 'new', 'rid', 'test', 'survey', 'start']);
 
 function cleanParams(raw: unknown): Record<string, string> {
@@ -267,7 +273,7 @@ export async function respondentRoutes(app: FastifyInstance) {
       const s = t.surveyRow;
       // Предпросмотр черновика: команда (после входа) или тестовая ссылка
       const preview = !!req.body?.preview || !!req.body?.test;
-      if (preview && !checkTestToken(req.params.id, req.body?.test) && !(await currentUser(req))) {
+      if (preview && !checkTestToken(req.params.id, req.body?.test) && !(await isTeam(req))) {
         return reply.code(401).send({ error: req.body?.test ? 'Тестовая ссылка недействительна' : 'Предпросмотр доступен только после входа в админку' });
       }
 

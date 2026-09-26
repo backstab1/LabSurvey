@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../api.ts';
-import { canEdit, navigate, useMe } from './AdminApp.tsx';
+import { canEdit, isClient, navigate, useMe } from './AdminApp.tsx';
 import { DataTab } from './DataTab.tsx';
 import { ReportTab } from './ReportTab.tsx';
 import { ConditionField } from './ConditionEditor.tsx';
@@ -35,6 +35,21 @@ export interface ProjectInfo {
   sheetsAccount: { configured: boolean; email: string | null };
   testToken: string;
   telegramConfigured: boolean;
+  /** Динамика по дням (последние 60 дней с первой анкеты) */
+  daily: DayStat[];
+}
+
+export interface DayStat { day: string; started: number; completed: number; screenedOut: number; overquota: number }
+
+/** Копия проекта для новой волны: спрашивает название и открывает копию */
+async function copyProject(id: string, title: string) {
+  const name = window.prompt('Название копии. Скопируются анкета, настройки сбора, квоты и панели — без ответов, Google Sheets и уведомлений.', `${title} (копия)`);
+  if (name === null) return;
+  try {
+    const r = await api<{ id: string }>('POST', `/api/admin/projects/${id}/copy`, { title: name });
+    navigate(`/admin/p/${r.id}`);
+    toast('Проект скопирован');
+  } catch (e) { toast((e as Error).message); }
 }
 
 export interface PanelCounts { panel: string | null; statuses: Record<string, number>; rejected: number; medianSec: number | null }
@@ -111,7 +126,8 @@ export function ProjectList() {
                     <Menu items={[
                       { label: 'Открыть', onClick: () => navigate(`/admin/p/${r.id}`) },
                       { label: 'Скопировать ссылку', onClick: () => { navigator.clipboard.writeText(`${window.location.origin}/s/${r.id}`); toast('Ссылка скопирована'); } },
-                      { label: 'Открыть анкету', onClick: () => navigate(`/admin/s/${r.surveyId}`) },
+                      editable && { label: 'Открыть анкету', onClick: () => navigate(`/admin/s/${r.surveyId}`) },
+                      editable && { label: 'Копировать проект (новая волна)', onClick: () => copyProject(r.id, r.title) },
                     ]} />
                   </td>
                 </tr>
@@ -170,13 +186,21 @@ type Tab = 'overview' | 'panels' | 'quotas' | 'data' | 'report' | 'settings';
 const TABS: [Tab, string][] = [
   ['overview', 'Сводка'], ['panels', 'Панели'], ['quotas', 'Квоты'], ['data', 'Данные'], ['report', 'Отчёт'], ['settings', 'Настройки сбора'],
 ];
+/** Заказчику — только результаты */
+const CLIENT_TABS: Tab[] = ['overview', 'report', 'data'];
 
 export function ProjectPage({ id }: { id: string }) {
   const [info, setInfo] = useState<ProjectInfo | null>(null);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).get('tab') as Tab) || 'overview');
+  const me = useMe();
+  const client = isClient(me);
+  const tabs = client ? TABS.filter(([t]) => CLIENT_TABS.includes(t)) : TABS;
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = new URLSearchParams(window.location.search).get('tab') as Tab;
+    return tabs.some(([x]) => x === t) ? t : 'overview';
+  });
   const [title, setTitle] = useState('');
-  const readOnly = !canEdit(useMe());
+  const readOnly = !canEdit(me);
 
   const reload = useCallback(async () => {
     try {
@@ -219,10 +243,11 @@ export function ProjectPage({ id }: { id: string }) {
           onChange={(e) => setTitle(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
         <span className={`badge status-${info.status}`}>{PROJECT_STATUS_LABELS[info.status]}</span>
         <span className="grow" />
-        <Menu className="btn btn-secondary menu-trigger" items={[
+        {!client && <Menu className="btn btn-secondary menu-trigger" items={[
           { label: 'Скопировать ссылку для респондентов', onClick: () => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); } },
           { label: 'Скопировать тестовую ссылку', onClick: () => { navigator.clipboard.writeText(`${link}?test=${info.testToken}`); toast('Тестовая ссылка скопирована: черновик анкеты, ответы тестовые'); } },
           { label: 'Открыть анкету в конструкторе', onClick: () => navigate(`/admin/s/${info.survey.id}`) },
+          !readOnly && { label: 'Копировать проект (новая волна)', onClick: () => copyProject(id, info.title) },
           !readOnly && {
             label: 'Удалить проект', danger: true, onClick: async () => {
               const n = Object.values(info.counts.real).reduce((a, b) => a + b, 0) + info.counts.test + info.counts.rejected;
@@ -231,24 +256,26 @@ export function ProjectPage({ id }: { id: string }) {
               navigate('/admin');
             },
           },
-        ]} />
+        ]} />}
       </div>
 
       <div className="tabs-row">
         <div className="tabs">
-          {TABS.map(([t, label]) => (
+          {tabs.map(([t, label]) => (
             <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => changeTab(t)}>
               {label}{t === 'quotas' && info.quotaDefs.length > 0 && <span className="tab-count">{info.quotaDefs.length}</span>}
               {t === 'panels' && info.panels.length > 0 && <span className="tab-count">{info.panels.length}</span>}
             </button>
           ))}
         </div>
-        <button className="link-chip url" title="Скопировать ссылку" onClick={() => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); }}>
-          🔗 {link.replace(/^https?:\/\//, '')}
-        </button>
+        {!client && (
+          <button className="link-chip url" title="Скопировать ссылку" onClick={() => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); }}>
+            🔗 {link.replace(/^https?:\/\//, '')}
+          </button>
+        )}
       </div>
 
-      {tab === 'overview' && <Overview info={info} readOnly={readOnly} setStatus={setStatus} reload={reload} onTab={changeTab} />}
+      {tab === 'overview' && <Overview info={info} readOnly={readOnly} client={client} setStatus={setStatus} reload={reload} onTab={changeTab} />}
       {tab === 'panels' && <PanelsTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'quotas' && <QuotasTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
@@ -260,8 +287,8 @@ export function ProjectPage({ id }: { id: string }) {
 
 // ---------- Сводка ----------
 
-function Overview({ info, readOnly, setStatus, reload, onTab }: {
-  info: ProjectInfo; readOnly: boolean; setStatus: (s: ProjectStatus) => void; reload: () => Promise<unknown>; onTab: (t: Tab) => void;
+function Overview({ info, readOnly, client, setStatus, reload, onTab }: {
+  info: ProjectInfo; readOnly: boolean; client: boolean; setStatus: (s: ProjectStatus) => void; reload: () => Promise<unknown>; onTab: (t: Tab) => void;
 }) {
   const [surveys, setSurveys] = useState<SurveyOption[] | null>(null);
   const st = info.settings;
@@ -308,7 +335,8 @@ function Overview({ info, readOnly, setStatus, reload, onTab }: {
         <div className="muted small">
           {st.openFrom || st.closeAt
             ? <>Сроки: {st.openFrom ? `с ${fmtDate(st.openFrom)}` : 'без даты начала'} {st.closeAt ? `до ${fmtDate(st.closeAt)}` : 'без даты окончания'}</>
-            : 'Сроки не заданы'} · <button className="btn-link" style={{ padding: 0 }} onClick={() => onTab('settings')}>настроить</button>
+            : 'Сроки не заданы'}
+          {!client && <> · <button className="btn-link" style={{ padding: 0 }} onClick={() => onTab('settings')}>настроить</button></>}
         </div>
       </div>
 
@@ -334,19 +362,26 @@ function Overview({ info, readOnly, setStatus, reload, onTab }: {
 
       {(info.panels.length > 0 || info.panelCounts.some((c) => c.panel !== null)) && (
         <div className="card stack">
-          <div className="row"><h2 className="grow" style={{ margin: 0 }}>Источники</h2><button className="btn-link" onClick={() => onTab('panels')}>панели</button></div>
+          <div className="row"><h2 className="grow" style={{ margin: 0 }}>Источники</h2>{!client && <button className="btn-link" onClick={() => onTab('panels')}>панели</button>}</div>
           <SourcesTable info={info} />
+        </div>
+      )}
+
+      {info.daily.length > 1 && (
+        <div className="card stack">
+          <h2 style={{ margin: 0 }}>По дням</h2>
+          <DailyChart days={info.daily} />
         </div>
       )}
 
       {info.quotas.length > 0 && (
         <div className="card stack">
-          <div className="row"><h2 className="grow" style={{ margin: 0 }}>Квоты</h2><button className="btn-link" onClick={() => onTab('quotas')}>изменить</button></div>
+          <div className="row"><h2 className="grow" style={{ margin: 0 }}>Квоты</h2>{!client && <button className="btn-link" onClick={() => onTab('quotas')}>изменить</button>}</div>
           <QuotaProgress quotas={info.quotas} />
         </div>
       )}
 
-      <div className="card stack">
+      {!client && <div className="card stack">
         <h2 style={{ margin: 0 }}>Анкета</h2>
         <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
           <strong>{info.survey.title}</strong>
@@ -377,6 +412,36 @@ function Overview({ info, readOnly, setStatus, reload, onTab }: {
                 </label>
               )
         )}
+      </div>}
+    </div>
+  );
+}
+
+/** Столбики по дням: завершили (основной цвет) поверх начавших (светлый); подробности — при наведении */
+function DailyChart({ days }: { days: DayStat[] }) {
+  const max = Math.max(1, ...days.map((d) => d.started));
+  const total = days.reduce((a, d) => a + d.completed, 0);
+  const fmtDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  const every = Math.ceil(days.length / 10);
+  return (
+    <div className="daily">
+      <div className="daily-bars" role="img" aria-label={`Завершили за ${days.length} дн.: ${total}`}>
+        {days.map((d) => (
+          <div key={d.day} className="daily-col"
+            title={`${fmtDay(d.day)}: начали ${d.started}, завершили ${d.completed}${d.screenedOut ? `, отсеяны ${d.screenedOut}` : ''}${d.overquota ? `, сверх квоты ${d.overquota}` : ''}`}>
+            <div className="daily-started" style={{ height: `${(d.started / max) * 100}%` }} />
+            <div className="daily-done" style={{ height: `${(Math.min(d.completed, max) / max) * 100}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="daily-axis">
+        {days.map((d, i) => <span key={d.day}>{i % every === 0 || i === days.length - 1 ? fmtDay(d.day) : ''}</span>)}
+      </div>
+      <div className="row small muted" style={{ gap: 14 }}>
+        <span><i className="daily-key done" /> завершили</span>
+        <span><i className="daily-key started" /> начали</span>
+        <span className="grow" />
+        <span>Всего завершили: {total}</span>
       </div>
     </div>
   );

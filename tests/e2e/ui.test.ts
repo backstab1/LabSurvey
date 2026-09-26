@@ -201,3 +201,53 @@ test('password-protected survey', async (t) => {
   await r.getByText('Как дела?').waitFor();
   await ctx.close();
 });
+
+test('client sees only results of assigned projects; admin sees panels, sources and daily chart', async (t) => {
+  if (!needBrowser(t)) return;
+  const { ctx, page } = await adminContext();
+  const def = {
+    formatVersion: 2, title: 'Для заказчика',
+    blocks: [{ id: 'B1', questions: [{ id: 'Q1', type: 'single', text: 'Да?', options: [{ code: 1, text: 'Да' }, { code: 2, text: 'Нет' }] }] }],
+  };
+  const pid = await publishVia(ctx, def);
+  const other = await publishVia(ctx, { ...def, title: 'Чужая' });
+  await ctx.request.put(`${base}/api/admin/projects/${pid}`, { data: { panels: [{ id: 'pa', title: 'Панель А' }] } });
+  for (const panel of ['pa', 'pa', '']) {
+    const st = await (await ctx.request.post(`${base}/api/s/${pid}/start`, { data: { params: panel ? { panel } : {} } })).json();
+    await ctx.request.post(`${base}/api/s/${pid}/submit`, { data: { rid: st.rid, page: 'Q1', answers: { Q1: { v: 1 } } } });
+  }
+  await ctx.request.post(`${base}/api/admin/users`, { data: { login: 'client-e2e', password: 'client-pass', role: 'client', projects: [pid] } });
+
+  // Админ: вкладка «Панели», таблица источников
+  await page.goto(`${base}/admin/p/${pid}`);
+  await page.getByRole('heading', { name: 'Источники' }).waitFor();
+  assert.equal(await page.locator('table.sources tbody tr').count(), 2);
+  await page.getByRole('button', { name: /^Панели/ }).click();
+  assert.equal(await page.getByLabel('Ссылка для панели').inputValue(), `${base}/s/${pid}?panel=pa`);
+  await ctx.close();
+
+  // Заказчик: только свой проект, вкладки результатов, без анкет и служебных кнопок
+  const cctx = await browser!.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ru-RU' });
+  const cp = await cctx.newPage();
+  await cp.goto(`${base}/admin`);
+  await cp.getByLabel('Логин').fill('client-e2e');
+  await cp.getByLabel('Пароль').fill('client-pass');
+  await cp.getByRole('button', { name: 'Войти' }).click();
+  await cp.getByRole('heading', { name: 'Проекты' }).waitFor();
+  assert.equal(await cp.getByRole('link', { name: 'Анкеты' }).count(), 0);
+  assert.equal(await cp.locator('table tbody tr.clickable').count(), 1);
+  await cp.goto(`${base}/admin/p/${pid}?tab=settings`);
+  await cp.getByRole('heading', { name: 'Источники' }).waitFor();
+  const tabs = await cp.locator('.tabs .tab').allInnerTexts();
+  assert.deepEqual(tabs.map((x) => x.trim()), ['Сводка', 'Данные', 'Отчёт']);
+  assert.equal(await cp.getByRole('heading', { name: 'Анкета' }).count(), 0);
+  assert.equal(await cp.locator('.editor-head .menu-trigger').count(), 0);
+  await cp.getByRole('button', { name: 'Данные' }).click();
+  await cp.getByRole('heading', { name: 'Последние ответы' }).waitFor();
+  assert.equal(await cp.getByText('Тестовые ответы').count(), 0);
+  assert.equal(await cp.getByText('Google Sheets').count(), 0);
+  // Чужой проект — ошибка доступа
+  await cp.goto(`${base}/admin/p/${other}`);
+  await cp.locator('.error-box').waitFor();
+  await cctx.close();
+});

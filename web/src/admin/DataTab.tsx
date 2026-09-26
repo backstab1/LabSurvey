@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { Modal, toast } from './common.tsx';
+import { canEdit, isClient, useMe } from './AdminApp.tsx';
 import { rich } from '../runner/rich.tsx';
 import { allQuestions, answerText, pipe } from '../../../shared/logic.ts';
 import { expandAllLoops } from '../../../shared/loops.ts';
@@ -21,7 +22,10 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
   const [statuses, setStatuses] = useState<ResponseStatus[]>(['completed']);
   const [recent, setRecent] = useState<RespRow[] | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
-  const [showTest, setShowTest] = useState(true);
+  const me = useMe();
+  const editable = canEdit(me);
+  const client = isClient(me);
+  const [showTest, setShowTest] = useState(!client);
   const [simCount, setSimCount] = useState(20);
   const [simBusy, setSimBusy] = useState(false);
   const refresh = async () => {
@@ -115,7 +119,7 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
           <a className="btn btn-primary" href={exportUrl('xlsx')}>Excel (.xlsx)</a>
           <a className="btn btn-primary" href={exportUrl('sav')}>SPSS (.sav)</a>
           <a className="btn btn-secondary" href={exportUrl('csv')}>CSV</a>
-          <a className="btn btn-secondary" href={`/api/admin/surveys/${info.survey.id}/export.json`}>Анкета (.json)</a>
+          {!client && <a className="btn btn-secondary" href={`/api/admin/surveys/${info.survey.id}/export.json`}>Анкета (.json)</a>}
         </div>
         <p className="muted" style={{ margin: 0, fontSize: 14 }}>
           Excel содержит листы «Коды», «Метки» и «Кодбук». Время — по часовому поясу сервера выгрузки (по умолчанию Москва).
@@ -126,7 +130,7 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
       <div className="card" style={{ overflowX: 'auto' }}>
         <div className="row" style={{ marginBottom: 8 }}>
           <h2 className="grow" style={{ margin: 0 }}>Последние ответы</h2>
-          <label className="check small"><input type="checkbox" checked={showTest} onChange={(e) => setShowTest(e.target.checked)} />показывать тестовые</label>
+          {!client && <label className="check small"><input type="checkbox" checked={showTest} onChange={(e) => setShowTest(e.target.checked)} />показывать тестовые</label>}
         </div>
         {!recent ? <p className="muted">Загрузка…</p> : recent.length === 0 ? <p className="muted">Ответов пока нет</p> : (
           <table className="table">
@@ -151,10 +155,10 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
           </table>
         )}
       </div>
-      <div className="card stack">
+      {!client && <div className="card stack">
         <div className="row">
           <h2 className="grow" style={{ margin: 0 }}>Тестовые ответы: {info.counts.test}</h2>
-          <span className="row" style={{ gap: 6 }}>
+          {editable && <span className="row" style={{ gap: 6 }}>
             <input className="input mini" type="number" min={1} max={500} value={simCount} title="Сколько анкет заполнить"
               onChange={(e) => setSimCount(Math.max(1, Math.min(500, Number(e.target.value) || 1)))} />
             <button className="btn btn-secondary btn-sm" disabled={simBusy} title="Боты пройдут черновик по логике со случайными ответами" onClick={async () => {
@@ -169,21 +173,21 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
                 setSimBusy(false);
               }
             }}>{simBusy ? 'Заполнение…' : 'Заполнить тестовыми'}</button>
-          </span>
+          </span>}
           <a className="btn btn-secondary btn-sm" href={`/api/admin/projects/${info.id}/export.xlsx?statuses=${EXPORT_STATUSES.join(',')}&test=1`}>Excel с тестовыми</a>
-          <button className="btn btn-danger btn-sm" disabled={!info.counts.test} onClick={async () => {
+          {editable && <button className="btn btn-danger btn-sm" disabled={!info.counts.test} onClick={async () => {
             if (!window.confirm('Удалить все тестовые ответы?')) return;
             const r = await api('DELETE', `/api/admin/projects/${info.id}/test-responses`);
             toast(`Удалено: ${r.deleted}`);
             await refresh();
-          }}>Удалить тестовые</button>
+          }}>Удалить тестовые</button>}
         </div>
         <p className="muted small" style={{ margin: 0 }}>
           Тестовые ответы появляются из предпросмотра и тестового заполнения. В обычные выгрузки и Google Sheets они не попадают.
         </p>
-      </div>
+      </div>}
 
-      <div className="integrations">
+      {!client && <div className="integrations">
         <details className="card integration" open={!!info.sheets || undefined}>
           <summary><h2>Google Sheets</h2><span className="muted small">{info.sheets ? 'подключено' : 'автоматическая запись ответов в таблицу'}</span></summary>
           <SheetsCard info={info} reload={reload} />
@@ -192,15 +196,15 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
           <summary><h2>Уведомления</h2><span className="muted small">{info.notify ? 'настроены' : 'вебхук и Telegram'}</span></summary>
           <NotifyCard info={info} reload={reload} />
         </details>
-      </div>
-      {viewing && <ResponseModal surveyId={info.id} rid={viewing} onClose={() => setViewing(null)} onDeleted={() => { setViewing(null); refresh(); }} onChanged={refresh} />}
+      </div>}
+      {viewing && <ResponseModal editable={editable} surveyId={info.id} rid={viewing} onClose={() => setViewing(null)} onDeleted={() => { setViewing(null); refresh(); }} onChanged={refresh} />}
     </div>
   );
 }
 
 /** Просмотр одного ответа: вопросы, которые видел респондент, и его ответы */
-function ResponseModal({ surveyId, rid, onClose, onDeleted, onChanged }: {
-  surveyId: string; rid: string; onClose: () => void; onDeleted: () => void; onChanged: () => void;
+function ResponseModal({ editable, surveyId, rid, onClose, onDeleted, onChanged }: {
+  editable: boolean; surveyId: string; rid: string; onClose: () => void; onDeleted: () => void; onChanged: () => void;
 }) {
   const [data, setData] = useState<{ response: RespRow & { answers: Answers; history: string[]; timings?: Record<string, number> }; survey: Survey } | null>(null);
   const load = () => api('GET', `/api/admin/projects/${surveyId}/responses/${rid}`).then(setData);
@@ -212,7 +216,7 @@ function ResponseModal({ surveyId, rid, onClose, onDeleted, onChanged }: {
   return (
     <Modal onClose={onClose} title={<>Ответ <span className="mono muted" style={{ fontWeight: 400, fontSize: 14 }}>{r.id}</span></>}
       actions={<>
-        <button className="btn btn-secondary btn-sm" title="Бракованная анкета не считается в квотах, лимите, отчёте и выгрузке (выгрузить можно отдельно)"
+        {editable && <><button className="btn btn-secondary btn-sm" title="Бракованная анкета не считается в квотах, лимите, отчёте и выгрузке (выгрузить можно отдельно)"
           onClick={async () => {
             await api('POST', `/api/admin/projects/${surveyId}/responses/${rid}/reject`, { rejected: !r.rejected });
             await load();
@@ -223,7 +227,7 @@ function ResponseModal({ surveyId, rid, onClose, onDeleted, onChanged }: {
           if (!window.confirm('Удалить этот ответ? Это нельзя отменить.')) return;
           await api('DELETE', `/api/admin/projects/${surveyId}/responses/${rid}`);
           onDeleted();
-        }}>Удалить</button>
+        }}>Удалить</button></>}
         <button className="btn btn-primary btn-sm" onClick={onClose}>Закрыть</button>
       </>}>
       <div className="stack">

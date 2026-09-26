@@ -10,6 +10,7 @@ import { writeXlsx } from '../export/xlsx.ts';
 import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
 import { simulate } from '../simulate.ts';
+import { dailyStats } from '../daily.ts';
 import { quotaCounts, resetQuotas } from '../quotas.ts';
 import { buildReport } from '../../shared/report.ts';
 import { send, telegramConfigured } from '../notify.ts';
@@ -85,35 +86,50 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     // ---- Пользователи (только администратор) ----
-    const ROLES: Role[] = ['admin', 'editor', 'viewer'];
+    const ROLES: Role[] = ['admin', 'editor', 'viewer', 'client'];
+    const ROLE_ERROR = 'Роль: admin, editor, viewer или client';
+    /** Проекты заказчика: только существующие */
+    const cleanProjects = async (raw: unknown): Promise<string[] | null> => {
+      if (raw === undefined) return [];
+      if (!Array.isArray(raw)) return null;
+      const out: string[] = [];
+      for (const id of raw) if (typeof id === 'string' && !out.includes(id) && (await projects.get(id))) out.push(id);
+      return out;
+    };
     priv.register(async (adm) => {
       adm.addHook('preHandler', requireAdminRole);
 
       adm.get('/api/admin/users', async () => users.list());
 
-      adm.post<{ Body: { login: string; password: string; role: Role } }>('/api/admin/users', async (req, reply) => {
+      adm.post<{ Body: { login: string; password: string; role: Role; projects?: string[] } }>('/api/admin/users', async (req, reply) => {
         const login = String(req.body?.login ?? '').trim();
         const password = String(req.body?.password ?? '');
         const role = req.body?.role;
         if (!/^[\w.@-]{2,50}$/.test(login)) return reply.code(400).send({ error: 'Логин: 2–50 символов, латиница, цифры, _ . @ -' });
         if (isBuiltInLogin(login) || (await users.get(login))) return reply.code(400).send({ error: 'Такой логин уже есть' });
         if (password.length < 8) return reply.code(400).send({ error: 'Пароль — не короче 8 символов' });
-        if (!ROLES.includes(role)) return reply.code(400).send({ error: 'Роль: admin, editor или viewer' });
+        if (!ROLES.includes(role)) return reply.code(400).send({ error: ROLE_ERROR });
+        const list = await cleanProjects(req.body?.projects);
+        if (!list) return reply.code(400).send({ error: 'projects: ожидается список ID проектов' });
         await users.create(login, hashPassword(password), role);
+        if (list.length) await users.update(login, { projects: list });
         return { ok: true };
       });
 
-      adm.put<{ Params: { login: string }; Body: { role?: Role; password?: string; disabled?: boolean } }>('/api/admin/users/:login', async (req, reply) => {
+      adm.put<{ Params: { login: string }; Body: { role?: Role; password?: string; disabled?: boolean; projects?: string[] } }>('/api/admin/users/:login', async (req, reply) => {
         const u = await users.get(req.params.login);
         if (!u) return reply.code(404).send({ error: 'Пользователь не найден' });
         const b = req.body ?? {};
-        if (b.role !== undefined && !ROLES.includes(b.role)) return reply.code(400).send({ error: 'Роль: admin, editor или viewer' });
+        if (b.role !== undefined && !ROLES.includes(b.role)) return reply.code(400).send({ error: ROLE_ERROR });
+        const list = b.projects === undefined ? undefined : await cleanProjects(b.projects);
+        if (list === null) return reply.code(400).send({ error: 'projects: ожидается список ID проектов' });
         if (b.password !== undefined && String(b.password).length < 8) return reply.code(400).send({ error: 'Пароль — не короче 8 символов' });
         if (u.login === req.user!.login && (b.disabled || (b.role && b.role !== 'admin'))) {
           return reply.code(400).send({ error: 'Нельзя отключить себя или снять с себя права администратора' });
         }
         await users.update(u.login, {
           role: b.role, disabled: b.disabled, passwordHash: b.password !== undefined ? hashPassword(String(b.password)) : undefined,
+          projects: list,
         });
         return { ok: true };
       });
@@ -224,8 +240,9 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const PROJECT_STATUSES: ProjectStatus[] = ['development', 'collecting', 'processing', 'archive'];
 
-    priv.get('/api/admin/projects', async () => {
-      const list = await projects.list();
+    priv.get('/api/admin/projects', async (req) => {
+      const u = req.user!;
+      const list = (await projects.list()).filter((p) => u.role !== 'client' || (u.projects ?? []).includes(p.id));
       return Promise.all(list.map(async (p) => {
         // Прогресс квот — по опубликованной версии анкеты
         let quotasFull = 0;
@@ -265,7 +282,7 @@ export async function adminRoutes(app: FastifyInstance) {
       if (!l) return reply.code(404).send({ error: 'Проект не найден' });
       const { project: p, survey: s } = l;
       const counts = l.live && p.quotas.length ? await quotaCounts(p.id, l.live, false) : null;
-      return {
+      const info = {
         id: p.id, title: p.title, status: p.status, settings: p.settings, quotaDefs: p.quotas, panels: p.panels,
         panelCounts: await responses.countsByPanel(p.id),
         quotas: p.quotas.map((q) => ({ id: q.id, title: q.title, limit: q.limit, count: counts?.get(q.id) ?? 0 })),
@@ -274,8 +291,24 @@ export async function adminRoutes(app: FastifyInstance) {
         draft: l.draft, published: l.live,
         sheets: p.sheets, notify: p.notify, counts: await responses.counts(p.id),
         sheetsAccount: sheetsStatus(), testToken: testToken(p.id), telegramConfigured: telegramConfigured(),
+        daily: dailyStats(await responses.timeline(p.id)),
         createdAt: p.createdAt, updatedAt: p.updatedAt,
       };
+      if (req.user!.role !== 'client') return info;
+      // Заказчику — без служебного: тестовой ссылки, интеграций, пароля и адресов возврата панелей
+      const { password: _pw, ...settings } = p.settings;
+      return {
+        ...info, settings, testToken: '', sheets: null, notify: null, sheetsAccount: { configured: false, email: null }, telegramConfigured: false,
+        panels: p.panels.map((x) => ({ id: x.id, title: x.title, limit: x.limit, closed: x.closed })),
+      };
+    });
+
+    priv.post<{ Params: { id: string }; Body: { title?: string } }>('/api/admin/projects/:id/copy', async (req, reply) => {
+      const p = await projects.get(req.params.id);
+      if (!p) return reply.code(404).send({ error: 'Проект не найден' });
+      const title = String(req.body?.title ?? '').trim() || `${p.title} (копия)`;
+      const copy = await projects.copy(p.id, title.slice(0, 200));
+      return { id: copy.id };
     });
 
     priv.put<{ Params: { id: string }; Body: { title?: string; surveyId?: string; settings?: ProjectSettings; quotas?: Quota[]; panels?: Panel[] } }>(

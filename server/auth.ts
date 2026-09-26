@@ -8,6 +8,8 @@ export interface SessionUser {
   role: Role;
   /** Главный администратор из .env (ADMIN_LOGIN / ADMIN_PASSWORD) */
   builtIn: boolean;
+  /** Для заказчика: доступные проекты */
+  projects?: string[];
 }
 
 declare module 'fastify' {
@@ -36,7 +38,7 @@ export async function authenticate(login: string, password: string): Promise<Ses
   const u = await users.get(login);
   if (!u || u.disabled || !verifyHash(password, u.passwordHash)) return null;
   await users.touch(u.login);
-  return { login: u.login, role: u.role, builtIn: false };
+  return { login: u.login, role: u.role, builtIn: false, ...(u.role === 'client' ? { projects: u.projects } : {}) };
 }
 
 /** Пароль пользователя из базы (для смены пароля) */
@@ -99,7 +101,7 @@ export async function currentUser(req: FastifyRequest): Promise<SessionUser | nu
   if (!login) return null;
   if (isBuiltInLogin(login)) return { login: config.adminLogin, role: 'admin', builtIn: true };
   const u = await users.get(login);
-  return u && !u.disabled ? { login: u.login, role: u.role, builtIn: false } : null;
+  return u && !u.disabled ? { login: u.login, role: u.role, builtIn: false, ...(u.role === 'client' ? { projects: u.projects } : {}) } : null;
 }
 
 /** Ключ тестовой ссылки анкеты: открывает предпросмотр черновика без входа в админку */
@@ -119,9 +121,22 @@ export async function requireUser(req: FastifyRequest, reply: FastifyReply): Pro
   const user = await currentUser(req);
   if (!user) return reply.code(401).send({ error: 'Требуется вход' });
   req.user = user;
+  if (user.role === 'client' && !clientAllowed(req.method, req.url, user.projects ?? [])) {
+    return reply.code(403).send({ error: 'Недостаточно прав: этот раздел недоступен' });
+  }
   if (user.role === 'viewer' && req.method !== 'GET' && !req.url.startsWith('/api/admin/me/')) {
     return reply.code(403).send({ error: 'Недостаточно прав: у вас доступ только на просмотр' });
   }
+}
+
+/** Заказчик: смена своего пароля, список и чтение своих проектов — сводка, отчёт, данные, выгрузки */
+export function clientAllowed(method: string, url: string, projects: string[]): boolean {
+  const path = url.split('?')[0];
+  if (method === 'POST') return path === '/api/admin/me/password';
+  if (method !== 'GET') return false;
+  if (path === '/api/admin/projects') return true;
+  const m = path.match(/^\/api\/admin\/projects\/([\w-]+)(?:\/(report|responses(?:\/[\w-]+)?|export\.\w+))?$/);
+  return !!m && projects.includes(m[1]);
 }
 
 /** Только администратор (пользователи, резервные копии) */

@@ -13,7 +13,9 @@ export interface Me { login: string; role: Role; builtIn: boolean }
 const MeContext = createContext<Me>({ login: '', role: 'viewer', builtIn: false });
 /** Текущий пользователь админки */
 export const useMe = () => useContext(MeContext);
-export const canEdit = (me: Me) => me.role !== 'viewer';
+export const canEdit = (me: Me) => me.role !== 'viewer' && me.role !== 'client';
+/** Заказчик: видит только свои проекты — сводку, отчёт и данные */
+export const isClient = (me: Me) => me.role === 'client';
 
 export function navigate(path: string) {
   window.history.pushState(null, '', path);
@@ -55,7 +57,7 @@ export function AdminApp() {
           <a className="logo" href="/admin" onClick={go('/admin')}>Survey<span>LAB</span></a>
           <nav className="top-nav">
             <a href="/admin" className={section === 'projects' ? 'active' : ''} onClick={go('/admin')}>Проекты</a>
-            <a href="/admin/surveys" className={section === 'surveys' ? 'active' : ''} onClick={go('/admin/surveys')}>Анкеты</a>
+            {!isClient(me) && <a href="/admin/surveys" className={section === 'surveys' ? 'active' : ''} onClick={go('/admin/surveys')}>Анкеты</a>}
           </nav>
           <div className="spacer" />
           <Menu className="btn btn-secondary btn-sm user-menu" label={<>{me.login} <span className="muted">· {ROLE_LABELS[me.role]}</span></>} title="Учётная запись" items={[
@@ -66,6 +68,7 @@ export function AdminApp() {
         </header>
         {path.startsWith('/admin/users') && me.role === 'admin'
           ? <UsersPage me={me.login} />
+          : isClient(me) ? (projectMatch ? <ProjectPage key={projectMatch[1]} id={projectMatch[1]} /> : <ProjectList />)
           : editorMatch ? <Editor key={editorMatch[1]} id={editorMatch[1]} />
             : projectMatch ? <ProjectPage key={projectMatch[1]} id={projectMatch[1]} />
               : path.startsWith('/admin/surveys') ? <SurveyList /> : <ProjectList />}
