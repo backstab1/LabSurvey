@@ -248,6 +248,7 @@ export function ProjectPage({ id }: { id: string }) {
           { label: 'Скопировать тестовую ссылку', onClick: () => { navigator.clipboard.writeText(`${link}?test=${info.testToken}`); toast('Тестовая ссылка скопирована: черновик анкеты, ответы тестовые'); } },
           { label: 'Открыть анкету в конструкторе', onClick: () => navigate(`/admin/s/${info.survey.id}`) },
           !readOnly && { label: 'Копировать проект (новая волна)', onClick: () => copyProject(id, info.title) },
+          me.role === 'admin' && { label: 'История действий', onClick: () => navigate(`/admin/audit?targetType=project&targetId=${id}`) },
           !readOnly && {
             label: 'Удалить проект', danger: true, onClick: async () => {
               const n = Object.values(info.counts.real).reduce((a, b) => a + b, 0) + info.counts.test + info.counts.rejected;

@@ -47,7 +47,7 @@ async function connect(login: string, password: string) {
   assert.equal(wrong.status, 401);
   const consent = await fetch(`${base}/oauth/authorize`, { method: 'POST', ...form({ ...params, action: 'login', login, password }) });
   const html = await consent.text();
-  if (consent.status !== 200) return { client_id, denied: html };
+  if (consent.status !== 200) return { client_id, denied: html, tokens: null as never, cookie: '' };
   assert.match(html, /Разрешить доступ/);
   const cookie = String(consent.headers.get('set-cookie')).split(';')[0];
   const csrf = html.match(/name="csrf" value="([^"]+)"/)![1];
@@ -88,7 +88,7 @@ async function mcpClient(accessToken: string) {
   await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${accessToken}` } } }));
   return client;
 }
-const textOf = (r: { content?: unknown }) => ((r.content as { type: string; text: string }[])[0]).text;
+const textOf = (r: unknown) => ((r as { content: { type: string; text: string }[] }).content[0]).text;
 
 const SURVEY = {
   formatVersion: 2, title: 'От ИИ',
@@ -138,6 +138,11 @@ test('OAuth flow, MCP tools, refresh rotation, revoke', async () => {
   assert.equal(again.definition.title, 'От ИИ — правка');
   assert.equal(again.publishedVersion, null);
   await client.close();
+
+  // Действия ИИ — в журнале с пометкой ai и названием приложения
+  const log = await (await fetch(`${base}/api/admin/audit?via=ai`, { headers: { cookie } })).json();
+  assert.deepEqual(log.entries.map((e: { action: string }) => e.action), ['Изменил черновик анкеты', 'Создал анкету', 'Подключил ИИ-приложение', 'Подключил ИИ-приложение']);
+  assert.equal(log.entries[0].details.app, 'Claude');
 
   // Токен обновления одноразовый
   const r1 = await fetch(`${base}/oauth/token`, { method: 'POST', ...form({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id }) });

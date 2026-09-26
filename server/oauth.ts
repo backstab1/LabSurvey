@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticate, currentUser, loginBlocked, loginFailed, setSession, isBuiltInLogin, type SessionUser } from './auth.ts';
 import { config } from './config.ts';
 import { oauth, users } from './db.ts';
+import { auditAi } from './audit.ts';
 
 export const SCOPE = 'surveys';
 const ACCESS_TTL = 3600;
@@ -228,6 +229,7 @@ ${error ? `<div class="err">${esc(error)}</div>` : ''}
     if (csrf.length !== want.length || !timingSafeEqual(csrf, want)) return denied(reply, 'Форма устарела. Начните подключение заново.');
     if (b.action !== 'approve') return back({ error: 'access_denied', error_description: 'Пользователь отказал в доступе' });
 
+    await auditAi({ login: user.login, app: chk.client.name, action: 'Подключил ИИ-приложение', ip: req.ip ?? null });
     const code = token();
     await oauth.saveCode(sha(code), {
       clientId: chk.client.id, login: user.login, scope: SCOPE, expiresAt: later(CODE_TTL), redirectUri: p.redirect_uri, challenge: p.code_challenge,

@@ -3,7 +3,7 @@ import {
   authenticate, checkUserPassword, clearSession, currentUser, hashPassword, isBuiltInLogin, loginBlocked, loginFailed,
   requireAdminRole, requireUser, setSession, testToken,
 } from '../auth.ts';
-import { oauth, projects, responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig } from '../db.ts';
+import { audit, oauth, projects, responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig } from '../db.ts';
 import { defFor, loadProject } from '../projectCtx.ts';
 import { buildTable, cellToText } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
@@ -11,6 +11,7 @@ import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
 import { simulate } from '../simulate.ts';
 import { dailyStats } from '../daily.ts';
+import { auditHooks, auditLogin } from '../audit.ts';
 import { quotaCounts, resetQuotas } from '../quotas.ts';
 import { buildReport } from '../../shared/report.ts';
 import { send, telegramConfigured } from '../notify.ts';
@@ -55,9 +56,11 @@ export async function adminRoutes(app: FastifyInstance) {
     const user = await authenticate(String(login ?? '').trim(), String(password ?? ''));
     if (!user) {
       loginFailed(req.ip);
+      await auditLogin(req, String(login ?? '').trim().slice(0, 50), false);
       return reply.code(401).send({ error: 'Неверный логин или пароль' });
     }
     setSession(reply, user.login);
+    await auditLogin(req, user.login, true);
     return user;
   });
 
@@ -74,6 +77,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // Всё ниже — только для команды
   app.register(async (priv) => {
     priv.addHook('preHandler', requireUser);
+    auditHooks(priv);
 
     priv.post<{ Body: { current: string; next: string } }>('/api/admin/me/password', async (req, reply) => {
       const u = req.user!;
@@ -144,6 +148,21 @@ export async function adminRoutes(app: FastifyInstance) {
         if (req.params.login.toLowerCase() === req.user!.login.toLowerCase()) return reply.code(400).send({ error: 'Нельзя удалить себя' });
         await users.remove(req.params.login);
         return { ok: true };
+      });
+
+      // Журнал действий команды
+      adm.get<{ Querystring: Record<string, string> }>('/api/admin/audit', async (req) => {
+        const q = req.query ?? {};
+        const day = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined);
+        return {
+          entries: await audit.list({
+            login: q.login || undefined, targetType: q.targetType || undefined, targetId: q.targetId || undefined, via: q.via || undefined,
+            q: q.q?.trim() || undefined, from: day(q.from) ? `${q.from}T00:00:00` : undefined,
+            to: day(q.to) ? new Date(Date.parse(`${q.to}T00:00:00Z`) + 86400_000).toISOString() : undefined,
+            before: Number(q.before) || undefined, limit: 100,
+          }),
+          logins: await audit.logins(),
+        };
       });
 
       // Резервные копии базы: там все данные — только администратору

@@ -756,3 +756,98 @@ export const oauth = {
     return Number(res.changes);
   },
 };
+
+// ---- Журнал действий команды ----
+db.exec(`
+  CREATE TABLE IF NOT EXISTS audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    login TEXT,
+    via TEXT NOT NULL DEFAULT 'ui',
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id TEXT,
+    target_title TEXT,
+    details TEXT,
+    ip TEXT
+  );
+  CREATE INDEX IF NOT EXISTS audit_at ON audit(at);
+  CREATE INDEX IF NOT EXISTS audit_target ON audit(target_type, target_id);
+`);
+
+export interface AuditEntry {
+  id: number;
+  at: string;
+  login: string | null;
+  /** ui — интерфейс, ai — ИИ-коннектор (details.app — приложение) */
+  via: 'ui' | 'ai';
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  targetTitle: string | null;
+  details: Record<string, unknown> | null;
+  ip: string | null;
+}
+
+/** Сколько дней хранить журнал */
+const AUDIT_KEEP_DAYS = 365;
+let auditPrunedAt = 0;
+
+export const audit = {
+  /**
+   * Записать действие. coalesceMin — если то же действие того же человека над тем же объектом было недавно,
+   * обновляется время прежней записи (автосохранение черновика не засоряет журнал).
+   */
+  async add(e: Omit<AuditEntry, 'id' | 'at'>, coalesceMin = 0): Promise<void> {
+    const t = now();
+    if (coalesceMin > 0) {
+      const since = new Date(Date.now() - coalesceMin * 60_000).toISOString();
+      const prev = db.prepare(`SELECT id FROM audit WHERE login IS ? AND via = ? AND action = ? AND target_type IS ? AND target_id IS ? AND at >= ?
+        ORDER BY id DESC LIMIT 1`).get(e.login, e.via, e.action, e.targetType, e.targetId, since) as Row | undefined;
+      if (prev) {
+        db.prepare('UPDATE audit SET at = ?, target_title = COALESCE(?, target_title) WHERE id = ?').run(t, e.targetTitle, prev.id as number);
+        return;
+      }
+    }
+    db.prepare(`INSERT INTO audit (at, login, via, action, target_type, target_id, target_title, details, ip)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      t, e.login, e.via, e.action, e.targetType, e.targetId, e.targetTitle, e.details ? JSON.stringify(e.details) : null, e.ip,
+    );
+    if (Date.now() - auditPrunedAt > 86400_000) {
+      auditPrunedAt = Date.now();
+      db.prepare('DELETE FROM audit WHERE at < ?').run(new Date(Date.now() - AUDIT_KEEP_DAYS * 86400_000).toISOString());
+    }
+  },
+
+  /** Записи от новых к старым; фильтры необязательны */
+  async list(f: { login?: string; targetType?: string; targetId?: string; via?: string; q?: string; from?: string; to?: string; before?: number; limit?: number } = {}):
+    Promise<AuditEntry[]> {
+    const where: string[] = [];
+    const vals: (string | number)[] = [];
+    if (f.login) { where.push('login = ? COLLATE NOCASE'); vals.push(f.login); }
+    if (f.targetType) { where.push('target_type = ?'); vals.push(f.targetType); }
+    if (f.targetId) { where.push('target_id = ?'); vals.push(f.targetId); }
+    if (f.via) { where.push('via = ?'); vals.push(f.via); }
+    if (f.from) { where.push('at >= ?'); vals.push(f.from); }
+    if (f.to) { where.push('at < ?'); vals.push(f.to); }
+    if (f.before) { where.push('id < ?'); vals.push(f.before); }
+    if (f.q) {
+      where.push('(action LIKE ? OR target_title LIKE ? OR target_id LIKE ? OR login LIKE ?)');
+      const like = `%${f.q.replace(/[%_]/g, '')}%`;
+      vals.push(like, like, like, like);
+    }
+    const limit = Math.min(Math.max(f.limit ?? 100, 1), 500);
+    const rows = db.prepare(`SELECT * FROM audit ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY id DESC LIMIT ${limit}`)
+      .all(...vals) as Row[];
+    return rows.map((r) => ({
+      id: r.id as number, at: r.at as string, login: (r.login as string) ?? null, via: r.via as 'ui' | 'ai', action: r.action as string,
+      targetType: (r.target_type as string) ?? null, targetId: (r.target_id as string) ?? null, targetTitle: (r.target_title as string) ?? null,
+      details: r.details ? JSON.parse(r.details as string) : null, ip: (r.ip as string) ?? null,
+    }));
+  },
+
+  /** Логины, встречающиеся в журнале (для фильтра) */
+  async logins(): Promise<string[]> {
+    return (db.prepare('SELECT DISTINCT login FROM audit WHERE login IS NOT NULL ORDER BY login').all() as Row[]).map((r) => r.login as string);
+  },
+};

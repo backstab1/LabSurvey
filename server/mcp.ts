@@ -7,7 +7,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as z from 'zod';
 import { baseUrl, bearerUser } from './oauth.ts';
-import { surveys } from './db.ts';
+import { oauth, surveys } from './db.ts';
+import { auditAi } from './audit.ts';
 import type { SessionUser } from './auth.ts';
 import { draftShapeOk } from './routes/admin.ts';
 import { migrateSurvey } from '../shared/migrate.ts';
@@ -47,8 +48,10 @@ const issues = (v: ValidationResult) => ({
 const definition = z.union([z.record(z.string(), z.unknown()), z.string()])
   .describe('Анкета в формате SurveyLAB (formatVersion 2) — объект или JSON-строка. Формат: get_format_guide.');
 
-function buildServer(user: SessionUser, base: string): McpServer {
+function buildServer(user: SessionUser, base: string, app: string, ip: string | null): McpServer {
   const server = new McpServer({ name: 'surveylab', version: '1.0.0' }, { instructions: INSTRUCTIONS });
+  const log = (action: string, id: string, title: string, coalesceMin = 0) =>
+    auditAi({ login: user.login, app, action, targetType: 'survey', targetId: id, targetTitle: title, ip }, coalesceMin);
   const canWrite = user.role === 'admin' || user.role === 'editor';
   const editorUrl = (id: string) => `${base}/admin/s/${id}`;
 
@@ -108,6 +111,7 @@ function buildServer(user: SessionUser, base: string): McpServer {
     const v = validateSurvey(def);
     if (!draftShapeOk(def)) return fail(`Анкета не сохранена — сломана структура. ${JSON.stringify(issues(v))}`);
     const s = await surveys.create(def as Survey);
+    await log('Создал анкету', s.id, s.title);
     return text({
       id: s.id, title: s.title, updatedAt: s.updatedAt, editorUrl: editorUrl(s.id), check: issues(v),
       note: v.ok ? 'Сохранено как черновик. Опубликовать и запустить сбор пользователь может в конструкторе.'
@@ -137,6 +141,7 @@ function buildServer(user: SessionUser, base: string): McpServer {
     if (!draftShapeOk(def)) return fail(`Черновик не сохранён — сломана структура. ${JSON.stringify(issues(v))}`);
     await surveys.saveDraft(s.id, def as Survey);
     const saved = (await surveys.get(s.id))!;
+    await log('Изменил черновик анкеты', s.id, saved.title, 30);
     return text({ id: s.id, updatedAt: saved.updatedAt, editorUrl: editorUrl(s.id), check: issues(v) });
   });
 
@@ -152,7 +157,8 @@ export async function mcpRoutes(app: FastifyInstance) {
         .send({ error: 'invalid_token', error_description: 'Нужен вход через OAuth' });
     }
     // Без сессий: на каждый запрос — свой сервер и транспорт, ответ — JSON
-    const server = buildServer(auth.user, baseUrl(req));
+    const client = await oauth.client(auth.clientId);
+    const server = buildServer(auth.user, baseUrl(req), client?.name ?? 'ИИ-приложение', req.ip ?? null);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     reply.hijack();
     reply.raw.on('close', () => { transport.close(); server.close(); });

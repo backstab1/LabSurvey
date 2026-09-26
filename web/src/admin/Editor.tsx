@@ -46,7 +46,8 @@ export function Editor({ id }: { id: string }) {
   const [showVersions, setShowVersions] = useState(false);
   const [newProject, setNewProject] = useState(false);
   // Наблюдатель видит всё, но ничего не меняет
-  const readOnly = !canEdit(useMe());
+  const me = useMe();
+  const readOnly = !canEdit(me);
   const [focus, setFocus] = useState<{ where: string; n: number }>();
   const latest = useRef<Survey | null>(null);
   // История для отмены: правки, сделанные подряд быстрее чем за 0,7 с, объединяются в один шаг
@@ -209,6 +210,7 @@ export function Editor({ id }: { id: string }) {
           !readOnly && { label: 'Запустить в новом проекте', onClick: () => setNewProject(true) },
           { label: 'Печатная версия анкеты', onClick: async () => { await saveNow(); window.open(`/admin/s/${id}/print`, '_blank'); } },
           { label: 'История версий', onClick: () => setShowVersions(true), disabled: !info.published },
+          me.role === 'admin' && { label: 'История действий', onClick: () => navigate(`/admin/audit?targetType=survey&targetId=${id}`) },
           !readOnly && { label: 'Дублировать анкету', onClick: async () => { const r = await api('POST', `/api/admin/surveys/${id}/duplicate`); navigate(`/admin/s/${r.id}`); } },
           { label: 'Скачать JSON', onClick: () => { window.location.href = `/api/admin/surveys/${id}/export.json`; } },
           !readOnly && {

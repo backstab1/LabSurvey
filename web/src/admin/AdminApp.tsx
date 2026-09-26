@@ -8,6 +8,7 @@ import { ProjectList, ProjectPage } from './ProjectPage.tsx';
 import { Editor } from './Editor.tsx';
 import { PrintView } from './PrintView.tsx';
 import { ConnectorDialog } from './ConnectorDialog.tsx';
+import { AuditPage } from './AuditPage.tsx';
 
 export interface Me { login: string; role: Role; builtIn: boolean }
 
@@ -64,6 +65,7 @@ export function AdminApp() {
           <div className="spacer" />
           <Menu className="btn btn-secondary btn-sm user-menu" label={<>{me.login} <span className="muted">· {ROLE_LABELS[me.role]}</span></>} title="Учётная запись" items={[
             me.role === 'admin' && { label: 'Пользователи', onClick: () => navigate('/admin/users') },
+            me.role === 'admin' && { label: 'Журнал действий', onClick: () => navigate('/admin/audit') },
             !isClient(me) && { label: 'ИИ-коннектор (Claude, ChatGPT)', onClick: () => setAiOpen(true) },
             !me.builtIn && { label: 'Сменить пароль', onClick: () => setPwOpen(true) },
             { label: 'Выйти', onClick: async () => { await api('POST', '/api/admin/logout'); setMe(null); } },
@@ -71,6 +73,7 @@ export function AdminApp() {
         </header>
         {path.startsWith('/admin/users') && me.role === 'admin'
           ? <UsersPage me={me.login} />
+          : path.startsWith('/admin/audit') && me.role === 'admin' ? <AuditPage key={window.location.search} />
           : isClient(me) ? (projectMatch ? <ProjectPage key={projectMatch[1]} id={projectMatch[1]} /> : <ProjectList />)
           : editorMatch ? <Editor key={editorMatch[1]} id={editorMatch[1]} />
             : projectMatch ? <ProjectPage key={projectMatch[1]} id={projectMatch[1]} />
