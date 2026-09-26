@@ -93,6 +93,8 @@ textarea.input { resize: vertical; }
 .matrix .cell { display: flex; justify-content: center; align-items: center; min-height: 40px; cursor: pointer; }
 .matrix .cell input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
 .matrix .cell-label { display: none; }
+.matrix tr.matrix-group th { text-align: left; font-weight: 600; font-size: 14px; color: #4a515b; padding-top: 16px; min-width: 0; }
+.matrix-group-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 
 .nav { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
 .nav .btn { min-height: 44px; }
@@ -123,6 +125,8 @@ textarea.input { resize: vertical; }
   .matrix tr.answered { border-color: #b9cdf5; }
   .has-error .matrix tr.unanswered { border-color: var(--danger); }
   .matrix .cell-label { display: inline; text-align: left; }
+  .matrix tr.matrix-group { border: 0; padding: 8px 0 0; margin: 0; }
+  .matrix tr.matrix-group th { padding: 0 0 6px; }
 }
 
 /* Режимы матрицы */

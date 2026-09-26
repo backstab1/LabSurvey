@@ -36,7 +36,11 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
   useEffect(() => { reload(); }, []);
   useEffect(() => { api<RespRow[]>('GET', `/api/admin/projects/${info.id}/responses`).then(setRecent); }, [info.id, info.counts]);
 
-  const [opts, setOpts] = useState({ from: '', to: '', timings: false, rejected: false });
+  const [opts, setOpts] = useState({ from: '', to: '', timings: false, rejected: false, panel: '' });
+  /** Панели для фильтра: из проекта и те, что встречаются в ответах */
+  const panelCodes = [...new Set([...info.panels.map((p) => p.id), ...info.panelCounts.map((c) => c.panel).filter((x): x is string => !!x)])];
+  const panelTitle = (code: string) => info.panels.find((p) => p.id === code)?.title || code;
+  const matchPanel = (r: RespRow) => !opts.panel || (opts.panel === '-' ? !r.params.panel : r.params.panel === opts.panel);
   const exportUrl = (format: string, test = false) => {
     const q = new URLSearchParams({ statuses: statuses.join(',') });
     if (test) q.set('test', '1');
@@ -44,6 +48,7 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
     if (opts.to) q.set('to', opts.to);
     if (opts.timings) q.set('timings', '1');
     if (opts.rejected) q.set('rejected', '1');
+    if (opts.panel) q.set('panel', opts.panel);
     return `/api/admin/projects/${info.id}/export.${format}?${q}`;
   };
 
@@ -94,6 +99,13 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
             <input className="input" type="date" value={opts.from} onChange={(e) => setOpts({ ...opts, from: e.target.value })} /></label>
           <label className="row" style={{ gap: 6 }}><span className="muted small">по</span>
             <input className="input" type="date" value={opts.to} onChange={(e) => setOpts({ ...opts, to: e.target.value })} /></label>
+          {panelCodes.length > 0 && (
+            <select className="input" style={{ width: 'auto' }} value={opts.panel} aria-label="Панель" onChange={(e) => setOpts({ ...opts, panel: e.target.value })}>
+              <option value="">все панели</option>
+              {panelCodes.map((c) => <option key={c} value={c}>{panelTitle(c)}</option>)}
+              <option value="-">без панели</option>
+            </select>
+          )}
           <label className="check"><input type="checkbox" checked={opts.timings} onChange={(e) => setOpts({ ...opts, timings: e.target.checked })} />Время на каждом вопросе (t_Q1…)</label>
           {info.counts.rejected > 0 && (
             <label className="check"><input type="checkbox" checked={opts.rejected} onChange={(e) => setOpts({ ...opts, rejected: e.target.checked })} />Включая брак</label>
@@ -120,7 +132,7 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
           <table className="table">
             <thead><tr><th>ID</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Время</th><th>Ответов</th><th>Параметры</th></tr></thead>
             <tbody>
-              {recent.filter((r) => showTest || !r.isTest).slice(0, 100).map((r) => (
+              {recent.filter((r) => (showTest || !r.isTest) && matchPanel(r)).slice(0, 100).map((r) => (
                 <tr key={r.id} className={`clickable${r.rejected ? ' muted' : ''}`} onClick={() => setViewing(r.id)} title="Открыть ответ">
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{r.id}</td>
                   <td>{STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}{r.rejected && <span className="badge closed">брак</span>}</td>

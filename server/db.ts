@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes } from 'node:crypto';
 import { config } from './config.ts';
-import { stripProjectFields, type Answers, type ProjectSettings, type ProjectStatus, type Quota, type Survey } from '../shared/types.ts';
+import { PANEL_PARAM, stripProjectFields, type Answers, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey } from '../shared/types.ts';
 import { migrateSurvey } from '../shared/migrate.ts';
 import type { ResponseRecord, ResponseStatus } from '../shared/variables.ts';
 
@@ -77,6 +77,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS projects_survey ON projects(survey_id);
 `);
 migrateToProjects();
+if (!(db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).some((c) => c.name === 'panels')) {
+  db.exec('ALTER TABLE projects ADD COLUMN panels TEXT');
+}
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     login TEXT PRIMARY KEY COLLATE NOCASE,
@@ -219,10 +222,20 @@ export interface ProjectRow {
   status: ProjectStatus;
   settings: ProjectSettings;
   quotas: Quota[];
+  panels: Panel[];
   sheets: SheetsConfig | null;
   notify: NotifyConfig | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Счётчики одного источника: panel = null — прямая ссылка без панели */
+export interface PanelCounts {
+  panel: string | null;
+  statuses: Record<string, number>;
+  rejected: number;
+  /** Медиана длительности завершённых анкет, сек */
+  medianSec: number | null;
 }
 
 export interface StoredResponse extends ResponseRecord {
@@ -246,6 +259,14 @@ export function newId(len = 10): string {
 }
 
 const now = () => new Date().toISOString();
+const paramPath = (key: string) => `$."${key.replace(/"/g, '')}"`;
+
+export function median(list: number[]): number | null {
+  if (!list.length) return null;
+  const s = [...list].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+}
 type Row = Record<string, unknown>;
 
 function toSurvey(r: Row): SurveyRow {
@@ -273,6 +294,7 @@ function toProject(r: Row): ProjectRow {
     status: r.status as ProjectStatus,
     settings: r.settings ? JSON.parse(r.settings as string) : {},
     quotas: r.quotas ? JSON.parse(r.quotas as string) : [],
+    panels: r.panels ? JSON.parse(r.panels as string) : [],
     sheets: r.sheets ? JSON.parse(r.sheets as string) : null,
     notify: r.notify ? JSON.parse(r.notify as string) : null,
     createdAt: r.created_at as string,
@@ -404,7 +426,7 @@ export const projects = {
     return (await this.get(id))!;
   },
 
-  async update(id: string, patch: { title?: string; surveyId?: string; status?: ProjectStatus; settings?: ProjectSettings; quotas?: Quota[] }): Promise<void> {
+  async update(id: string, patch: { title?: string; surveyId?: string; status?: ProjectStatus; settings?: ProjectSettings; quotas?: Quota[]; panels?: Panel[] }): Promise<void> {
     const sets: string[] = ['updated_at = ?'];
     const vals: (string | null)[] = [now()];
     if (patch.title !== undefined) { sets.push('title = ?'); vals.push(patch.title); }
@@ -412,6 +434,7 @@ export const projects = {
     if (patch.status !== undefined) { sets.push('status = ?'); vals.push(patch.status); }
     if (patch.settings !== undefined) { sets.push('settings = ?'); vals.push(Object.keys(patch.settings).length ? JSON.stringify(patch.settings) : null); }
     if (patch.quotas !== undefined) { sets.push('quotas = ?'); vals.push(patch.quotas.length ? JSON.stringify(patch.quotas) : null); }
+    if (patch.panels !== undefined) { sets.push('panels = ?'); vals.push(patch.panels.length ? JSON.stringify(patch.panels) : null); }
     vals.push(id);
     db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
   },
@@ -487,11 +510,46 @@ export const responses = {
     return (db.prepare(sql).all(...vals) as Row[]).map(toResponse);
   },
 
-  /** Последняя настоящая (не тестовая) анкета с этим значением параметра ссылки */
-  async findByParam(projectId: string, key: string, value: string): Promise<StoredResponse | null> {
-    const r = db.prepare(`SELECT * FROM responses WHERE project_id = ? AND is_test = 0 AND json_extract(params, ?) = ?
-      ORDER BY started_at DESC LIMIT 1`).get(projectId, `$."${key.replace(/"/g, '')}"`, value) as Row | undefined;
+  /** Последняя настоящая (не тестовая) анкета с этими значениями параметров ссылки */
+  async findByParam(projectId: string, match: Record<string, string>): Promise<StoredResponse | null> {
+    const keys = Object.keys(match);
+    const r = db.prepare(`SELECT * FROM responses WHERE project_id = ? AND is_test = 0
+      ${keys.map(() => 'AND json_extract(params, ?) = ?').join(' ')} ORDER BY started_at DESC LIMIT 1`)
+      .get(projectId, ...keys.flatMap((k) => [paramPath(k), match[k]])) as Row | undefined;
     return r ? toResponse(r) : null;
+  },
+
+  /** Сколько настоящих завершённых анкет пришло с панели */
+  async completedFromPanel(projectId: string, panel: string): Promise<number> {
+    const r = db.prepare(`SELECT COUNT(*) AS n FROM responses WHERE project_id = ? AND is_test = 0 AND rejected = 0
+      AND status = 'completed' AND json_extract(params, ?) = ?`).get(projectId, paramPath(PANEL_PARAM), panel) as Row;
+    return r.n as number;
+  },
+
+  /** Счётчики настоящих анкет по панелям (источникам) */
+  async countsByPanel(projectId: string): Promise<PanelCounts[]> {
+    const rows = db.prepare(`SELECT json_extract(params, ?) AS panel, status, rejected, COUNT(*) AS n FROM responses
+      WHERE project_id = ? AND is_test = 0 GROUP BY panel, status, rejected`).all(paramPath(PANEL_PARAM), projectId) as Row[];
+    const out = new Map<string | null, PanelCounts>();
+    const of = (panel: string | null) => {
+      if (!out.has(panel)) out.set(panel, { panel, statuses: {}, rejected: 0, medianSec: null });
+      return out.get(panel)!;
+    };
+    for (const r of rows) {
+      const c = of(r.panel === null || r.panel === '' ? null : String(r.panel));
+      if (r.rejected === 1) c.rejected += r.n as number;
+      else c.statuses[r.status as string] = (c.statuses[r.status as string] ?? 0) + (r.n as number);
+    }
+    const durations = db.prepare(`SELECT json_extract(params, ?) AS panel, duration_sec AS d FROM responses
+      WHERE project_id = ? AND is_test = 0 AND rejected = 0 AND status = 'completed' AND duration_sec IS NOT NULL`)
+      .all(paramPath(PANEL_PARAM), projectId) as Row[];
+    const byPanel = new Map<string | null, number[]>();
+    for (const r of durations) {
+      const k = r.panel === null || r.panel === '' ? null : String(r.panel);
+      byPanel.set(k, [...(byPanel.get(k) ?? []), r.d as number]);
+    }
+    for (const [k, list] of byPanel) of(k).medianSec = median(list);
+    return [...out.values()];
   },
 
   /** Сколько настоящих анкет начато с этого IP за последние sinceSec секунд */

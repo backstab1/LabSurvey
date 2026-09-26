@@ -67,7 +67,7 @@ function sourceItems(spec: LoopSpec, ctx: RespondentContext | null, survey: Surv
     return Array.from({ length: n }, (_, i) => ({ code: i + 1, text: String(i + 1) }));
   }
   if (src.type === 'matrix') {
-    const rows = (ctx ? resolveRows(ctx, src) : allRows(survey, src)).filter((r) => !r.noLoop);
+    const rows = (ctx ? resolveRows(ctx, src) : allRows(survey, src)).filter((r) => !r.noLoop && !r.group);
     if (!ctx) return rows.map((r) => ({ code: r.code, text: r.text }));
     const v = (answer?.v && typeof answer.v === 'object' && !Array.isArray(answer.v) ? answer.v : {}) as Record<string, number | number[]>;
     const hit = (r: Option) => {

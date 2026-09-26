@@ -1,4 +1,4 @@
-import { groupOf, resolveOptions, resolveRows } from './logic.ts';
+import { answerRows, groupOf, resolveOptions } from './logic.ts';
 import type { Answer, Option, Question, RespondentContext } from './types.ts';
 
 export function isRequired(q: Question): boolean {
@@ -181,7 +181,7 @@ function validateMatrix(
   a: Answer | undefined,
   required: boolean,
 ): string | null {
-  const rows = resolveRows(ctx, q);
+  const rows = answerRows(ctx, q);
   const v = (a?.v ?? {}) as Record<string, number | number[]>;
   if (typeof v !== 'object' || Array.isArray(v)) return 'Некорректный ответ';
   const colCodes = new Set(q.columns.map((c) => c.code));

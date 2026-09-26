@@ -16,9 +16,9 @@ import { send, telegramConfigured } from '../notify.ts';
 import { backupPath, listBackups, makeBackup } from '../backup.ts';
 import { createReadStream } from 'node:fs';
 import { config } from '../config.ts';
-import { validateSurvey } from '../../shared/validate.ts';
+import { validatePanels, validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
-import { PROJECT_SETTING_KEYS, effectiveSurvey, type Condition, type ProjectSettings, type ProjectStatus, type Quota, type Survey } from '../../shared/types.ts';
+import { PANEL_PARAM, PROJECT_SETTING_KEYS, effectiveSurvey, type Condition, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey } from '../../shared/types.ts';
 import { evalCondition } from '../../shared/logic.ts';
 import { expandAllLoops } from '../../shared/loops.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
@@ -238,6 +238,7 @@ export async function adminRoutes(app: FastifyInstance) {
         }
         return {
           id: p.id, title: p.title, status: p.status, surveyId: p.surveyId, surveyTitle: p.surveyTitle, counts: p.counts,
+          panels: p.panels.length,
           maxResponses: p.settings.maxResponses ?? null, openFrom: p.settings.openFrom ?? null, closeAt: p.settings.closeAt ?? null,
           quotas: p.quotas.length, quotasFull, createdAt: p.createdAt, updatedAt: p.updatedAt,
         };
@@ -265,7 +266,8 @@ export async function adminRoutes(app: FastifyInstance) {
       const { project: p, survey: s } = l;
       const counts = l.live && p.quotas.length ? await quotaCounts(p.id, l.live, false) : null;
       return {
-        id: p.id, title: p.title, status: p.status, settings: p.settings, quotaDefs: p.quotas,
+        id: p.id, title: p.title, status: p.status, settings: p.settings, quotaDefs: p.quotas, panels: p.panels,
+        panelCounts: await responses.countsByPanel(p.id),
         quotas: p.quotas.map((q) => ({ id: q.id, title: q.title, limit: q.limit, count: counts?.get(q.id) ?? 0 })),
         survey: { id: s.id, title: s.draft.title, version: s.version, published: !!s.published, unpublished: !s.published || JSON.stringify(s.published) !== JSON.stringify(s.draft) },
         // Анкета с настройками проекта: для отчёта, данных и условий квот
@@ -276,7 +278,7 @@ export async function adminRoutes(app: FastifyInstance) {
       };
     });
 
-    priv.put<{ Params: { id: string }; Body: { title?: string; surveyId?: string; settings?: ProjectSettings; quotas?: Quota[] } }>(
+    priv.put<{ Params: { id: string }; Body: { title?: string; surveyId?: string; settings?: ProjectSettings; quotas?: Quota[]; panels?: Panel[] } }>(
       '/api/admin/projects/:id',
       async (req, reply) => {
         const l = await loadProject(req.params.id);
@@ -304,6 +306,11 @@ export async function adminRoutes(app: FastifyInstance) {
         if (b.quotas !== undefined) {
           if (!Array.isArray(b.quotas)) return reply.code(400).send({ error: 'quotas: ожидается массив' });
           patch.quotas = b.quotas;
+        }
+        if (b.panels !== undefined) {
+          const errs = validatePanels(b.panels);
+          if (errs.length) return reply.code(422).send({ error: errs.join('; ') });
+          patch.panels = b.panels;
         }
         // Настройки и квоты проверяются вместе с анкетой — условия квот ссылаются на её вопросы
         const next = { settings: patch.settings ?? l.project.settings, quotas: patch.quotas ?? l.project.quotas };
@@ -399,7 +406,7 @@ export async function adminRoutes(app: FastifyInstance) {
       return buildReport(expandAllLoops(def), all.filter((r) => statuses.includes(r.status)), unfinished);
     });
 
-    priv.get<{ Params: { id: string; format: string }; Querystring: { statuses?: string; test?: string; from?: string; to?: string; timings?: string; rejected?: string } }>(
+    priv.get<{ Params: { id: string; format: string }; Querystring: { statuses?: string; test?: string; from?: string; to?: string; timings?: string; rejected?: string; panel?: string } }>(
       '/api/admin/projects/:id/export.:format',
       async (req, reply) => {
         const l = await loadProject(req.params.id);
@@ -412,7 +419,9 @@ export async function adminRoutes(app: FastifyInstance) {
         const to = day(req.query.to) ? new Date(Date.parse(`${req.query.to}T00:00:00Z`) + 86400_000).toISOString().slice(0, 19) : undefined;
         const list = (await responses.list(l.project.id, {
           includeTest: req.query.test === '1', statuses, includeRejected: req.query.rejected === '1', from, to,
-        })).filter((r) => (req.query.test === '1' ? r.isTest : !r.isTest));
+        })).filter((r) => (req.query.test === '1' ? r.isTest : !r.isTest))
+          // Панель: код или «-» — пришедшие без панели
+          .filter((r) => !req.query.panel || (req.query.panel === '-' ? !r.params[PANEL_PARAM] : r.params[PANEL_PARAM] === req.query.panel));
         const table = buildTable(def, list, { timings: req.query.timings === '1' });
         const date = new Date().toISOString().slice(0, 10);
         const base = `${l.project.title.slice(0, 60)}_${date}${req.query.test === '1' ? '_test' : ''}`;

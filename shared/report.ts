@@ -132,7 +132,7 @@ export function buildReport(survey: Survey, responses: ResponseRecord[], unfinis
         break;
       }
       case 'matrix': {
-        const rows = allRows(survey, q);
+        const rows = allRows(survey, q).filter((r) => !r.group);
         rep.matrix = rows.map((row) => {
           const inRow = answered.filter((r) => {
             const x = (r.answers[q.id].v as Record<string, number | number[]>)[String(row.code)];

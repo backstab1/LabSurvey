@@ -550,9 +550,36 @@ export const PROJECT_SETTING_KEYS = [
 ] as const;
 export type ProjectSettings = Pick<SurveySettings, (typeof PROJECT_SETTING_KEYS)[number]>;
 
+/**
+ * Панель — источник трафика проекта (панель-подрядчик, рассылка, соцсеть). Ссылка: /s/<проект>?panel=<id>;
+ * код панели сохраняется в параметрах ответа (param.panel) — по нему работают квоты, выгрузка и счётчики.
+ */
+export interface Panel {
+  /** Код панели в ссылке: латиница, цифры, _ и - */
+  id: string;
+  title?: string;
+  /** Параметр ссылки с ID респондента у панели (uid, pid…): один ответ на ID, без него ссылка не откроется */
+  idParam?: string;
+  /** Как панель подставляет свой ID в ссылку (макрос панели: [%RID%], {uid}…) — только для готовой ссылки */
+  idMacro?: string;
+  /** Лимит завершённых анкет от панели: сверх лимита — «Сверх квоты» и редирект панели */
+  limit?: number;
+  /** Приём с панели остановлен */
+  closed?: boolean;
+  /** Редиректы панели по статусам — важнее редиректов анкеты. Подстановки: {{param.uid}}, {{resp_id}}, {{Q1}} */
+  redirectComplete?: string;
+  redirectScreenout?: string;
+  redirectOverquota?: string;
+  redirectEarlyFinish?: string;
+}
+
+/** Параметр ссылки, в котором приходит код панели */
+export const PANEL_PARAM = 'panel';
+
 export interface ProjectConfig {
   settings?: ProjectSettings;
   quotas?: Quota[];
+  panels?: Panel[];
 }
 
 /** Анкета с настройками сбора и квотами проекта — её видит движок опроса, выгрузка и отчёт */

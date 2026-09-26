@@ -551,7 +551,7 @@ function validateQuestion(
       if (q.rowOrder !== undefined && q.rowOrder !== 'random' && q.rowOrder !== 'rotate') err(w, 'rowOrder: random или rotate');
       if (q.carousel && q.progressiveRows) warn(w, 'carousel и progressiveRows вместе не имеют смысла — будет карусель');
       if (Array.isArray(q.columns) && q.columns.some((c) => c?.other)) err(w, '«Другое» в матрице задаётся в строках, а не в столбцах');
-      if (Array.isArray(q.rows) && q.rows.some((r) => r?.group)) err(w, 'Группы строк в матрице пока не поддерживаются');
+      if (Array.isArray(q.rows) && q.rows.some((r) => r?.group && r.groupExclusive)) err(w, 'groupExclusive в строках матрицы не действует');
       if (q.requiredRows !== undefined && q.requiredRows !== 'all' && q.requiredRows !== 'none'
         && !(isInt(q.requiredRows) && q.requiredRows >= 1)) {
         err(w, 'requiredRows: "all", "none" или целое ≥ 1');
@@ -590,4 +590,36 @@ function validateQuestion(
       if (q.fromParam !== undefined && (typeof q.fromParam !== 'string' || !q.fromParam)) err(w, 'fromParam: имя параметра ссылки');
       break;
   }
+}
+
+const PANEL_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+const PANEL_URL_KEYS = ['redirectComplete', 'redirectScreenout', 'redirectOverquota', 'redirectEarlyFinish'] as const;
+/** Параметры ссылки, которые занимает сам опрос */
+const RESERVED_LINK_PARAMS = new Set(['preview', 'new', 'rid', 'test', 'survey', 'start', 'panel']);
+
+/** Проверка панелей проекта; возвращает список ошибок (пусто — всё в порядке) */
+export function validatePanels(panels: unknown): string[] {
+  if (!Array.isArray(panels)) return ['panels: ожидается массив'];
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  panels.forEach((p: Record<string, unknown>, i) => {
+    const where = `Панель ${typeof p?.id === 'string' && p.id ? p.id : i + 1}`;
+    if (!p || typeof p !== 'object') return errors.push(`${where}: некорректное описание`);
+    if (typeof p.id !== 'string' || !PANEL_ID_RE.test(p.id)) errors.push(`${where}: код — латиница, цифры, _ и -, до 40 символов`);
+    else if (seen.has(p.id.toLowerCase())) errors.push(`${where}: такой код уже есть`);
+    else seen.add(p.id.toLowerCase());
+    if (p.title !== undefined && typeof p.title !== 'string') errors.push(`${where}: название должно быть строкой`);
+    if (p.idParam !== undefined) {
+      if (typeof p.idParam !== 'string' || !/^[\w.-]{1,50}$/.test(p.idParam)) errors.push(`${where}: параметр ID — латиница, цифры, _ . -`);
+      else if (RESERVED_LINK_PARAMS.has(p.idParam)) errors.push(`${where}: параметр «${p.idParam}» занят опросом`);
+    }
+    if (p.idMacro !== undefined && (typeof p.idMacro !== 'string' || p.idMacro.length > 100)) errors.push(`${where}: макрос ID — строка до 100 символов`);
+    if (p.limit !== undefined && (!Number.isInteger(p.limit) || (p.limit as number) < 1)) errors.push(`${where}: лимит — целое число от 1`);
+    for (const k of PANEL_URL_KEYS) {
+      if (p[k] !== undefined && (typeof p[k] !== 'string' || !/^https?:\/\/\S+$/i.test(p[k] as string))) {
+        errors.push(`${where}: редирект должен начинаться с http:// или https://`);
+      }
+    }
+  });
+  return errors;
 }

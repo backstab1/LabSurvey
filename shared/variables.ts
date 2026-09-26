@@ -183,7 +183,7 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
           break;
         }
         case 'matrix': {
-          const rows = allRows(survey, q);
+          const rows = allRows(survey, q).filter((r) => !r.group);
           const rowVal = (r: ResponseRecord, code: number) => {
             const v = ans(r)?.v;
             return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, number | number[]>)[String(code)] : undefined;

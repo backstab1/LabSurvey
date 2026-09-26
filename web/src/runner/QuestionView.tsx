@@ -348,7 +348,18 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
   // Столбцы «общий для всей таблицы» — отдельными вариантами под таблицей
   const sharedCols = q.columns.filter((c) => c.shared);
   const columns = sharedCols.length ? q.columns.filter((c) => !c.shared) : q.columns;
-  const plainRows = rows.filter((r) => !r.other);
+  // Заголовки групп строк — только подписи; отвечают в остальных строках
+  const choiceRows = rows.filter((r) => !r.group);
+  const plainRows = choiceRows.filter((r) => !r.other);
+  /** Заголовок группы, к которой относится строка (для карусели) */
+  const groupHead = (r: Option): Option | undefined => {
+    let head: Option | undefined;
+    for (const x of rows) {
+      if (x.group) head = x;
+      else if (x.code === r.code) return head && !head.groupHidden ? head : undefined;
+    }
+    return undefined;
+  };
   const sharedOn = (c: Option) => plainRows.length > 0 && plainRows.every((r) => {
     const x = v[String(r.code)];
     return Array.isArray(x) ? x.includes(c.code) : x === c.code;
@@ -370,7 +381,7 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
       const firstTime = v[key] === undefined;
       emit({ ...v, [key]: col }, others);
       if (firstTime && window.matchMedia('(max-width: 640px)').matches) {
-        const next = rows.find((r) => r.code !== row && !r.other && v[String(r.code)] === undefined);
+        const next = plainRows.find((r) => r.code !== row && v[String(r.code)] === undefined);
         if (next) setTimeout(() => wrapRef.current?.querySelector(`[data-row="${next.code}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
       }
       return;
@@ -413,7 +424,10 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
   if (q.carousel) {
     return (
       <div className={markerCls.trim() || undefined}>
-        <MatrixCarousel q={q} columns={columns} rows={rows} rowLabel={rowLabel} cell={cell} answered={answered} />
+        <MatrixCarousel q={q} columns={columns} rows={choiceRows} rowLabel={(r) => {
+          const head = groupHead(r);
+          return head ? <><div className="matrix-group-label">{rich(head.text)}</div>{rowLabel(r)}</> : rowLabel(r);
+        }} cell={cell} answered={answered} />
         {sharedBlock}
       </div>
     );
@@ -422,7 +436,7 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
   // Постепенный показ: строки до первой неотвеченной (строки «Другое» не останавливают)
   let shownRows = rows;
   if (q.progressiveRows) {
-    const firstOpen = rows.findIndex((r) => !r.other && !answered(r));
+    const firstOpen = rows.findIndex((r) => !r.group && !r.other && !answered(r));
     if (firstOpen >= 0) shownRows = rows.slice(0, firstOpen + 1);
   }
   const cls = `matrix${q.verticalHeaders ? ' vertical-headers' : ''}${markerCls}`;
@@ -433,13 +447,13 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
       <div className="matrix-wrap">
         <table className={cls}>
           <thead>
-            <tr><th />{shownRows.map((r) => <th key={r.code} scope="col"><span>{rowLabel(r)}</span></th>)}</tr>
+            <tr><th />{shownRows.filter((r) => !r.group).map((r) => <th key={r.code} scope="col"><span>{rowLabel(r)}</span></th>)}</tr>
           </thead>
           <tbody>
             {columns.map((c) => (
               <tr key={c.code}>
                 <th scope="row">{c.text}</th>
-                {shownRows.map((r) => <td key={r.code}>{cell(r, c, r.other ? others[r.code] || r.text : r.text)}</td>)}
+                {shownRows.filter((r) => !r.group).map((r) => <td key={r.code}>{cell(r, c, r.other ? others[r.code] || r.text : r.text)}</td>)}
               </tr>
             ))}
           </tbody>
@@ -458,12 +472,16 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
           <tr><th />{columns.map((c) => <th key={c.code} scope="col"><span>{c.text}</span></th>)}</tr>
         </thead>
         <tbody>
-          {shownRows.map((r) => (
+          {shownRows.map((r) => (r.group ? (r.groupHidden ? null : (
+            <tr key={`g${r.code}`} className="matrix-group">
+              <th scope="rowgroup" colSpan={columns.length + 1}>{rich(r.text)}</th>
+            </tr>
+          )) : (
             <tr key={r.code} className={`fade-in${answered(r) ? ' answered' : r.other ? '' : ' unanswered'}`} data-row={r.code}>
               <th scope="row">{rowLabel(r)}</th>
               {columns.map((c) => <td key={c.code}>{cell(r, c, c.text)}</td>)}
             </tr>
-          ))}
+          )))}
         </tbody>
       </table>
     </div>

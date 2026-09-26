@@ -1,6 +1,6 @@
 // Формулы для вычисляемых переменных (hidden + calc): арифметика по ответам без выполнения кода.
 // Пример: "score(Q1) + score(Q2)", "(Q5 + Q6) / 2", "if(S1 >= 18, 1, 2)", "count(Q3)".
-import { hasOptions, resolveOptions, resolveRows } from './logic.ts';
+import { answerRows, hasOptions, resolveOptions } from './logic.ts';
 import type { AnswerValue, Question, RespondentContext, Survey } from './types.ts';
 
 type Node =
@@ -109,7 +109,7 @@ function optionScore(ctx: RespondentContext, q: Question, v: AnswerValue): numbe
   }
   if (q.type === 'scale') return typeof v === 'number' ? (q.extraOptions?.find((o) => o.code === v)?.score ?? (v >= q.from && v <= q.to ? v : 0)) : 0;
   if (q.type === 'matrix' && v && typeof v === 'object' && !Array.isArray(v)) {
-    const rows = new Set(resolveRows(ctx, q).map((r) => String(r.code)));
+    const rows = new Set(answerRows(ctx, q).map((r) => String(r.code)));
     return Object.entries(v as Record<string, number | number[]>)
       .filter(([r]) => rows.has(r))
       .reduce((s, [, x]) => s + (Array.isArray(x) ? x : [x]).reduce((a, c) => a + (q.columns.find((col) => col.code === c)?.score ?? 0), 0), 0);

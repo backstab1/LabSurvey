@@ -266,7 +266,7 @@ function TypeBody({ def, q, set }: { def: Survey; q: Question; set: (p: Patch) =
             <ListButton title="Список столбцов" options={q.columns} onClick={() => setList('columns')} />
           </div>
           {list === 'rows' && dialog('Список строк', q.rows, 'rows',
-            { other: true, flags: true, noExport: true, noExportOther: true, logic: true, bottom: true, script: true },
+            { other: true, flags: true, groups: true, noExport: true, noExportOther: true, logic: true, bottom: true, script: true },
             { placeholder: 'Утверждение', carry: carry('rowsFrom', q.rowsFrom) })}
           {list === 'columns' && dialog('Список столбцов', q.columns, 'columns', { scores: true, shared: true }, { placeholder: 'Ответ' })}
         </>

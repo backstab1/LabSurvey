@@ -8,7 +8,7 @@ import { Menu, Modal, compact, toast } from './common.tsx';
 import { nextId } from '../../../shared/refactor.ts';
 import { allQuestions } from '../../../shared/logic.ts';
 import {
-  PROJECT_STATUS_LABELS, type ProjectSettings, type ProjectStatus, type Quota, type Survey,
+  PANEL_PARAM, PROJECT_STATUS_LABELS, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey,
 } from '../../../shared/types.ts';
 
 export interface ProjectInfo {
@@ -17,6 +17,9 @@ export interface ProjectInfo {
   status: ProjectStatus;
   settings: ProjectSettings;
   quotaDefs: Quota[];
+  panels: Panel[];
+  /** Счётчики настоящих анкет по панелям; panel = null — прямая ссылка */
+  panelCounts: PanelCounts[];
   /** Прогресс квот по опубликованной версии */
   quotas: { id: string; title?: string; limit: number; count: number }[];
   survey: { id: string; title: string; version: number; published: boolean; unpublished: boolean };
@@ -33,6 +36,8 @@ export interface ProjectInfo {
   testToken: string;
   telegramConfigured: boolean;
 }
+
+export interface PanelCounts { panel: string | null; statuses: Record<string, number>; rejected: number; medianSec: number | null }
 
 /** Что значит статус проекта для респондентов */
 export const STATUS_HINTS: Record<ProjectStatus, string> = {
@@ -161,8 +166,10 @@ export function NewProjectModal({ onClose, surveyId }: { onClose: () => void; su
 
 // ======================= Страница проекта =======================
 
-type Tab = 'overview' | 'quotas' | 'data' | 'report' | 'settings';
-const TABS: [Tab, string][] = [['overview', 'Сводка'], ['quotas', 'Квоты'], ['data', 'Данные'], ['report', 'Отчёт'], ['settings', 'Настройки сбора']];
+type Tab = 'overview' | 'panels' | 'quotas' | 'data' | 'report' | 'settings';
+const TABS: [Tab, string][] = [
+  ['overview', 'Сводка'], ['panels', 'Панели'], ['quotas', 'Квоты'], ['data', 'Данные'], ['report', 'Отчёт'], ['settings', 'Настройки сбора'],
+];
 
 export function ProjectPage({ id }: { id: string }) {
   const [info, setInfo] = useState<ProjectInfo | null>(null);
@@ -232,6 +239,7 @@ export function ProjectPage({ id }: { id: string }) {
           {TABS.map(([t, label]) => (
             <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => changeTab(t)}>
               {label}{t === 'quotas' && info.quotaDefs.length > 0 && <span className="tab-count">{info.quotaDefs.length}</span>}
+              {t === 'panels' && info.panels.length > 0 && <span className="tab-count">{info.panels.length}</span>}
             </button>
           ))}
         </div>
@@ -241,6 +249,7 @@ export function ProjectPage({ id }: { id: string }) {
       </div>
 
       {tab === 'overview' && <Overview info={info} readOnly={readOnly} setStatus={setStatus} reload={reload} onTab={changeTab} />}
+      {tab === 'panels' && <PanelsTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'quotas' && <QuotasTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
       {tab === 'report' && <ReportTab info={info} />}
@@ -313,7 +322,22 @@ function Overview({ info, readOnly, setStatus, reload, onTab }: {
         <div className="card"><div className="stat">{info.counts.real.overquota ?? 0}</div><div className="stat-label">Сверх квоты</div></div>
         <div className="card"><div className="stat">{info.counts.real.in_progress ?? 0}</div><div className="stat-label">В процессе / бросили</div></div>
         <div className="card"><div className="stat">{started}</div><div className="stat-label">Всего начали</div></div>
+        <div className="card">
+          <div className="stat">{pct(done, started)}</div>
+          <div className="stat-label" title="Завершили / начали">Конверсия</div>
+        </div>
+        <div className="card">
+          <div className="stat">{fmtDuration(medianAll(info.panelCounts))}</div>
+          <div className="stat-label" title="Медиана длительности завершённых анкет">Медиана времени</div>
+        </div>
       </div>
+
+      {(info.panels.length > 0 || info.panelCounts.some((c) => c.panel !== null)) && (
+        <div className="card stack">
+          <div className="row"><h2 className="grow" style={{ margin: 0 }}>Источники</h2><button className="btn-link" onClick={() => onTab('panels')}>панели</button></div>
+          <SourcesTable info={info} />
+        </div>
+      )}
 
       {info.quotas.length > 0 && (
         <div className="card stack">
@@ -371,6 +395,194 @@ function QuotaProgress({ quotas }: { quotas: ProjectInfo['quotas'] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** Процент a от b: «42%» или «—» */
+const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '—');
+const fmtDuration = (sec: number | null) => (sec === null ? '—' : sec < 60 ? `${sec} с` : `${Math.floor(sec / 60)} мин${sec % 60 ? ` ${sec % 60} с` : ''}`);
+/** Медиана по всем источникам — приближённо: медианы источников, взвешенные по числу завершённых */
+function medianAll(list: PanelCounts[]): number | null {
+  const withTime = list.filter((c) => c.medianSec !== null && (c.statuses.completed ?? 0) > 0);
+  if (!withTime.length) return null;
+  const n = withTime.reduce((a, c) => a + (c.statuses.completed ?? 0), 0);
+  return Math.round(withTime.reduce((a, c) => a + c.medianSec! * (c.statuses.completed ?? 0), 0) / n);
+}
+
+/** Воронка по источникам: панели проекта, неизвестные коды и прямая ссылка */
+function SourcesTable({ info }: { info: ProjectInfo }) {
+  const byCode = new Map(info.panelCounts.map((c) => [c.panel, c]));
+  const rows: { key: string; name: ReactNode; c: PanelCounts | undefined; limit?: number; closed?: boolean }[] = [
+    ...info.panels.map((p) => ({
+      key: p.id, name: <>{p.title || p.id} <span className="muted mono small">{p.id}</span></>, c: byCode.get(p.id), limit: p.limit, closed: p.closed,
+    })),
+    ...info.panelCounts.filter((c) => c.panel !== null && !info.panels.some((p) => p.id === c.panel))
+      .map((c) => ({ key: `?${c.panel}`, name: <>{c.panel} <span className="muted small">— нет такой панели</span></>, c })),
+  ];
+  const direct = byCode.get(null);
+  if (direct || info.panels.length === 0) rows.push({ key: '-', name: <span className="muted">Прямая ссылка (без панели)</span>, c: direct });
+  const n = (c: PanelCounts | undefined, st: string) => c?.statuses[st] ?? 0;
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="table sources">
+        <thead>
+          <tr>
+            <th>Источник</th><th>Начали</th><th>Завершили</th><th>Отсеяны</th><th>Сверх квоты</th><th title="В процессе и завершили досрочно">Бросили</th>
+            <th title="Завершили / начали">Конверсия</th><th title="Завершили / (завершили + отсеяны)">Инцидентность</th><th title="Медиана длительности завершённых">Время</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ key, name, c, limit, closed }) => {
+            const started = Object.values(c?.statuses ?? {}).reduce((a, b) => a + b, 0);
+            const done = n(c, 'completed');
+            return (
+              <tr key={key}>
+                <td>{name}{closed && <span className="badge status-processing" style={{ marginLeft: 6 }}>стоп</span>}</td>
+                <td>{started}</td>
+                <td>{done}{limit ? <span className="muted"> / {limit}</span> : null}</td>
+                <td>{n(c, 'screened_out')}</td>
+                <td>{n(c, 'overquota')}</td>
+                <td>{n(c, 'in_progress') + n(c, 'terminated')}</td>
+                <td>{pct(done, started)}</td>
+                <td>{pct(done, done + n(c, 'screened_out'))}</td>
+                <td>{fmtDuration(c?.medianSec ?? null)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---------- Панели ----------
+
+const PANEL_REDIRECTS: [keyof Panel, string, string][] = [
+  ['redirectComplete', 'Завершил', 'complete'], ['redirectScreenout', 'Отсеян', 'screenout'],
+  ['redirectOverquota', 'Сверх квоты', 'overquota'], ['redirectEarlyFinish', 'Вышел досрочно', 'terminate'],
+];
+
+/** Ссылка для панели: код панели и ID респондента в виде макроса панели */
+export function panelLink(projectId: string, p: Panel): string {
+  let url = `${window.location.origin}/s/${projectId}?${PANEL_PARAM}=${encodeURIComponent(p.id)}`;
+  if (p.idParam) url += `&${p.idParam}=${p.idMacro || '{ID}'}`;
+  return url;
+}
+
+function PanelsTab({ info, readOnly, reload }: { info: ProjectInfo; readOnly: boolean; reload: () => Promise<unknown> }) {
+  const [panels, setPanels] = useState<Panel[]>(info.panels);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const dirty = JSON.stringify(panels) !== JSON.stringify(info.panels);
+  const setAt = (i: number, patch: Partial<Panel>) => setPanels(panels.map((p, k) => (k === i ? compact({ ...p, ...patch }) : p)));
+  const add = () => {
+    const used = new Set(panels.map((p) => p.id));
+    let n = panels.length + 1;
+    while (used.has(`panel${n}`)) n++;
+    setPanels([...panels, { id: `panel${n}`, idParam: 'uid' }]);
+  };
+  const save = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await api('PUT', `/api/admin/projects/${info.id}`, { panels });
+      await reload();
+      toast('Панели сохранены');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Не удалось сохранить');
+    } finally { setBusy(false); }
+  };
+  const counts = new Map(info.panelCounts.map((c) => [c.panel, c]));
+
+  return (
+    <div className="stack">
+      <div className="card stack">
+        <div className="row">
+          <h2 className="grow" style={{ margin: 0 }}>Панели</h2>
+          {!readOnly && <button className="btn btn-secondary btn-sm" onClick={add}>+ Панель</button>}
+          {!readOnly && <button className="btn btn-primary btn-sm" disabled={!dirty || busy} onClick={save}>{dirty ? 'Сохранить' : 'Сохранено'}</button>}
+        </div>
+        <p className="muted small" style={{ margin: 0 }}>
+          Панель — источник респондентов: панель-подрядчик, рассылка, соцсеть. У каждой своя ссылка (<code>?panel=код</code>), свой лимит
+          и свои адреса возврата по статусам — они важнее редиректов из анкеты. Код панели попадает в данные как <code>url_panel</code>,
+          в квотах его можно проверить условием <code>param.panel = "код"</code>.
+        </p>
+        {error && <div className="error-box">{error}</div>}
+        {panels.length === 0 && <p className="muted" style={{ margin: 0 }}>Панелей нет — все приходят по общей ссылке проекта.</p>}
+        {panels.map((p, i) => {
+          const c = counts.get(p.id);
+          const done = c?.statuses.completed ?? 0;
+          const started = Object.values(c?.statuses ?? {}).reduce((a, b) => a + b, 0);
+          const saved = info.panels.some((x) => x.id === p.id);
+          const link = panelLink(info.id, p);
+          const redirects = PANEL_REDIRECTS.filter(([k]) => p[k]).length;
+          const idRef = `{{param.${p.idParam || 'uid'}}}`;
+          return (
+            <div key={i} className="quota panel">
+              <fieldset className="plain stack" disabled={readOnly} style={{ gap: 8 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <input className="input mono" style={{ width: 120 }} value={p.id} title="Код панели в ссылке" aria-label="Код панели"
+                    onChange={(e) => setAt(i, { id: e.target.value.replace(/[^A-Za-z0-9_-]/g, '') })} />
+                  <input className="input grow" placeholder="Название, например «Панель А» или «Рассылка по базе»" value={p.title ?? ''} aria-label="Название панели"
+                    onChange={(e) => setAt(i, { title: e.target.value || undefined })} />
+                  <label className="row" style={{ gap: 6 }} title="Лимит завершённых анкет с панели"><span className="muted small">лимит</span>
+                    <input className="input mini" type="number" min={1} placeholder="—" value={p.limit ?? ''} aria-label="Лимит панели"
+                      onChange={(e) => setAt(i, { limit: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} />
+                  </label>
+                  <label className="check" title="Приём остановлен: новые респонденты с этой панели видят «Опрос закрыт»">
+                    <input type="checkbox" checked={!!p.closed} onChange={(e) => setAt(i, { closed: e.target.checked || undefined })} />
+                    <span className="small">стоп</span>
+                  </label>
+                  {!readOnly && (
+                    <button className="icon-btn" title="Удалить панель" onClick={() => {
+                      if (started && !window.confirm(`С панели «${p.title || p.id}» уже есть анкеты (${started}). Удалить панель? Анкеты останутся в данных.`)) return;
+                      setPanels(panels.filter((_, k) => k !== i));
+                    }}>✕</button>
+                  )}
+                </div>
+                <div className="grid2">
+                  <label className="field"><span>Параметр с ID респондента</span>
+                    <input className="input mono" placeholder="не передаётся" value={p.idParam ?? ''}
+                      onChange={(e) => setAt(i, { idParam: e.target.value.trim() || undefined })} />
+                    <span className="field-help">Один ответ на ID; без ID ссылка не откроется</span>
+                  </label>
+                  <label className="field"><span>Макрос панели для ID</span>
+                    <input className="input mono" placeholder="{ID}" value={p.idMacro ?? ''} disabled={!p.idParam}
+                      onChange={(e) => setAt(i, { idMacro: e.target.value.trim() || undefined })} />
+                    <span className="field-help">Как панель подставляет ID: [%RID%], {'{uid}'}, ##ID## — попадёт в ссылку</span>
+                  </label>
+                </div>
+              </fieldset>
+              <div className="row" style={{ gap: 8 }}>
+                <input className="input mono grow" readOnly value={link} aria-label="Ссылка для панели" onFocus={(e) => e.target.select()} />
+                <button className="btn btn-secondary btn-sm" disabled={!saved || dirty} title={!saved || dirty ? 'Сначала сохраните панели' : ''}
+                  onClick={() => { navigator.clipboard.writeText(link); toast('Ссылка для панели скопирована'); }}>Копировать</button>
+              </div>
+              <details className="js-details" open={!saved}>
+                <summary>Редиректы по статусам{redirects ? ` (${redirects} из 4)` : ' — не заданы, действуют редиректы анкеты'}</summary>
+                <fieldset className="plain grid2" disabled={readOnly} style={{ marginTop: 6 }}>
+                  {PANEL_REDIRECTS.map(([k, label, slug]) => (
+                    <label key={k} className="field"><span>{label}</span>
+                      <input className="input mono" placeholder={`https://panel.example/${slug}?id=${idRef}`}
+                        value={(p[k] as string) ?? ''} onChange={(e) => setAt(i, { [k]: e.target.value.trim() || undefined })} />
+                    </label>
+                  ))}
+                  <span className="field-help" style={{ gridColumn: '1 / -1' }}>
+                    Подстановки: <code>{idRef}</code> — ID респондента у панели, <code>{'{{resp_id}}'}</code> — ID анкеты, <code>{'{{Q1}}'}</code> — ответ на вопрос.
+                  </span>
+                </fieldset>
+              </details>
+              {saved && (
+                <div className="muted small">
+                  Начали {started} · завершили {done}{p.limit ? ` из ${p.limit}` : ''} · отсеяны {c?.statuses.screened_out ?? 0}
+                  {' '}· сверх квоты {c?.statuses.overquota ?? 0} · конверсия {pct(done, started)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

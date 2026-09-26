@@ -12,7 +12,7 @@ import {
 } from '../../shared/logic.ts';
 import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
 import { expandAllLoops, withLoops } from '../../shared/loops.ts';
-import { END, SCREENOUT, settingsOf, type Answer, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
+import { END, PANEL_PARAM, SCREENOUT, settingsOf, type Answer, type Panel, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
 
 export interface RunnerState {
@@ -81,7 +81,15 @@ export function publicSurvey(survey: Survey): Survey {
   return { ...survey, settings };
 }
 
-function finished(survey: Survey, r: StoredResponse): { message: string; redirect?: string } {
+/** Панель, с которой пришёл респондент (по параметру ?panel=) */
+export const panelOf = (panels: Panel[], params: Record<string, string>): Panel | undefined =>
+  params[PANEL_PARAM] ? panels.find((p) => p.id === params[PANEL_PARAM]) : undefined;
+
+const PANEL_REDIRECT = {
+  completed: 'redirectComplete', screened_out: 'redirectScreenout', overquota: 'redirectOverquota', terminated: 'redirectEarlyFinish',
+} as const;
+
+function finished(survey: Survey, r: StoredResponse, panels: Panel[]): { message: string; redirect?: string } {
   const st = settingsOf(survey);
   let [message, redirect] = r.status === 'screened_out' ? [st.screenoutMessage, st.redirectScreenout]
     : r.status === 'terminated' ? [st.earlyFinishMessage, st.redirectEarlyFinish]
@@ -90,6 +98,9 @@ function finished(survey: Survey, r: StoredResponse): { message: string; redirec
   // Своё сообщение и адрес у сработавшего действия важнее общих
   if (r.ending?.message) message = r.ending.message;
   if (r.ending?.redirect) redirect = r.ending.redirect;
+  // Редирект панели важнее всего: подрядчик считает статусы по возвратам
+  const panelRedirect = r.status !== 'in_progress' ? panelOf(panels, r.params)?.[PANEL_REDIRECT[r.status]] : undefined;
+  if (panelRedirect) redirect = panelRedirect;
   const ctx = ctxOf(survey, r, r.answers);
   return { message: pipe(message, ctx), redirect: redirect ? pipeUrl(redirect, ctx, r.id) : undefined };
 }
@@ -110,13 +121,13 @@ async function closedReason(projectId: string, survey: Survey): Promise<string |
   return null;
 }
 
-function stateOf(survey: Survey, r: StoredResponse): RunnerState {
+function stateOf(survey: Survey, r: StoredResponse, panels: Panel[] = []): RunnerState {
   const st = settingsOf(survey);
   const base = {
     rid: r.id, status: r.status, preview: r.isTest, survey: publicSurvey(survey), params: r.params, answers: r.answers,
   };
   if (r.status !== 'in_progress' || !r.currentPage) {
-    return { ...base, page: null, canBack: false, progress: 100, step: 0, ...finished(survey, r) };
+    return { ...base, page: null, canBack: false, progress: 100, step: 0, ...finished(survey, r, panels) };
   }
   const nav = cleanAnswers(ctxOf(survey, r, r.answers), r.history);
   return {
@@ -219,6 +230,7 @@ export async function respondentRoutes(app: FastifyInstance) {
     const s = t.surveyRow;
     const survey = definitionFor(t, r.isTest);
     if (!survey) return null;
+    const panels = t.loaded?.project.panels ?? [];
     // Анкету переопубликовали (или черновик изменили) во время прохождения — продолжаем по текущей версии
     const all = expandAllLoops(survey);
     const stale = r.currentPage && !findPage(all, r.currentPage);
@@ -235,9 +247,9 @@ export async function respondentRoutes(app: FastifyInstance) {
     const limit = settingsOf(survey).timeLimitMin;
     if (limit && r.status === 'in_progress' && Date.now() > Date.parse(r.startedAt) + limit * 60_000 + 5_000) {
       await finalize(survey, r, r.answers, r.history, 'terminated', { message: settingsOf(survey).timeoutMessage });
-      return { s, r: (await responses.get(r.id))!, survey };
+      return { s, r: (await responses.get(r.id))!, survey, panels };
     }
-    return { s, r, survey };
+    return { s, r, survey, panels };
   }
 
   app.post<{
@@ -280,23 +292,39 @@ export async function respondentRoutes(app: FastifyInstance) {
           const done = loaded.r.status !== 'in_progress';
           // Завершённую сессию показываем снова, если повторное прохождение не разрешено (в предпросмотре — всегда заново)
           const retake = done && (preview || (req.body.restart && settingsOf(loaded.survey).allowRetake));
-          if (!retake) return stateOf(loaded.survey, loaded.r);
+          if (!retake) return stateOf(loaded.survey, loaded.r, loaded.panels);
         }
       }
 
       const survey = definitionFor(t, preview)!;
       const params = cleanParams(req.body?.params);
+      const panels = t.loaded?.project.panels ?? [];
+      const panel = panelOf(panels, params);
+      let panelFull = false;
       if (!preview && t.projectId) {
         const projectId = t.projectId;
         const st = settingsOf(survey);
+        if (panel?.closed) return { closed: true, title: survey.title, message: st.closedMessage };
+        // Панель с ID респондента: один ответ на ID внутри панели, начатую анкету продолжаем
+        if (panel?.idParam) {
+          const value = params[panel.idParam];
+          if (!value) return { closed: true, title: survey.title, message: 'Ссылка на опрос неполная. Откройте её из приглашения ещё раз.' };
+          const prev = await responses.findByParam(projectId, { [PANEL_PARAM]: panel.id, [panel.idParam]: value });
+          if (prev) {
+            const loaded = await load(projectId, prev.id);
+            if (loaded?.r.status === 'in_progress') return stateOf(loaded.survey, loaded.r, loaded.panels);
+            return { closed: true, title: survey.title, message: 'Вы уже прошли этот опрос. Спасибо!' };
+          }
+        }
+        if (panel?.limit && (await responses.completedFromPanel(projectId, panel.id)) >= panel.limit) panelFull = true;
         // Один ответ на значение параметра (ID панелиста): продолжаем начатую анкету, повторно не пускаем
         if (st.uniqueParam) {
           const value = params[st.uniqueParam];
           if (!value) return { closed: true, title: survey.title, message: 'Ссылка на опрос неполная. Откройте её из приглашения ещё раз.' };
-          const prev = await responses.findByParam(projectId, st.uniqueParam, value);
+          const prev = await responses.findByParam(projectId, { [st.uniqueParam]: value });
           if (prev) {
             const loaded = await load(projectId, prev.id);
-            if (loaded?.r.status === 'in_progress') return stateOf(loaded.survey, loaded.r);
+            if (loaded?.r.status === 'in_progress') return stateOf(loaded.survey, loaded.r, loaded.panels);
             return { closed: true, title: survey.title, message: 'Вы уже прошли этот опрос. Спасибо!' };
           }
         }
@@ -331,15 +359,15 @@ export async function respondentRoutes(app: FastifyInstance) {
       });
       const startCtx = ctxOf(survey, created, cleanAnswers(ctxOf(survey, created, initial), []));
       const first = startAt ?? firstPage(startCtx);
-      // Квоты по параметрам ссылки проверяются сразу
-      if (!startAt && first !== SCREENOUT && (await fullQuota(ownerOf(created), survey, preview, startCtx))) {
+      // Лимит панели набран — сразу «Сверх квоты» (с редиректом панели); квоты по параметрам ссылки проверяются сразу
+      if (panelFull || (!startAt && first !== SCREENOUT && (await fullQuota(ownerOf(created), survey, preview, startCtx)))) {
         await finalize(survey, created, initial, [], 'overquota');
       } else if (first === END || first === SCREENOUT) {
         await finalize(survey, created, initial, [], first === END ? 'completed' : 'screened_out');
       } else {
         await responses.update(created.id, { currentPage: first });
       }
-      return stateOf(survey, (await responses.get(created.id))!);
+      return stateOf(survey, (await responses.get(created.id))!, panels);
     },
   );
 
@@ -348,9 +376,9 @@ export async function respondentRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const loaded = await load(req.params.id, req.body?.rid);
       if (!loaded) return reply.code(404).send({ error: 'Сессия не найдена' });
-      const { survey, r } = loaded;
+      const { survey, r, panels } = loaded;
       if (r.status !== 'in_progress' || r.currentPage !== req.body.page) {
-        return { ...stateOf(survey, r), resynced: true };
+        return { ...stateOf(survey, r, panels), resynced: true };
       }
       const { errors, pageAnswers, page } = checkPage(survey, r, r.currentPage, req.body.answers, true);
       if (Object.keys(errors).length) return reply.code(422).send({ errors });
@@ -374,7 +402,7 @@ export async function respondentRoutes(app: FastifyInstance) {
       } else {
         await responses.update(r.id, { answers, history: visited, currentPage: next });
       }
-      return stateOf(survey, (await responses.get(r.id))!);
+      return stateOf(survey, (await responses.get(r.id))!, panels);
     },
   );
 
@@ -383,10 +411,10 @@ export async function respondentRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const loaded = await load(req.params.id, req.body?.rid);
       if (!loaded) return reply.code(404).send({ error: 'Сессия не найдена' });
-      const { survey, r } = loaded;
+      const { survey, r, panels } = loaded;
       const st = settingsOf(survey);
       if (r.status !== 'in_progress' || !st.allowBack || r.history.length === 0 || r.currentPage !== req.body.page) {
-        return stateOf(survey, r);
+        return stateOf(survey, r, panels);
       }
       // Сохраняем то, что уже введено на странице, чтобы не потерять при возврате
       const { pageAnswers, page } = checkPage(survey, r, r.currentPage, req.body.answers ?? {}, false);
@@ -394,7 +422,7 @@ export async function respondentRoutes(app: FastifyInstance) {
       await responses.update(r.id, {
         answers: mergePage(r.answers, page, pageAnswers), history, currentPage: r.history[r.history.length - 1],
       });
-      return stateOf(survey, (await responses.get(r.id))!);
+      return stateOf(survey, (await responses.get(r.id))!, panels);
     },
   );
 
@@ -403,12 +431,12 @@ export async function respondentRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const loaded = await load(req.params.id, req.body?.rid);
       if (!loaded) return reply.code(404).send({ error: 'Сессия не найдена' });
-      const { survey, r } = loaded;
+      const { survey, r, panels } = loaded;
       const st = settingsOf(survey);
-      if (r.status !== 'in_progress' || !st.allowEarlyFinish || !r.currentPage) return stateOf(survey, r);
+      if (r.status !== 'in_progress' || !st.allowEarlyFinish || !r.currentPage) return stateOf(survey, r, panels);
       const { pageAnswers, page } = checkPage(survey, r, r.currentPage, req.body.answers ?? {}, false);
       await finalize(survey, r, mergePage(r.answers, page, pageAnswers), [...r.history, page.id], 'terminated');
-      return stateOf(survey, (await responses.get(r.id))!);
+      return stateOf(survey, (await responses.get(r.id))!, panels);
     },
   );
 }

@@ -193,7 +193,7 @@ export function allRows(survey: Survey, q: MatrixQuestion, depth = 0): Option[] 
 }
 
 function sourceOptions(survey: Survey, src: Question, depth: number): Option[] {
-  if (src.type === 'matrix') return allRows(survey, src, depth);
+  if (src.type === 'matrix') return allRows(survey, src, depth).filter(isChoice);
   // При переносе «Другое» становится обычным вариантом с текстом респондента
   return allOptions(survey, src, depth).filter((o) => !o.exclusive && !o.group).map((o) => ({ code: o.code, text: o.text }));
 }
@@ -261,7 +261,12 @@ export function resolveRows(ctx: RespondentContext, q: MatrixQuestion, depth = 0
   let rows = q.rowsFrom && depth < 10 ? applyFrom(ctx, q.rowsFrom, shown(q.rows), depth) : shown(q.rows);
   rows = filterByActions(ctx, q, rows, depth);
   rows = orderOptions(rows, ctx.seed + ':' + q.id, q.rowOrder ?? (q.randomizeRows ? 'random' : undefined));
-  return rows;
+  return dropEmptyGroups(rows);
+}
+
+/** Строки матрицы, в которых отвечают (без заголовков групп) */
+export function answerRows(ctx: RespondentContext, q: MatrixQuestion, depth = 0): Option[] {
+  return resolveRows(ctx, q, depth).filter(isChoice);
 }
 
 // ---------- Условия ----------
@@ -328,7 +333,7 @@ export function evalCondition(c: Condition | undefined, ctx: RespondentContext):
 /** Сколько вариантов (строк матрицы) видит респондент; null — у вопроса нет вариантов */
 function visibleCount(ctx: RespondentContext, q: Question): number | null {
   if (hasOptions(q)) return resolveOptions(ctx, q, 0, false).filter(isChoice).length;
-  if (q.type === 'matrix') return resolveRows(ctx, q).length;
+  if (q.type === 'matrix') return answerRows(ctx, q).length;
   return null;
 }
 

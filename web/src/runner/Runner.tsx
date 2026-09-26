@@ -3,7 +3,7 @@ import { api, ApiError } from '../api.ts';
 import { QuestionView } from './QuestionView.tsx';
 import { runScript, type ScriptEnv } from './scripts.ts';
 import { rich } from './rich.tsx';
-import { actionError, allQuestions, answerText, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions, resolveRows } from '../../../shared/logic.ts';
+import { actionError, allQuestions, answerText, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions, resolveRows, answerRows } from '../../../shared/logic.ts';
 import { validateAnswer } from '../../../shared/answers.ts';
 import { expandLoops, withLoops } from '../../../shared/loops.ts';
 import {
@@ -303,7 +303,7 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
   // Скрипты проверки у выбранных вариантов: sl.value — открытое значение варианта, sl.option — его код
   const optionScriptError = (q: Question, a: Answer | undefined): string | undefined => {
     if (!a || !OPTION_TYPES.includes(q.type)) return undefined;
-    const opts = q.type === 'matrix' ? resolveRows(ctx, q) : resolveOptions(ctx, q, 0, false);
+    const opts = q.type === 'matrix' ? answerRows(ctx, q) : resolveOptions(ctx, q, 0, false);
     const chosen = q.type === 'matrix' && typeof a.v === 'object' && !Array.isArray(a.v) ? Object.keys(a.v).map(Number)
       : Array.isArray(a.v) ? a.v : typeof a.v === 'number' ? [a.v] : [];
     for (const o of opts) {

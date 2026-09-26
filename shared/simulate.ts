@@ -1,5 +1,5 @@
 // Случайные допустимые ответы — для тестового заполнения анкеты.
-import { resolveOptions, resolveRows } from './logic.ts';
+import { answerRows, resolveOptions } from './logic.ts';
 import { validateAnswer } from './answers.ts';
 import type { Answer, Question, RespondentContext } from './types.ts';
 
@@ -49,7 +49,7 @@ function candidate(ctx: RespondentContext, q: Question): Answer | undefined {
     }
     case 'matrix': {
       const v: Record<string, number | number[]> = {};
-      for (const r of resolveRows(ctx, q)) {
+      for (const r of answerRows(ctx, q)) {
         if (r.other) continue;
         v[r.code] = q.mode === 'multi' ? [pick(q.columns).code] : pick(q.columns).code;
       }
