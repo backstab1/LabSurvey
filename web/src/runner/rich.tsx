@@ -25,3 +25,16 @@ export function rich(text: string | undefined): ReactNode {
   if (last < text.length) out.push(text.slice(last));
   return out;
 }
+
+/** Текст без разметки — для списков и подсказок в админке: подстановки как [Q1], картинки убираются */
+export function plain(text: string | undefined): string {
+  if (!text) return '';
+  return text
+    .replace(/!\[[^\]]*\]\([^)\s]+\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)\s]+\)/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*\s][^*]*)\*/g, '$1')
+    .replace(/\{\{\s*([\w.]+)\s*\}\}/g, '[$1]')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { ConditionField } from './ConditionEditor.tsx';
 import { ActionsEditor } from './ActionsEditor.tsx';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
+import { RichText, pipeTargets } from './RichText.tsx';
 import { OptionsListDialog, listSummary, type CarryProps, type ListFeatures } from './OptionsListDialog.tsx';
 import { blockOf } from '../../../shared/logic.ts';
 import { CALC_FUNCTIONS, parseCalc } from '../../../shared/calc.ts';
@@ -74,6 +75,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
     onRename(next);
   };
   const answerable = q.type !== 'info' && q.type !== 'hidden';
+  const pipes = pipeTargets(def, q.id);
   const settings = questionSettings(def, q, set);
   const actionCount = (q.actions?.before?.length ?? 0) + (q.actions?.after?.length ?? 0);
   const scriptCount = Object.values(q.scripts ?? {}).filter(Boolean).length;
@@ -135,17 +137,20 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
               )}
             </div>
 
-            <label className="field">
-              <span>{q.type === 'hidden' ? 'Подпись для выгрузки' : q.type === 'info' ? 'Текст' : 'Текст вопроса'}</span>
-              <textarea className="input autogrow" rows={Math.min(8, Math.max(2, q.text.split('\n').length))} value={q.text} autoFocus={!q.text}
-                placeholder={q.type === 'hidden' ? 'Например: ID панелиста' : 'Введите вопрос. Подставить ответ: {{Q1}}'}
-                onChange={(e) => set({ text: e.target.value })} />
-              {q.type !== 'hidden' && <span className="field-help">**жирный**, *курсив*, [ссылка](https://…), ![картинка](https://…), ответ на вопрос — {'{{Q1}}'}</span>}
-            </label>
-            {answerable && showHint && (
-              <label className="field"><span>Подсказка под вопросом</span>
-                <input className="input" value={q.hint ?? ''} autoFocus={!q.hint} onChange={(e) => set({ hint: e.target.value || undefined })} />
+            {q.type === 'hidden' ? (
+              <label className="field"><span>Подпись для выгрузки</span>
+                <input className="input" value={q.text} autoFocus={!q.text} placeholder="Например: ID панелиста" onChange={(e) => set({ text: e.target.value })} />
               </label>
+            ) : (
+              <div className="field"><span>{q.type === 'info' ? 'Текст' : 'Текст вопроса'}</span>
+                <RichText value={q.text} autoFocus={!q.text} pipes={pipes} placeholder={q.type === 'info' ? 'Текст для респондента' : 'Введите вопрос'}
+                  onChange={(text) => set({ text })} />
+              </div>
+            )}
+            {answerable && showHint && (
+              <div className="field"><span>Подсказка под вопросом</span>
+                <RichText multiline={false} value={q.hint ?? ''} autoFocus={!q.hint} pipes={pipes} onChange={(v) => set({ hint: v || undefined })} />
+              </div>
             )}
             {showNote && (
               <label className="field"><span>Комментарий для команды (респондент не видит)</span>
@@ -154,9 +159,9 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
               </label>
             )}
             {(!showHint && answerable) || !showNote ? (
-              <div className="row" style={{ gap: 14 }}>
-                {answerable && !showHint && <button className="btn-link" style={{ padding: 0 }} onClick={() => setShowHint(true)}>+ подсказка</button>}
-                {!showNote && <button className="btn-link" style={{ padding: 0 }} onClick={() => setShowNote(true)}>+ комментарий для команды</button>}
+              <div className="row add-links">
+                {answerable && !showHint && <button type="button" onClick={() => setShowHint(true)}>+ Подсказка под вопросом</button>}
+                {!showNote && <button type="button" onClick={() => setShowNote(true)}>+ Комментарий для команды</button>}
               </div>
             ) : null}
 

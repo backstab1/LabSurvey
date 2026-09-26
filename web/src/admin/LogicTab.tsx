@@ -1,5 +1,6 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Segmented } from './common.tsx';
+import { plain } from '../runner/rich.tsx';
 import { describeCondition } from './ConditionEditor.tsx';
 import { TYPE_ICONS } from './Builder.tsx';
 import { analyzeFlow, type FlowEdge, type FlowNode } from '../../../shared/flow.ts';
@@ -127,7 +128,7 @@ export function LogicTab({ def, onOpen }: { def: Survey; onOpen: (id: string) =>
             <Fragment key={n.id}>
               {header && (
                 <div className={`lblock${block?.loop ? ' loop' : ''}`} style={indent ? { marginLeft: indent } : undefined}>
-                  {shownTitle(n.blockTitle) || n.blockId}
+                  {shownTitle(n.blockTitle) || `Блок ${def.blocks.indexOf(block!) + 1}`}
                   {block?.loop && <span className="lloop">{describeLoop(def, block)}</span>}
                   {block?.parent && !block.loop && <span className="lloop">повторяется внутри цикла «{block.parent}»</span>}
                 </div>
@@ -139,7 +140,7 @@ export function LogicTab({ def, onOpen }: { def: Survey; onOpen: (id: string) =>
                   <span className="lnum">{n.number ?? '·'}</span>
                   <span className="qid">{n.id}</span>
                   <span className="ltype" title={n.q.type}>{TYPE_ICONS[n.q.type]}</span>
-                  <span className="ltext">{n.q.text || <em className="muted">без текста</em>}</span>
+                  <span className="ltext">{plain(n.q.text) || <em className="muted">без текста</em>}</span>
                 </div>
                 <div className="lmeta">
                   {!n.reachable && n.q.type !== 'hidden' && <span className="lchip bad">недостижим</span>}

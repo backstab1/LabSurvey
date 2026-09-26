@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { QuestionDialog } from './QuestionEditor.tsx';
 import { describeCondition } from './ConditionEditor.tsx';
 import { describeActions } from './ActionsEditor.tsx';
-import { QuestionPreview } from './preview.tsx';
+import { plain, rich } from '../runner/rich.tsx';
 import { Menu, toast } from './common.tsx';
 import { QUESTION_TYPE_LABELS, type Block, type LoopSpec, type Question, type QuestionType, type Survey } from '../../../shared/types.ts';
 import { LoopDialog, describeLoop, shownTitle } from './LoopEditor.tsx';
@@ -264,10 +264,10 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                 {shownTitle(b.title) || `Блок ${bi + 1}`}
               </button>
               {found.map((x) => (
-                <button key={x.id} className={`outline-q${issueFor(x.id) ? ' has-issue' : ''}`} title={x.text} onClick={() => {
+                <button key={x.id} className={`outline-q${issueFor(x.id) ? ' has-issue' : ''}`} title={plain(x.text)} onClick={() => {
                   if (collapsed.has(b.id)) { toggleBlock(b.id); setTimeout(() => jumpTo(x.id), 50); } else jumpTo(x.id);
                 }}>
-                  <span className="qid">{x.id}</span><span className="qtext">{x.text || QUESTION_TYPE_LABELS[x.type]}</span>
+                  <span className="qid">{x.id}</span><span className="qtext">{plain(x.text) || QUESTION_TYPE_LABELS[x.type]}</span>
                 </button>
               ))}
             </div>
@@ -429,10 +429,10 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, pinne
   onDragOverHalf: (after: boolean) => void; onDropHere: () => void;
   onDuplicate: () => void; onDelete: () => void; onPreview: () => void; onCopy: () => void;
 }) {
-  const chips: { text: string; kind: 'cond' | 'act' | 'plain' }[] = [];
+  const chips: { text: string; kind: 'show' | 'act' | 'plain' }[] = [];
   if (q.type !== 'info' && q.type !== 'hidden' && q.required === false) chips.push({ text: 'необязательный', kind: 'plain' });
   if (pinned) chips.push({ text: '📌 на месте при перемешивании', kind: 'plain' });
-  if (q.showIf) chips.push({ text: `если ${describeCondition(def, q.showIf)}`, kind: 'cond' });
+  if (q.showIf) chips.push({ text: `если ${describeCondition(def, q.showIf)}`, kind: 'show' });
   const before = describeActions(def, q, q.actions?.before);
   const after = describeActions(def, q, q.actions?.after);
   if (before) chips.push({ text: `перед показом: ${before}`, kind: 'act' });
@@ -473,13 +473,24 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, pinne
       </div>
       {error && <div className="card-error">{error}</div>}
       {q.note && <div className="qcard-note" title="Комментарий для команды — респондент его не видит">💬 {q.note}</div>}
-      {q.text || q.type === 'hidden'
-        ? <QuestionPreview def={def} q={q} />
-        : <div className="muted empty-q">Пустой вопрос — нажмите, чтобы заполнить</div>}
+      {q.type === 'hidden' ? (
+        <div className="hidden-var">
+          {q.text && <span className="qcard-label">{q.text} · </span>}
+          {q.calc ? <>формула <code>{q.calc}</code></> : q.fromParam ? <>из параметра ссылки <code>?{q.fromParam}</code></> : 'задаётся действием или скриптом'}
+        </div>
+      ) : q.text ? (
+        <>
+          <div className={`qcard-text${q.type === 'info' ? ' info' : ''}`}>{rich(pipeMark(q.text))}</div>
+          {q.hint && <div className="qcard-hint">{rich(pipeMark(q.hint))}</div>}
+        </>
+      ) : <div className="muted empty-q">Пустой вопрос — нажмите, чтобы заполнить</div>}
     </div>
   );
 }, (a, b) => a.q === b.q && a.n === b.n && a.error === b.error && a.flash === b.flash && a.dragging === b.dragging && a.selected === b.selected && a.pinned === b.pinned
   && a.def.blocks.length === b.def.blocks.length);
+
+/** Подстановки в карточке — как [Q1] */
+const pipeMark = (t: string) => t.replace(/\{\{\s*([\w.]+)\s*\}\}/g, '[$1]');
 
 /** Полоска между карточками: «+» добавляет вопрос в это место, сюда же можно бросить перетаскиваемую карточку */
 function Inserter({ active, last, dropping, onOpen, onPick, onPaste, onClose, onDragOver, onDrop }: {

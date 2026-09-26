@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
 import { compact } from './common.tsx';
+import { RichText, pipeTargets } from './RichText.tsx';
 import { DEFAULT_SETTINGS, settingsOf, type Survey, type SurveySettings } from '../../../shared/types.ts';
 
 type Key = keyof SurveySettings;
@@ -27,16 +28,24 @@ export function SettingsTab({ def, onChange }: { def: Survey; onChange: (d: Surv
       <span>{label}{hint && <small className="muted"> — {hint}</small>}</span>
     </label>
   );
-  const text = (key: Key, label: string, opts: { placeholder?: string; area?: boolean; mono?: boolean; help?: ReactNode; type?: string } = {}) => {
+  const pipes = pipeTargets(def);
+  const text = (key: Key, label: string, opts: { placeholder?: string; area?: boolean; rich?: boolean; mono?: boolean; help?: ReactNode; type?: string } = {}) => {
     const value = (def.settings?.[key] as string | undefined) ?? '';
     const placeholder = opts.placeholder ?? (DEFAULT_SETTINGS[key] as string | undefined);
     const onValue = (v: string) => setSettings({ [key]: v.trim() ? v : undefined });
+    if (opts.area || opts.rich) {
+      // Тексты для респондента — с панелью форматирования
+      return (
+        <div className="field"><span>{label}</span>
+          <RichText multiline={!!opts.area} placeholder={placeholder} value={value} onChange={onValue} pipes={opts.area ? pipes : undefined} />
+          {opts.help && <span className="field-help">{opts.help}</span>}
+        </div>
+      );
+    }
     return (
       <label className="field"><span>{label}</span>
-        {opts.area
-          ? <textarea className="input" rows={2} placeholder={placeholder} value={value} onChange={(e) => onValue(e.target.value)} />
-          : <input className={`input${opts.mono ? ' mono' : ''}`} type={opts.type ?? 'text'} placeholder={placeholder} value={value}
-              onChange={(e) => onValue(e.target.value)} />}
+        <input className={`input${opts.mono ? ' mono' : ''}`} type={opts.type ?? 'text'} placeholder={placeholder} value={value}
+          onChange={(e) => onValue(e.target.value)} />
         {opts.help && <span className="field-help">{opts.help}</span>}
       </label>
     );
@@ -91,7 +100,7 @@ export function SettingsTab({ def, onChange }: { def: Survey; onChange: (d: Surv
             </div>
           </label>
         </div>
-        {text('footerText', 'Текст внизу страницы', { placeholder: 'Например: © Компания · [Политика конфиденциальности](https://…)' })}
+        {text('footerText', 'Текст внизу страницы', { placeholder: 'Например: © Компания · Политика конфиденциальности', rich: true })}
         <div className="sub-title">Надписи на кнопках</div>
         <div className="grid2">
           {text('nextLabel', '«Далее»')}

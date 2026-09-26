@@ -235,7 +235,7 @@ export function Editor({ id }: { id: string }) {
         </div>
         {info.projects.map((p) => (
           <button key={p.id} className="link-chip" title="Открыть проект: сбор, квоты, данные и отчёт" onClick={() => navigate(`/admin/p/${p.id}`)}>
-            ▸ {p.title} · {PROJECT_STATUS_LABELS[p.status]}
+            Проект «{p.title}» · {PROJECT_STATUS_LABELS[p.status].toLowerCase()} →
           </button>
         ))}
         {!info.projects.length && !readOnly && (

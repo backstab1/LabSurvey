@@ -85,7 +85,10 @@
   border: 1px solid var(--border); background: var(--surface); border-radius: 99px; padding: 4px 12px; font-size: 13px;
   cursor: pointer; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis;
 }
-.link-chip { font-family: var(--mono); color: var(--muted); }
+.link-chip { color: var(--muted); }
+.link-chip:hover { color: var(--accent); border-color: var(--accent); }
+.link-chip.url { font-family: var(--mono); }
+.mono::placeholder { font-family: var(--font); }
 .issues-chip { color: var(--warn); border-color: #f1d49b; background: var(--warn-soft); }
 .issues-chip.err { color: var(--danger); border-color: #f3b9b4; background: var(--danger-soft); }
 .issues-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
@@ -121,7 +124,7 @@
   font-size: 12px; background: #eef0f3; color: #4a515b; border-radius: 99px; padding: 2px 8px; max-width: 420px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.chip-info.cond { background: var(--accent-soft); color: #2553b8; }
+.chip-info.show { background: var(--accent-soft); color: #2553b8; }
 .chip-info.act { background: #f1ebfd; color: #6531c4; }
 .chip-error { font-size: 12px; background: var(--danger-soft); color: var(--danger); border-radius: 99px; padding: 2px 8px; }
 
@@ -145,12 +148,33 @@
 .qcard:hover .card-tools { opacity: 1; }
 .card-error { font-size: 13px; color: var(--danger); margin-bottom: 6px; }
 .empty-q { padding: 8px 0 14px; font-size: 14px; }
-.q-preview.static { pointer-events: none; }
-.q-preview .question { margin-bottom: 12px; }
-.q-preview .q-text { font-size: 16px; margin-bottom: 8px; }
-.q-preview .option { padding: 8px 12px; }
-.q-preview .scale-point { min-height: 38px; }
+.qcard-text { font-size: 15px; font-weight: 600; line-height: 1.4; padding: 0 0 12px; white-space: pre-line; overflow-wrap: anywhere; }
+.qcard-text.info { font-weight: 400; }
+.qcard-text .rich-img, .qcard-hint .rich-img { max-height: 80px; max-width: 200px; display: block; margin: 6px 0; border-radius: 6px; }
+.qcard-hint { font-size: 13px; color: var(--muted); margin: -8px 0 12px; white-space: pre-line; }
 .hidden-var { font-size: 14px; color: var(--muted); padding: 2px 0 10px; }
+.hidden-var .qcard-label { color: var(--text); }
+
+/* «+ подсказка», «+ комментарий» под текстом вопроса */
+.add-links { gap: 4px; margin-top: -6px; }
+.add-links button { border: 0; background: none; padding: 4px 8px; border-radius: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.add-links button:first-child { margin-left: -8px; }
+.add-links button:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* Поле с панелью форматирования */
+.rich-edit { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.rich-edit:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rich-toolbar { display: flex; align-items: center; gap: 2px; padding: 3px 4px; border-bottom: 1px solid var(--border); background: #fafbfc; }
+.rich-toolbar button, .rich-toolbar .rich-pipe {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 26px; padding: 0 6px;
+  border: 0; border-radius: 6px; background: none; color: #4b5563; cursor: pointer; font-size: 13px;
+}
+.rich-toolbar button:hover, .rich-toolbar .rich-pipe:hover { background: #e9edf2; color: var(--text); }
+.rich-toolbar .rich-pipe .mono { font-size: 12px; }
+.rich-toolbar .menu-list button { display: block; width: 100%; height: auto; justify-content: flex-start; text-align: left; padding: 7px 10px; }
+.rich-field { display: block; width: 100%; border: 0; outline: none; background: none; font: inherit; color: inherit; padding: 8px 10px; resize: vertical; }
+.rich-edit.single .rich-field { padding: 7px 10px; }
+.rich-field.invalid { background: var(--danger-soft); }
 
 .inserter { position: relative; height: 14px; display: flex; align-items: center; justify-content: center; }
 .inserter:not(.last):hover::after { content: ''; position: absolute; left: 12px; right: 12px; top: 50%; border-top: 1px dashed #a9c3f6; }

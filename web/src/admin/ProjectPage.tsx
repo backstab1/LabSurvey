@@ -235,7 +235,7 @@ export function ProjectPage({ id }: { id: string }) {
             </button>
           ))}
         </div>
-        <button className="link-chip" title="Скопировать ссылку" onClick={() => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); }}>
+        <button className="link-chip url" title="Скопировать ссылку" onClick={() => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); }}>
           🔗 {link.replace(/^https?:\/\//, '')}
         </button>
       </div>
