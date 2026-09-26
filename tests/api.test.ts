@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'surveylab-'));
 process.env.ADMIN_PASSWORD = 'secret';
 const { buildApp } = await import('../server/app.ts');
+const { launch } = await import('./helpers.ts');
 
 let app: FastifyInstance;
 let cookie = '';
@@ -44,10 +45,18 @@ test('admin login and survey import', async () => {
   assert.deepEqual(created.json.errors, []);
   surveyId = created.json.id;
 
-  // До публикации опрос закрыт для респондентов
-  const closed = await call('POST', `/api/s/${surveyId}/start`, {});
-  assert.equal(closed.json.closed, true);
+  // Анкета без проекта — ссылка только для предпросмотра; у проекта в «Разработке» опрос ещё не начался
+  const noProject = await call('POST', `/api/s/${surveyId}/start`, {});
+  assert.equal(noProject.json.closed, true);
+  const draftProject = (await call('POST', '/api/admin/projects', { surveyId })).json.id;
+  assert.match((await call('POST', `/api/s/${draftProject}/start`, {})).json.message, /не начался/);
+  // Сбор нельзя начать, пока анкета не опубликована
+  assert.equal((await call('POST', `/api/admin/projects/${draftProject}/status`, { status: 'collecting' })).status, 400);
   assert.equal((await call('POST', `/api/admin/surveys/${surveyId}/publish`)).json.version, 1);
+  // Анкета в проекте — удалить её нельзя
+  assert.equal((await call('DELETE', `/api/admin/surveys/${surveyId}`)).status, 400);
+  await call('DELETE', `/api/admin/projects/${draftProject}`);
+  surveyId = await launch(call, surveyId, 'Демо — волна 1');
 });
 
 test('respondent path: one question per screen, actions, back, completion', async () => {
@@ -123,12 +132,13 @@ test('screenout and skipping after "none of these"', async () => {
 
 test('exports', async () => {
   await login();
-  const x = await call('GET', `/api/admin/surveys/${surveyId}/export.xlsx?statuses=completed,screened_out`);
+  const x = await call('GET', `/api/admin/projects/${surveyId}/export.xlsx?statuses=completed,screened_out`);
   assert.equal(x.status, 200);
   assert.equal(x.raw.rawPayload.subarray(0, 2).toString(), 'PK');
-  const s = await call('GET', `/api/admin/surveys/${surveyId}/export.sav`);
+  const s = await call('GET', `/api/admin/projects/${surveyId}/export.sav`);
   assert.equal(s.raw.rawPayload.subarray(0, 4).toString(), '$FL2');
-  const info = await call('GET', `/api/admin/surveys/${surveyId}`);
+  const info = await call('GET', `/api/admin/projects/${surveyId}`);
+  assert.equal(info.json.title, 'Демо — волна 1');
   assert.deepEqual(info.json.counts.real, { completed: 1, screened_out: 1, in_progress: 1 });
 });
 
@@ -149,8 +159,8 @@ test('hidden variables from URL param and from scripts', async () => {
   const created = await call('POST', '/api/admin/surveys', { definition: def });
   assert.deepEqual(created.json.errors, []);
   await call('POST', `/api/admin/surveys/${created.json.id}/publish`);
+  const sid = await launch(call, created.json.id);
   cookie = '';
-  const sid = created.json.id;
   let st = (await call('POST', `/api/s/${sid}/start`, { params: { pid: 'abc' } })).json;
   assert.equal(st.page, 'Q1');
   assert.equal(st.answers.H_pid.v, 'abc');

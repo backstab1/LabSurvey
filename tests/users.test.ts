@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'surveylab-users-'));
 process.env.ADMIN_PASSWORD = 'secret';
 const { buildApp } = await import('../server/app.ts');
+const { launch } = await import('./helpers.ts');
 
 let app: FastifyInstance;
 before(async () => { app = await buildApp(); });
@@ -38,13 +39,18 @@ test('roles: admin manages users, editor edits, viewer only reads', async () => 
   const sid = created.json.id;
   assert.equal((await anna('POST', `/api/admin/surveys/${sid}/publish`)).status, 200);
   assert.equal((await anna('GET', `/api/admin/surveys/${sid}/versions`)).json[0].publishedBy, 'anna');
+  // Редактор запускает проекты
+  const pid = (await anna('POST', '/api/admin/projects', { surveyId: sid })).json.id;
+  assert.ok(pid);
   // Редактор не управляет пользователями и копиями базы
   assert.equal((await anna('GET', '/api/admin/users')).status, 403);
   assert.equal((await anna('POST', '/api/admin/backups')).status, 403);
 
   const vova = as(await login('vova', 'vovapass1'));
   assert.equal((await vova('GET', `/api/admin/surveys/${sid}`)).status, 200);
-  assert.equal((await vova('GET', `/api/admin/surveys/${sid}/report`)).status, 200);
+  assert.equal((await vova('GET', `/api/admin/projects/${pid}/report`)).status, 200);
+  assert.equal((await vova('POST', `/api/admin/projects/${pid}/status`, { status: 'collecting' })).status, 403);
+  assert.equal((await vova('POST', '/api/admin/projects', { surveyId: sid })).status, 403);
   assert.equal((await vova('PUT', `/api/admin/surveys/${sid}`, { definition: {} })).status, 403);
   assert.equal((await vova('POST', '/api/admin/surveys', {})).status, 403);
   // Свой пароль наблюдатель сменить может
@@ -71,8 +77,9 @@ test('timings, reject, CSV and date filter in exports; per-branch endings', asyn
       { id: 'B', type: 'text', text: 'Комментарий; с разделителем' },
     ] }],
   };
-  const sid = (await admin('POST', '/api/admin/surveys', { definition: def })).json.id;
-  await admin('POST', `/api/admin/surveys/${sid}/publish`);
+  const surveyId = (await admin('POST', '/api/admin/surveys', { definition: def })).json.id;
+  await admin('POST', `/api/admin/surveys/${surveyId}/publish`);
+  const sid = await launch(admin, surveyId);
   const resp = as('');
   let st = (await resp('POST', `/api/s/${sid}/start`, {})).json;
   st = (await resp('POST', `/api/s/${sid}/submit`, { rid: st.rid, page: 'A', answers: { A: { v: 1 } } })).json;
@@ -84,22 +91,22 @@ test('timings, reject, CSV and date filter in exports; per-branch endings', asyn
   await resp('POST', `/api/s/${sid}/submit`, { rid: ok.rid, page: 'A', answers: { A: { v: 2 } } });
   await resp('POST', `/api/s/${sid}/submit`, { rid: ok.rid, page: 'B', answers: { B: { v: 'да; "нет"' } } });
 
-  const csv = await app.inject({ method: 'GET', url: `/api/admin/surveys/${sid}/export.csv?timings=1`, headers: { cookie: (await login('admin', 'secret')) } });
+  const csv = await app.inject({ method: 'GET', url: `/api/admin/projects/${sid}/export.csv?timings=1`, headers: { cookie: (await login('admin', 'secret')) } });
   const text = csv.body.replace(/^\ufeff/, '');
   const [head, row] = text.split('\r\n');
   assert.ok(head.split(';').includes('t_A'));
   assert.ok(row.includes('"да; ""нет"""'));
 
   // Брак: не считается и не выгружается по умолчанию
-  await admin('POST', `/api/admin/surveys/${sid}/responses/${ok.rid}/reject`, { rejected: true });
-  const info = (await admin('GET', `/api/admin/surveys/${sid}`)).json;
+  await admin('POST', `/api/admin/projects/${sid}/responses/${ok.rid}/reject`, { rejected: true });
+  const info = (await admin('GET', `/api/admin/projects/${sid}`)).json;
   assert.equal(info.counts.real.completed, undefined);
   assert.equal(info.counts.rejected, 1);
   const cookie = await login('admin', 'secret');
-  const without = await app.inject({ method: 'GET', url: `/api/admin/surveys/${sid}/export.csv`, headers: { cookie } });
+  const without = await app.inject({ method: 'GET', url: `/api/admin/projects/${sid}/export.csv`, headers: { cookie } });
   assert.equal(without.body.split('\r\n').length, 1);
-  const withRejected = await app.inject({ method: 'GET', url: `/api/admin/surveys/${sid}/export.csv?rejected=1`, headers: { cookie } });
+  const withRejected = await app.inject({ method: 'GET', url: `/api/admin/projects/${sid}/export.csv?rejected=1`, headers: { cookie } });
   assert.equal(withRejected.body.split('\r\n').length, 2);
-  const future = await app.inject({ method: 'GET', url: `/api/admin/surveys/${sid}/export.csv?rejected=1&from=2099-01-01`, headers: { cookie } });
+  const future = await app.inject({ method: 'GET', url: `/api/admin/projects/${sid}/export.csv?rejected=1&from=2099-01-01`, headers: { cookie } });
   assert.equal(future.body.split('\r\n').length, 1);
 });

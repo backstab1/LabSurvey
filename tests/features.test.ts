@@ -66,23 +66,25 @@ const call = async (method: 'GET' | 'POST' | 'DELETE', url: string, body?: unkno
 
 test('simulation walks the survey by its logic', async () => {
   const { json: created } = await call('POST', '/api/admin/surveys', { definition: demo });
-  const { json } = await call('POST', `/api/admin/surveys/${created.id}/simulate`, { count: 40 });
+  // Тестовое заполнение — в проекте, по черновику анкеты (публиковать не нужно)
+  const pid = (await call('POST', '/api/admin/projects', { surveyId: created.id })).json.id;
+  const { json } = await call('POST', `/api/admin/projects/${pid}/simulate`, { count: 40 });
   assert.equal(json.count, 40);
   assert.equal((json.stats.completed ?? 0) + (json.stats.screened_out ?? 0), 40);
-  const list = (await call('GET', `/api/admin/surveys/${created.id}/responses`)).json;
+  const list = (await call('GET', `/api/admin/projects/${pid}/responses`)).json;
   assert.equal(list.length, 40);
   assert.ok(list.every((r: { isTest: boolean }) => r.isTest));
   // Каждый ответ соответствует логике: Q4 ≥ 7 → Q4a не задан
   for (const row of list.slice(0, 15)) {
-    const { json: d } = await call('GET', `/api/admin/surveys/${created.id}/responses/${row.id}`);
+    const { json: d } = await call('GET', `/api/admin/projects/${pid}/responses/${row.id}`);
     const a = d.response.answers;
     if (d.response.status === 'screened_out') assert.ok(a.S1?.v < 18 || a.S2?.v === 5);
     if (a.Q4 && typeof a.Q4.v === 'number' && a.Q4.v >= 7 && a.Q4.v <= 10) assert.equal(a.Q4a, undefined);
     if (a.Q1?.v?.includes?.(99)) assert.equal(a.Q2, undefined);
   }
   // Удаление одного ответа
-  assert.equal((await call('DELETE', `/api/admin/surveys/${created.id}/responses/${list[0].id}`)).status, 200);
-  assert.equal((await call('GET', `/api/admin/surveys/${created.id}/responses`)).json.length, 39);
+  assert.equal((await call('DELETE', `/api/admin/projects/${pid}/responses/${list[0].id}`)).status, 200);
+  assert.equal((await call('GET', `/api/admin/projects/${pid}/responses`)).json.length, 39);
 });
 
 test('preview can start from a chosen question', async () => {

@@ -54,7 +54,7 @@ export function Runner({ surveyId }: { surveyId: string }) {
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const test = query.get('test') ?? undefined;
   const preview = query.get('preview') === '1' || !!test;
-  const storageKey = `sl:${surveyId}:${preview ? 'preview' : 'live'}`;
+  const storageKey = `sl:${surveyId}:${preview ? (query.get('survey') === '1' ? 'survey' : 'preview') : 'live'}`;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [checking, setChecking] = useState(false);
 
@@ -74,7 +74,7 @@ export function Runner({ surveyId }: { surveyId: string }) {
     query.forEach((v, k) => { params[k] = v; });
     const startAt = preview ? query.get('start') ?? undefined : undefined;
     setChecking(true);
-    api('POST', `/api/s/${surveyId}/start`, { rid, params, preview: preview && !test, test, startAt, restart: fresh && !preview, password })
+    api('POST', `/api/s/${surveyId}/start`, { rid, params, preview: preview && !test, test, startAt, restart: fresh && !preview, password, surveyPreview: query.get('survey') === '1' })
       .then((res) => {
         if (res.closed) setLoaded({ kind: 'closed', title: res.title, message: res.message });
         else if (res.needPassword) setLoaded({ kind: 'password', title: res.title, error: res.error });

@@ -4,6 +4,7 @@ import { api } from '../api.ts';
 import { ChangePassword, ROLE_LABELS, UsersPage, type Role } from './UsersPage.tsx';
 import { Menu, Toaster } from './common.tsx';
 import { SurveyList } from './SurveyList.tsx';
+import { ProjectList, ProjectPage } from './ProjectPage.tsx';
 import { Editor } from './Editor.tsx';
 import { PrintView } from './PrintView.tsx';
 
@@ -44,11 +45,18 @@ export function AdminApp() {
   const printMatch = path.match(/^\/admin\/s\/([\w-]+)\/print/);
   if (printMatch) return <MeContext.Provider value={me}><PrintView id={printMatch[1]} /></MeContext.Provider>;
   const editorMatch = path.match(/^\/admin\/s\/([\w-]+)/);
+  const projectMatch = path.match(/^\/admin\/p\/([\w-]+)/);
+  const section = editorMatch || path.startsWith('/admin/surveys') ? 'surveys' : 'projects';
+  const go = (to: string) => (e: React.MouseEvent) => { e.preventDefault(); navigate(to); };
   return (
     <MeContext.Provider value={me}>
       <div className="admin">
         <header className="topbar">
-          <a className="logo" href="/admin" onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Survey<span>LAB</span></a>
+          <a className="logo" href="/admin" onClick={go('/admin')}>Survey<span>LAB</span></a>
+          <nav className="top-nav">
+            <a href="/admin" className={section === 'projects' ? 'active' : ''} onClick={go('/admin')}>Проекты</a>
+            <a href="/admin/surveys" className={section === 'surveys' ? 'active' : ''} onClick={go('/admin/surveys')}>Анкеты</a>
+          </nav>
           <div className="spacer" />
           <Menu className="btn btn-secondary btn-sm user-menu" label={<>{me.login} <span className="muted">· {ROLE_LABELS[me.role]}</span></>} title="Учётная запись" items={[
             me.role === 'admin' && { label: 'Пользователи', onClick: () => navigate('/admin/users') },
@@ -58,7 +66,9 @@ export function AdminApp() {
         </header>
         {path.startsWith('/admin/users') && me.role === 'admin'
           ? <UsersPage me={me.login} />
-          : editorMatch ? <Editor key={editorMatch[1]} id={editorMatch[1]} /> : <SurveyList />}
+          : editorMatch ? <Editor key={editorMatch[1]} id={editorMatch[1]} />
+            : projectMatch ? <ProjectPage key={projectMatch[1]} id={projectMatch[1]} />
+              : path.startsWith('/admin/surveys') ? <SurveyList /> : <ProjectList />}
         {pwOpen && <ChangePassword onClose={() => setPwOpen(false)} />}
         <Toaster />
       </div>

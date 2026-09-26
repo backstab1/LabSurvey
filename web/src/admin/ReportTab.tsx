@@ -3,14 +3,14 @@ import { api } from '../api.ts';
 import { QUESTION_TYPE_LABELS } from '../../../shared/types.ts';
 import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
 import type { QuestionReport, Report, ReportRow } from '../../../shared/report.ts';
-import type { SurveyInfo } from './Editor.tsx';
+import type { ProjectInfo } from './ProjectPage.tsx';
 import { ConditionEditor, defaultCondition, describeCondition } from './ConditionEditor.tsx';
 import type { Condition } from '../../../shared/types.ts';
 
 const STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
 
 /** Топлайн: распределения по каждому вопросу — чтобы видеть результаты, не выгружая данные */
-export function ReportTab({ info }: { info: SurveyInfo }) {
+export function ReportTab({ info }: { info: ProjectInfo }) {
   const [statuses, setStatuses] = useState<ResponseStatus[]>(['completed']);
   const [test, setTest] = useState(!info.published);
   const [report, setReport] = useState<Report | null>(null);
@@ -22,7 +22,7 @@ export function ReportTab({ info }: { info: SurveyInfo }) {
 
   useEffect(() => {
     setError('');
-    api<Report>('GET', `/api/admin/surveys/${info.id}/report?statuses=${statuses.join(',')}${test ? '&test=1' : ''}${filterJson ? `&filter=${encodeURIComponent(filterJson)}` : ''}`)
+    api<Report>('GET', `/api/admin/projects/${info.id}/report?statuses=${statuses.join(',')}${test ? '&test=1' : ''}${filterJson ? `&filter=${encodeURIComponent(filterJson)}` : ''}`)
       .then(setReport).catch((e) => setError((e as Error).message));
   }, [info.id, statuses, test, info.counts, filterJson]);
 

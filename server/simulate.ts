@@ -7,12 +7,12 @@ import { withLoops } from '../shared/loops.ts';
 import { END, SCREENOUT, type Answers, type RespondentContext, type Survey } from '../shared/types.ts';
 import type { ResponseStatus } from '../shared/variables.ts';
 
-export async function simulate(surveyId: string, survey: Survey, version: number, count: number) {
+export async function simulate(projectId: string, surveyId: string, survey: Survey, version: number, count: number) {
   const stats: Record<string, number> = {};
   for (let n = 0; n < count; n++) {
     const started = new Date(Date.now() - Math.floor(Math.random() * 3600_000));
     const r = await responses.create({
-      surveyId, version, status: 'in_progress', isTest: true, answers: {}, history: [], currentPage: null,
+      projectId, surveyId, version, status: 'in_progress', isTest: true, answers: {}, history: [], currentPage: null,
       params: { source: 'simulation' }, ip: null, userAgent: 'SurveyLAB simulation', startedAt: started.toISOString(),
     });
     const ctxOf = (answers: Answers): RespondentContext => withLoops({ survey, answers, params: r.params, seed: r.id });
@@ -43,7 +43,7 @@ export async function simulate(surveyId: string, survey: Survey, version: number
       const navCtx = ctxOf(cleanAnswers(ctxOf(answers), visited));
       page = nextPage(navCtx, page);
       // Квоты — как у настоящих респондентов (по тестовым ответам)
-      if (page !== SCREENOUT && (await fullQuota(surveyId, survey, true, navCtx))) { overquota = true; break; }
+      if (page !== SCREENOUT && (await fullQuota(projectId, survey, true, navCtx))) { overquota = true; break; }
     }
     const status: ResponseStatus = overquota ? 'overquota' : page === SCREENOUT ? 'screened_out' : 'completed';
     const duration = 60 + Math.floor(Math.random() * 600);
@@ -51,7 +51,7 @@ export async function simulate(surveyId: string, survey: Survey, version: number
       answers: cleanAnswers(ctxOf(answers), visited), history: visited, currentPage: null, status,
       completedAt: new Date(started.getTime() + duration * 1000).toISOString(), durationSec: duration,
     });
-    if (status === 'completed') noteCompleted(surveyId, survey, true, ctxOf(cleanAnswers(ctxOf(answers), visited)));
+    if (status === 'completed') noteCompleted(projectId, survey, true, ctxOf(cleanAnswers(ctxOf(answers), visited)));
     stats[status] = (stats[status] ?? 0) + 1;
   }
   return stats;

@@ -34,14 +34,23 @@ const base = (settings: Survey['settings']): Survey => ({
   ] }],
 });
 
-/** Создаёт и публикует анкету; возвращает её ID (после вызова мы — респондент без входа) */
+/** ID анкеты по ID проекта */
+const surveyOf: Record<string, string> = {};
+
+/**
+ * Создаёт и публикует анкету, запускает её в проекте (настройки сбора из JSON переходят в проект);
+ * возвращает ID проекта — он в ссылке респондента. После вызова мы — респондент без входа.
+ */
 async function publish(def: Survey): Promise<string> {
   await login();
   const created = await call('POST', '/api/admin/surveys', { definition: def });
   assert.deepEqual(created.json.errors, []);
   await call('POST', `/api/admin/surveys/${created.json.id}/publish`);
+  const project = await call('POST', '/api/admin/projects', { surveyId: created.json.id });
+  assert.equal((await call('POST', `/api/admin/projects/${project.json.id}/status`, { status: 'collecting' })).status, 200);
   cookie = '';
-  return created.json.id;
+  surveyOf[project.json.id] = created.json.id;
+  return project.json.id;
 }
 
 test('settings are validated', () => {
@@ -155,7 +164,8 @@ test('question numbers count answered questions', async () => {
 });
 
 test('archive closes collection and version history restores a draft', async () => {
-  const sid = await publish(base({}));
+  const pid = await publish(base({}));
+  const sid = surveyOf[pid];
   await login();
   const v1 = base({});
   v1.title = 'Версия 2';
@@ -168,13 +178,13 @@ test('archive closes collection and version history restores a draft', async () 
   assert.equal((await call('GET', `/api/admin/surveys/${sid}`)).json.draft.title, 'Настройки');
 
   await call('POST', `/api/admin/surveys/${sid}/archive`, { archived: true });
-  const info = (await call('GET', `/api/admin/surveys/${sid}`)).json;
-  assert.equal(info.archived, true);
-  assert.equal(info.status, 'closed');
-  assert.equal((await call('POST', `/api/admin/surveys/${sid}/status`, { status: 'active' })).status, 400);
   assert.equal((await call('GET', '/api/admin/surveys')).json.find((s: { id: string }) => s.id === sid).archived, true);
+  // Сбор закрывает проект: «Архив» и «Обработка» не пускают новых респондентов
+  await call('POST', `/api/admin/projects/${pid}/status`, { status: 'archive' });
+  assert.equal((await call('GET', `/api/admin/projects/${pid}`)).json.status, 'archive');
+  assert.equal((await call('POST', `/api/admin/projects/${pid}/status`, { status: 'nope' })).status, 400);
   cookie = '';
-  assert.equal((await call('POST', `/api/s/${sid}/start`, {})).json.closed, true);
+  assert.equal((await call('POST', `/api/s/${pid}/start`, {})).json.closed, true);
 });
 
 test('one response per URL param, IP limit, speeder variable', async () => {

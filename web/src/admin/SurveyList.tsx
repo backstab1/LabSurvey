@@ -2,30 +2,38 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { canEdit, navigate, useMe } from './AdminApp.tsx';
 import { TEMPLATES, type Template } from './templates.ts';
-import { IssuesList, Menu, Modal } from './common.tsx';
+import { IssuesList, Menu, Modal, toast } from './common.tsx';
+import { NewProjectModal } from './ProjectPage.tsx';
 import type { Issue } from '../../../shared/validate.ts';
 
 interface Row {
   id: string;
   title: string;
-  status: 'draft' | 'active' | 'closed';
   version: number;
   archived: boolean;
   updatedAt: string;
-  counts: Record<string, number>;
+  /** Сколько проектов запускают эту анкету */
+  projects: number;
+  /** Черновик отличается от опубликованной версии */
+  unpublished: boolean;
 }
 
-export const STATUS_TEXT = { draft: 'Черновик', active: 'Идёт сбор', closed: 'Закрыт' } as const;
+/** Состояние публикации анкеты */
+export function publishState(r: { version: number; unpublished: boolean }): { text: string; cls: string } {
+  if (!r.version) return { text: 'Черновик', cls: '' };
+  return r.unpublished ? { text: `Версия ${r.version} · есть правки`, cls: 'test' } : { text: `Опубликована · версия ${r.version}`, cls: 'active' };
+}
 
 export function SurveyList() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [backupsOpen, setBackupsOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
+  const [projectFor, setProjectFor] = useState<string | null>(null);
   const me = useMe();
   const editable = canEdit(me);
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState<'all' | Row['status'] | 'archived'>('all');
+  const [status, setStatus] = useState<'all' | 'archived'>('all');
 
   const load = () => api<Row[]>('GET', '/api/admin/surveys').then(setRows);
   useEffect(() => { load(); }, []);
@@ -47,10 +55,7 @@ export function SurveyList() {
         <div className="row list-filters">
           <input className="input" type="search" placeholder="Поиск по названию…" value={query} onChange={(e) => setQuery(e.target.value)} />
           <select className="input" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
-            <option value="all">Все статусы</option>
-            <option value="active">Идёт сбор</option>
-            <option value="draft">Черновики</option>
-            <option value="closed">Закрытые</option>
+            <option value="all">Все анкеты</option>
             <option value="archived">Архив ({rows.filter((r) => r.archived).length})</option>
           </select>
         </div>
@@ -61,40 +66,45 @@ export function SurveyList() {
         ) : (
           <table className="table">
             <thead>
-              <tr><th>Название</th><th>Статус</th><th>Завершили</th><th className="wide-only">Начали</th><th className="wide-only">Изменена</th><th /></tr>
+              <tr><th>Название</th><th>Публикация</th><th>Проекты</th><th className="wide-only">Изменена</th><th /></tr>
             </thead>
             <tbody>
-              {rows.filter((r) => (status === 'archived' ? r.archived : !r.archived && (status === 'all' || r.status === status))
-                && r.title.toLowerCase().includes(query.trim().toLowerCase())).map((r) => (
+              {rows.filter((r) => (status === 'archived' ? r.archived : !r.archived)
+                && r.title.toLowerCase().includes(query.trim().toLowerCase())).map((r) => {
+                const ps = publishState(r);
+                return (
                 <tr key={r.id} className="clickable" onClick={() => navigate(`/admin/s/${r.id}`)}>
-                  <td><strong>{r.title}</strong><div className="muted" style={{ fontSize: 13 }}>/s/{r.id}{r.version ? ` · версия ${r.version}` : ''}</div></td>
-                  <td>{r.archived ? <span className="badge">В архиве</span> : <span className={`badge ${r.status}`}>{STATUS_TEXT[r.status]}</span>}</td>
-                  <td>{r.counts.completed ?? 0}</td>
-                  <td className="wide-only">{Object.values(r.counts).reduce((a, b) => a + b, 0)}</td>
+                  <td><strong>{r.title}</strong></td>
+                  <td>{r.archived ? <span className="badge">В архиве</span> : <span className={`badge ${ps.cls}`}>{ps.text}</span>}</td>
+                  <td>{r.projects || <span className="muted">—</span>}</td>
                   <td className="muted wide-only">{new Date(r.updatedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</td>
                   <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
                     <Menu items={[
                       { label: 'Открыть', onClick: () => navigate(`/admin/s/${r.id}`) },
-                      { label: 'Предпросмотр', onClick: () => window.open(`/s/${r.id}?preview=1&new=1`, '_blank') },
+                      { label: 'Предпросмотр', onClick: () => window.open(`/s/${r.id}?preview=1&survey=1&new=1`, '_blank') },
+                      editable && { label: 'Запустить в новом проекте', onClick: () => setProjectFor(r.id) },
                       editable && { label: 'Дублировать', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/duplicate`); load(); } },
                       editable && { label: r.archived ? 'Вернуть из архива' : 'В архив', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/archive`, { archived: !r.archived }); load(); } },
                       editable && {
                         label: 'Удалить', danger: true, onClick: async () => {
-                          const n = Object.values(r.counts).reduce((a, b) => a + b, 0);
-                          if (!window.confirm(`Удалить «${r.title}»${n ? ` и ${n} ответов` : ''}? Это нельзя отменить.`)) return;
-                          await api('DELETE', `/api/admin/surveys/${r.id}`);
-                          load();
+                          if (!window.confirm(`Удалить анкету «${r.title}»? Это нельзя отменить.`)) return;
+                          try {
+                            await api('DELETE', `/api/admin/surveys/${r.id}`);
+                            load();
+                          } catch (e) { toast((e as Error).message); }
                         },
                       },
                     ]} />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
+      {projectFor && <NewProjectModal surveyId={projectFor} onClose={() => setProjectFor(null)} />}
       {backupsOpen && <BackupsModal onClose={() => setBackupsOpen(false)} />}
       {newOpen && (
         <Modal onClose={() => setNewOpen(false)} title="Новая анкета">

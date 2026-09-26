@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { checkTestToken, currentUser } from '../auth.ts';
 import { config } from '../config.ts';
 import { responses, surveys, type StoredResponse, type SurveyRow } from '../db.ts';
+import { defFor, loadProject, type Loaded } from '../projectCtx.ts';
 import { queueResponseSync } from '../sheets.ts';
 import { fullQuota, noteCompleted } from '../quotas.ts';
 import { afterComplete } from '../notify.ts';
@@ -33,7 +34,7 @@ export interface RunnerState {
   deadline?: string;
 }
 
-const RESERVED_PARAMS = new Set(['preview', 'new', 'rid', 'test']);
+const RESERVED_PARAMS = new Set(['preview', 'new', 'rid', 'test', 'survey', 'start']);
 
 function cleanParams(raw: unknown): Record<string, string> {
   const out: Record<string, string> = {};
@@ -45,9 +46,29 @@ function cleanParams(raw: unknown): Record<string, string> {
   return out;
 }
 
-function definitionFor(s: SurveyRow, r: { isTest: boolean }): Survey | null {
-  return r.isTest ? s.draft : s.published;
+/**
+ * Куда ведёт ссылка /s/ID: проект (обычная ссылка респондента) или анкета — только для предпросмотра из конструктора.
+ */
+interface Target {
+  projectId: string | null;
+  surveyRow: SurveyRow;
+  loaded: Loaded | null;
 }
+
+async function resolveTarget(id: string, surveyOnly = false): Promise<Target | null> {
+  const loaded = surveyOnly ? null : await loadProject(id);
+  if (loaded) return { projectId: id, surveyRow: loaded.survey, loaded };
+  const s = await surveys.get(id);
+  return s ? { projectId: null, surveyRow: s, loaded: null } : null;
+}
+
+function definitionFor(t: Target, isTest: boolean): Survey | null {
+  if (t.loaded) return isTest ? t.loaded.draft : t.loaded.live;
+  return isTest ? t.surveyRow.draft : null;
+}
+
+/** Ключ для квот и очередей: проект или (для предпросмотра без проекта) анкета */
+const ownerOf = (r: { projectId: string | null; surveyId: string }) => r.projectId ?? `survey:${r.surveyId}`;
 
 /** Контекст респондента; циклы развёрнуты по его ответам */
 const ctxOf = (survey: Survey, r: StoredResponse, answers: Answers): RespondentContext =>
@@ -74,7 +95,7 @@ function finished(survey: Survey, r: StoredResponse): { message: string; redirec
 }
 
 /** Почему новый респондент не может начать опрос (null — может) */
-async function closedReason(surveyId: string, survey: Survey): Promise<string | null> {
+async function closedReason(projectId: string, survey: Survey): Promise<string | null> {
   const st = settingsOf(survey);
   const now = Date.now();
   if (st.openFrom && now < Date.parse(st.openFrom)) {
@@ -83,7 +104,7 @@ async function closedReason(surveyId: string, survey: Survey): Promise<string | 
   }
   if (st.closeAt && now >= Date.parse(st.closeAt)) return st.closedMessage;
   if (st.maxResponses) {
-    const done = (await responses.counts(surveyId)).real.completed ?? 0;
+    const done = (await responses.counts(projectId)).real.completed ?? 0;
     if (done >= st.maxResponses) return st.closedMessage;
   }
   return null;
@@ -176,23 +197,27 @@ async function finalize(
     durationSec: Math.round((completedAt.getTime() - new Date(r.startedAt).getTime()) / 1000),
   });
   if (status === 'completed') {
-    noteCompleted(r.surveyId, survey, r.isTest, ctxOf(survey, r, final));
+    noteCompleted(ownerOf(r), survey, r.isTest, ctxOf(survey, r, final));
     // Уведомления — в фоне, респондент не ждёт
-    if (!r.isTest) {
+    if (!r.isTest && r.projectId) {
+      const projectId = r.projectId;
       responses.get(r.id)
-        .then((saved) => saved && afterComplete(r.surveyId, survey, saved, ctxOf(survey, saved, final)))
+        .then((saved) => saved && afterComplete(projectId, survey, saved, ctxOf(survey, saved, final)))
         .catch((e) => console.error('Уведомление не отправлено:', e));
     }
   }
-  if (!r.isTest) queueResponseSync(r.surveyId, r.id);
+  if (!r.isTest && r.projectId) queueResponseSync(r.projectId, r.id);
 }
 
 export async function respondentRoutes(app: FastifyInstance) {
-  async function load(surveyId: string, rid: string) {
-    const s = await surveys.get(surveyId);
+  async function load(id: string, rid: string) {
+    // Сессия принадлежит проекту или (предпросмотр из конструктора) анкете — адрес должен совпадать
     const r = rid ? await responses.get(rid) : null;
-    if (!s || !r || r.surveyId !== s.id) return null;
-    const survey = definitionFor(s, r);
+    if (!r || (r.projectId ?? r.surveyId) !== id) return null;
+    const t = r.projectId ? await resolveTarget(r.projectId) : await resolveTarget(r.surveyId, true);
+    if (!t) return null;
+    const s = t.surveyRow;
+    const survey = definitionFor(t, r.isTest);
     if (!survey) return null;
     // Анкету переопубликовали (или черновик изменили) во время прохождения — продолжаем по текущей версии
     const all = expandAllLoops(survey);
@@ -217,27 +242,40 @@ export async function respondentRoutes(app: FastifyInstance) {
 
   app.post<{
     Params: { id: string };
-    Body: { rid?: string; params?: unknown; preview?: boolean; test?: string; startAt?: string; restart?: boolean; password?: string };
+    Body: {
+      rid?: string; params?: unknown; preview?: boolean; test?: string; startAt?: string; restart?: boolean; password?: string;
+      /** Предпросмотр анкеты из конструктора — вне проекта, даже если ID совпадает с проектом */
+      surveyPreview?: boolean;
+    };
   }>(
     '/api/s/:id/start',
     async (req, reply) => {
-      const s = await surveys.get(req.params.id);
-      if (!s) return reply.code(404).send({ error: 'Опрос не найден' });
+      const t = await resolveTarget(req.params.id, !!req.body?.surveyPreview && (!!req.body?.preview || !!req.body?.test));
+      if (!t) return reply.code(404).send({ error: 'Опрос не найден' });
+      const s = t.surveyRow;
       // Предпросмотр черновика: команда (после входа) или тестовая ссылка
       const preview = !!req.body?.preview || !!req.body?.test;
-      if (preview && !checkTestToken(s.id, req.body?.test) && !(await currentUser(req))) {
+      if (preview && !checkTestToken(req.params.id, req.body?.test) && !(await currentUser(req))) {
         return reply.code(401).send({ error: req.body?.test ? 'Тестовая ссылка недействительна' : 'Предпросмотр доступен только после входа в админку' });
       }
 
-      if (!preview && (!s.published || s.status !== 'active')) {
-        return { closed: true, title: s.published?.title ?? s.title, message: settingsOf(s.published ?? s.draft).closedMessage };
+      if (!preview) {
+        // Сбор ответов решает проект: «Разработка» — ещё не начался, «Обработка» и «Архив» — закрыт
+        const p = t.loaded?.project;
+        const live = t.loaded?.live;
+        if (!p || !live || p.status !== 'collecting') {
+          const base = live ?? t.loaded?.draft ?? s.draft;
+          const message = p?.status === 'development' || !live ? 'Опрос ещё не начался.' : settingsOf(base).closedMessage;
+          return { closed: true, title: base.title, message };
+        }
       }
 
+      const draftDef = definitionFor(t, true)!;
       // Предпросмотр с выбранного вопроса — всегда новая сессия
-      const startAt = preview && req.body?.startAt && findPage(s.draft, req.body.startAt) ? req.body.startAt : null;
+      const startAt = preview && req.body?.startAt && findPage(draftDef, req.body.startAt) ? req.body.startAt : null;
 
       if (req.body?.rid && !startAt) {
-        const loaded = await load(s.id, req.body.rid);
+        const loaded = await load(req.params.id, req.body.rid);
         if (loaded && loaded.r.isTest === preview) {
           const done = loaded.r.status !== 'in_progress';
           // Завершённую сессию показываем снова, если повторное прохождение не разрешено (в предпросмотре — всегда заново)
@@ -246,25 +284,26 @@ export async function respondentRoutes(app: FastifyInstance) {
         }
       }
 
-      const survey = preview ? s.draft : s.published!;
+      const survey = definitionFor(t, preview)!;
       const params = cleanParams(req.body?.params);
-      if (!preview) {
+      if (!preview && t.projectId) {
+        const projectId = t.projectId;
         const st = settingsOf(survey);
         // Один ответ на значение параметра (ID панелиста): продолжаем начатую анкету, повторно не пускаем
         if (st.uniqueParam) {
           const value = params[st.uniqueParam];
           if (!value) return { closed: true, title: survey.title, message: 'Ссылка на опрос неполная. Откройте её из приглашения ещё раз.' };
-          const prev = await responses.findByParam(s.id, st.uniqueParam, value);
+          const prev = await responses.findByParam(projectId, st.uniqueParam, value);
           if (prev) {
-            const loaded = await load(s.id, prev.id);
+            const loaded = await load(projectId, prev.id);
             if (loaded?.r.status === 'in_progress') return stateOf(loaded.survey, loaded.r);
             return { closed: true, title: survey.title, message: 'Вы уже прошли этот опрос. Спасибо!' };
           }
         }
-        if (st.maxStartsPerIpHour && req.ip && (await responses.countByIp(s.id, req.ip, 3600)) >= st.maxStartsPerIpHour) {
+        if (st.maxStartsPerIpHour && req.ip && (await responses.countByIp(projectId, req.ip, 3600)) >= st.maxStartsPerIpHour) {
           return { closed: true, title: survey.title, message: 'С вашего устройства уже начато слишком много анкет. Попробуйте позже.' };
         }
-        const reason = await closedReason(s.id, survey);
+        const reason = await closedReason(projectId, survey);
         if (reason) return { closed: true, title: survey.title, message: reason };
         const password = survey.settings?.password;
         if (password && req.body?.password !== password) {
@@ -286,14 +325,14 @@ export async function respondentRoutes(app: FastifyInstance) {
         if (v !== undefined) initial[q.id] = { v };
       }
       const created = await responses.create({
-        surveyId: s.id, version: s.version, status: 'in_progress', isTest: preview, answers: initial, history: [],
+        projectId: t.projectId, surveyId: s.id, version: s.version, status: 'in_progress', isTest: preview, answers: initial, history: [],
         currentPage: null, params, ip: req.ip ?? null, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 500) || null,
         startedAt: new Date().toISOString(),
       });
       const startCtx = ctxOf(survey, created, cleanAnswers(ctxOf(survey, created, initial), []));
       const first = startAt ?? firstPage(startCtx);
       // Квоты по параметрам ссылки проверяются сразу
-      if (!startAt && first !== SCREENOUT && (await fullQuota(s.id, survey, preview, startCtx))) {
+      if (!startAt && first !== SCREENOUT && (await fullQuota(ownerOf(created), survey, preview, startCtx))) {
         await finalize(survey, created, initial, [], 'overquota');
       } else if (first === END || first === SCREENOUT) {
         await finalize(survey, created, initial, [], first === END ? 'completed' : 'screened_out');
@@ -326,7 +365,7 @@ export async function respondentRoutes(app: FastifyInstance) {
       const nav = ctxOf(survey, r, cleanAnswers(ctxOf(survey, r, answers), visited));
       const next = nextPage(nav, page.id);
       // Респондент подошёл под квоту, которая уже набрана (отсев важнее квоты)
-      if (next !== SCREENOUT && (await fullQuota(r.surveyId, survey, r.isTest, nav))) {
+      if (next !== SCREENOUT && (await fullQuota(ownerOf(r), survey, r.isTest, nav))) {
         await finalize(survey, r, answers, visited, 'overquota');
       } else if (next === END || next === SCREENOUT) {
         const act = endingAction(nav, page.id);

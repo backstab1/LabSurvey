@@ -12,6 +12,7 @@ import type { Survey } from '../shared/types.ts';
 process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'surveylab-loops-'));
 process.env.ADMIN_PASSWORD = 'secret';
 const { buildApp } = await import('../server/app.ts');
+const { launch } = await import('./helpers.ts');
 
 let app: FastifyInstance;
 let cookie = '';
@@ -75,8 +76,8 @@ test('respondent walks loops including a nested one', async () => {
   cookie = String(lr.headers['set-cookie']).split(';')[0];
   const created = await call('POST', '/api/admin/surveys', { definition: loopSurvey });
   assert.deepEqual(created.json.errors, []);
-  const sid = created.json.id;
-  await call('POST', `/api/admin/surveys/${sid}/publish`);
+  await call('POST', `/api/admin/surveys/${created.json.id}/publish`);
+  const sid = await launch(call, created.json.id);
   cookie = '';
 
   let st = (await call('POST', `/api/s/${sid}/start`, {})).json;
@@ -116,14 +117,14 @@ test('respondent walks loops including a nested one', async () => {
   assert.equal(s2.status, 'completed');
 
   cookie = String(lr.headers['set-cookie']).split(';')[0];
-  const csv = await call('GET', `/api/admin/surveys/${sid}/export.csv`);
+  const csv = await call('GET', `/api/admin/projects/${sid}/export.csv`);
   const [head, row1] = csv.body.replace(/^﻿/, '').split('\r\n');
   const cols = head.split(';');
   const val = (row: string, name: string) => row.split(';')[cols.indexOf(name)];
   assert.equal(val(row1, 'RATE_1_1'), '5');
   assert.equal(val(row1, 'RATE_2_2'), '2');
   assert.equal(val(row1, 'FREQ_1'), '1');
-  const report = (await call('GET', `/api/admin/surveys/${sid}/report`)).json;
+  const report = (await call('GET', `/api/admin/projects/${sid}/report`)).json;
   assert.ok(report.questions.some((q: { id: string; n: number }) => q.id === 'RATE_3_1' && q.n === 1));
 });
 

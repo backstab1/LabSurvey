@@ -10,6 +10,7 @@ import type { Survey } from '../shared/types.ts';
 process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'surveylab-notify-'));
 process.env.ADMIN_PASSWORD = 'secret';
 const { buildApp } = await import('../server/app.ts');
+const { launch } = await import('./helpers.ts');
 
 let app: FastifyInstance;
 let hook: Server;
@@ -48,12 +49,13 @@ const survey: Survey = {
 test('webhook gets completed, quota and limit events', async () => {
   const lr = await app.inject({ method: 'POST', url: '/api/admin/login', payload: { login: 'admin', password: 'secret' } });
   cookie = String(lr.headers['set-cookie']).split(';')[0];
-  const sid = (await call('POST', '/api/admin/surveys', { definition: survey })).json.id;
-  await call('POST', `/api/admin/surveys/${sid}/publish`);
-  assert.equal((await call('PUT', `/api/admin/surveys/${sid}/notify`, { webhookUrl: 'ftp://x' })).status, 400);
-  await call('PUT', `/api/admin/surveys/${sid}/notify`, { webhookUrl: hookUrl, everyN: 1, quotaFull: true, limitReached: true });
+  const surveyId = (await call('POST', '/api/admin/surveys', { definition: survey })).json.id;
+  await call('POST', `/api/admin/surveys/${surveyId}/publish`);
+  const sid = await launch(call, surveyId);
+  assert.equal((await call('PUT', `/api/admin/projects/${sid}/notify`, { webhookUrl: 'ftp://x' })).status, 400);
+  await call('PUT', `/api/admin/projects/${sid}/notify`, { webhookUrl: hookUrl, everyN: 1, quotaFull: true, limitReached: true });
 
-  assert.equal((await call('POST', `/api/admin/surveys/${sid}/notify/test`)).status, 200);
+  assert.equal((await call('POST', `/api/admin/projects/${sid}/notify/test`)).status, 200);
   await waitFor(1);
   assert.equal(received[0].event, 'test');
 

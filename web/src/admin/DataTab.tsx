@@ -5,7 +5,7 @@ import { rich } from '../runner/rich.tsx';
 import { allQuestions, answerText, pipe } from '../../../shared/logic.ts';
 import { expandAllLoops } from '../../../shared/loops.ts';
 import type { Answers, Survey } from '../../../shared/types.ts';
-import type { SurveyInfo } from './Editor.tsx';
+import type { ProjectInfo } from './ProjectPage.tsx';
 import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
 
 const EXPORT_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
@@ -17,7 +17,7 @@ interface RespRow {
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
-export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Promise<unknown> }) {
+export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Promise<unknown> }) {
   const [statuses, setStatuses] = useState<ResponseStatus[]>(['completed']);
   const [recent, setRecent] = useState<RespRow[] | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
   const [simCount, setSimCount] = useState(20);
   const [simBusy, setSimBusy] = useState(false);
   const refresh = async () => {
-    setRecent(await api<RespRow[]>('GET', `/api/admin/surveys/${info.id}/responses`));
+    setRecent(await api<RespRow[]>('GET', `/api/admin/projects/${info.id}/responses`));
     await reload();
   };
   const total = Object.values(info.counts.real).reduce((a, b) => a + b, 0);
@@ -34,7 +34,7 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
   // При открытии вкладки — свежие счётчики (редактор мог быть открыт давно)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { reload(); }, []);
-  useEffect(() => { api<RespRow[]>('GET', `/api/admin/surveys/${info.id}/responses`).then(setRecent); }, [info.id, info.counts]);
+  useEffect(() => { api<RespRow[]>('GET', `/api/admin/projects/${info.id}/responses`).then(setRecent); }, [info.id, info.counts]);
 
   const [opts, setOpts] = useState({ from: '', to: '', timings: false, rejected: false });
   const exportUrl = (format: string, test = false) => {
@@ -44,7 +44,7 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
     if (opts.to) q.set('to', opts.to);
     if (opts.timings) q.set('timings', '1');
     if (opts.rejected) q.set('rejected', '1');
-    return `/api/admin/surveys/${info.id}/export.${format}?${q}`;
+    return `/api/admin/projects/${info.id}/export.${format}?${q}`;
   };
 
   return (
@@ -103,7 +103,7 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
           <a className="btn btn-primary" href={exportUrl('xlsx')}>Excel (.xlsx)</a>
           <a className="btn btn-primary" href={exportUrl('sav')}>SPSS (.sav)</a>
           <a className="btn btn-secondary" href={exportUrl('csv')}>CSV</a>
-          <a className="btn btn-secondary" href={`/api/admin/surveys/${info.id}/export.json`}>Анкета (.json)</a>
+          <a className="btn btn-secondary" href={`/api/admin/surveys/${info.survey.id}/export.json`}>Анкета (.json)</a>
         </div>
         <p className="muted" style={{ margin: 0, fontSize: 14 }}>
           Excel содержит листы «Коды», «Метки» и «Кодбук». Время — по часовому поясу сервера выгрузки (по умолчанию Москва).
@@ -148,7 +148,7 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
             <button className="btn btn-secondary btn-sm" disabled={simBusy} title="Боты пройдут черновик по логике со случайными ответами" onClick={async () => {
               setSimBusy(true);
               try {
-                const r = await api('POST', `/api/admin/surveys/${info.id}/simulate`, { count: simCount });
+                const r = await api('POST', `/api/admin/projects/${info.id}/simulate`, { count: simCount });
                 toast(`Заполнено: ${r.count} (завершили ${r.stats.completed ?? 0}, отсеяно ${r.stats.screened_out ?? 0}${r.stats.overquota ? `, сверх квоты ${r.stats.overquota}` : ''})`);
                 await refresh();
               } catch (e) {
@@ -158,10 +158,10 @@ export function DataTab({ info, reload }: { info: SurveyInfo; reload: () => Prom
               }
             }}>{simBusy ? 'Заполнение…' : 'Заполнить тестовыми'}</button>
           </span>
-          <a className="btn btn-secondary btn-sm" href={`/api/admin/surveys/${info.id}/export.xlsx?statuses=${EXPORT_STATUSES.join(',')}&test=1`}>Excel с тестовыми</a>
+          <a className="btn btn-secondary btn-sm" href={`/api/admin/projects/${info.id}/export.xlsx?statuses=${EXPORT_STATUSES.join(',')}&test=1`}>Excel с тестовыми</a>
           <button className="btn btn-danger btn-sm" disabled={!info.counts.test} onClick={async () => {
             if (!window.confirm('Удалить все тестовые ответы?')) return;
-            const r = await api('DELETE', `/api/admin/surveys/${info.id}/test-responses`);
+            const r = await api('DELETE', `/api/admin/projects/${info.id}/test-responses`);
             toast(`Удалено: ${r.deleted}`);
             await refresh();
           }}>Удалить тестовые</button>
@@ -191,7 +191,7 @@ function ResponseModal({ surveyId, rid, onClose, onDeleted, onChanged }: {
   surveyId: string; rid: string; onClose: () => void; onDeleted: () => void; onChanged: () => void;
 }) {
   const [data, setData] = useState<{ response: RespRow & { answers: Answers; history: string[]; timings?: Record<string, number> }; survey: Survey } | null>(null);
-  const load = () => api('GET', `/api/admin/surveys/${surveyId}/responses/${rid}`).then(setData);
+  const load = () => api('GET', `/api/admin/projects/${surveyId}/responses/${rid}`).then(setData);
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [surveyId, rid]);
   if (!data) return <Modal onClose={onClose} title="Ответ">Загрузка…</Modal>;
   const { response: r, survey } = data;
@@ -202,14 +202,14 @@ function ResponseModal({ surveyId, rid, onClose, onDeleted, onChanged }: {
       actions={<>
         <button className="btn btn-secondary btn-sm" title="Бракованная анкета не считается в квотах, лимите, отчёте и выгрузке (выгрузить можно отдельно)"
           onClick={async () => {
-            await api('POST', `/api/admin/surveys/${surveyId}/responses/${rid}/reject`, { rejected: !r.rejected });
+            await api('POST', `/api/admin/projects/${surveyId}/responses/${rid}/reject`, { rejected: !r.rejected });
             await load();
             onChanged();
             toast(r.rejected ? 'Брак снят' : 'Анкета помечена как брак');
           }}>{r.rejected ? 'Снять брак' : 'Забраковать'}</button>
         <button className="btn btn-danger btn-sm" onClick={async () => {
           if (!window.confirm('Удалить этот ответ? Это нельзя отменить.')) return;
-          await api('DELETE', `/api/admin/surveys/${surveyId}/responses/${rid}`);
+          await api('DELETE', `/api/admin/projects/${surveyId}/responses/${rid}`);
           onDeleted();
         }}>Удалить</button>
         <button className="btn btn-primary btn-sm" onClick={onClose}>Закрыть</button>
@@ -245,7 +245,7 @@ function ResponseModal({ surveyId, rid, onClose, onDeleted, onChanged }: {
   );
 }
 
-function SheetsCard({ info, reload }: { info: SurveyInfo; reload: () => Promise<unknown> }) {
+function SheetsCard({ info, reload }: { info: ProjectInfo; reload: () => Promise<unknown> }) {
   const cfg = info.sheets;
   const [form, setForm] = useState({
     spreadsheetId: cfg?.spreadsheetId ?? '',
@@ -269,7 +269,7 @@ function SheetsCard({ info, reload }: { info: SurveyInfo; reload: () => Promise<
   }
 
   const save = async () => {
-    await api('PUT', `/api/admin/surveys/${info.id}/sheets`, form);
+    await api('PUT', `/api/admin/projects/${info.id}/sheets`, form);
     await reload();
     toast('Настройки Google Sheets сохранены');
   };
@@ -312,7 +312,7 @@ function SheetsCard({ info, reload }: { info: SurveyInfo; reload: () => Promise<
         <button className="btn btn-primary" disabled={!cfg?.spreadsheetId || busy} onClick={async () => {
           setBusy(true);
           try {
-            const r = await api('POST', `/api/admin/surveys/${info.id}/sheets/sync`);
+            const r = await api('POST', `/api/admin/projects/${info.id}/sheets/sync`);
             toast(`Выгружено строк: ${r.rows}`);
           } catch (e) {
             toast((e as Error).message);
@@ -327,7 +327,7 @@ function SheetsCard({ info, reload }: { info: SurveyInfo; reload: () => Promise<
 }
 
 /** Уведомления: вебхук (JSON) и Telegram — о завершённых анкетах, набранных квотах и лимите */
-function NotifyCard({ info, reload }: { info: SurveyInfo; reload: () => Promise<unknown> }) {
+function NotifyCard({ info, reload }: { info: ProjectInfo; reload: () => Promise<unknown> }) {
   const cfg = info.notify;
   const [form, setForm] = useState({
     webhookUrl: cfg?.webhookUrl ?? '', telegramChatId: cfg?.telegramChatId ?? '',
@@ -336,7 +336,7 @@ function NotifyCard({ info, reload }: { info: SurveyInfo; reload: () => Promise<
   const [busy, setBusy] = useState(false);
   const save = async () => {
     try {
-      await api('PUT', `/api/admin/surveys/${info.id}/notify`, form);
+      await api('PUT', `/api/admin/projects/${info.id}/notify`, form);
       await reload();
       toast('Уведомления сохранены');
       return true;
@@ -385,7 +385,7 @@ function NotifyCard({ info, reload }: { info: SurveyInfo; reload: () => Promise<
           setBusy(true);
           try {
             if (!(await save())) return;
-            await api('POST', `/api/admin/surveys/${info.id}/notify/test`);
+            await api('POST', `/api/admin/projects/${info.id}/notify/test`);
             toast('Тестовое уведомление отправлено');
           } catch (e) {
             toast((e as Error).message);

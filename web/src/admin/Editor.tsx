@@ -2,16 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { Builder } from './Builder.tsx';
 import { JsonTab } from './JsonTab.tsx';
-import { DataTab } from './DataTab.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
 import { LogicTab } from './LogicTab.tsx';
-import { ReportTab } from './ReportTab.tsx';
 import { IssuesList, Menu, Modal, toast } from './common.tsx';
 import { canEdit, navigate, useMe } from './AdminApp.tsx';
-import { STATUS_TEXT } from './SurveyList.tsx';
+import { publishState } from './SurveyList.tsx';
+import { NewProjectModal } from './ProjectPage.tsx';
 import { validateSurvey } from '../../../shared/validate.ts';
 import { analyzeFlow } from '../../../shared/flow.ts';
-import type { Survey } from '../../../shared/types.ts';
+import { PROJECT_STATUS_LABELS, type ProjectStatus, type Survey } from '../../../shared/types.ts';
 
 export interface SurveyInfo {
   id: string;
@@ -19,21 +18,13 @@ export interface SurveyInfo {
   draft: Survey;
   published: Survey | null;
   version: number;
-  status: 'draft' | 'active' | 'closed';
   archived: boolean;
-  sheets: any;
-  counts: { real: Record<string, number>; test: number; rejected: number };
-  sheetsAccount: { configured: boolean; email: string | null };
   testToken: string;
-  quotas: { id: string; title?: string; limit: number; count: number }[];
-  notify: {
-    webhookUrl?: string; telegramChatId?: string; everyN?: number; quotaFull?: boolean; limitReached?: boolean;
-    lastError?: string | null; lastSentAt?: string;
-  } | null;
-  telegramConfigured: boolean;
+  /** Проекты, в которых запускается анкета */
+  projects: { id: string; title: string; status: ProjectStatus }[];
 }
 
-type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'report' | 'data';
+type Tab = 'builder' | 'logic' | 'json' | 'settings';
 type SaveState = 'saved' | 'pending' | 'saving' | 'error';
 
 const SAVE_TEXT: Record<SaveState, string> = {
@@ -46,10 +37,14 @@ const SAVE_TEXT: Record<SaveState, string> = {
 export function Editor({ id }: { id: string }) {
   const [info, setInfo] = useState<SurveyInfo | null>(null);
   const [def, setDef] = useState<Survey | null>(null);
-  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).get('tab') as Tab) || 'builder');
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = new URLSearchParams(window.location.search).get('tab') as Tab;
+    return ['builder', 'logic', 'json', 'settings'].includes(t) ? t : 'builder';
+  });
   const [save, setSave] = useState<SaveState>('saved');
   const [showIssues, setShowIssues] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [newProject, setNewProject] = useState(false);
   // Наблюдатель видит всё, но ничего не меняет
   const readOnly = !canEdit(useMe());
   const [focus, setFocus] = useState<{ where: string; n: number }>();
@@ -162,8 +157,8 @@ export function Editor({ id }: { id: string }) {
 
   const publish = async () => {
     if (!(await saveNow())) return;
-    const hasData = Object.values(info.counts.real).some((n) => n > 0);
-    if (hasData && !window.confirm('По анкете уже есть ответы. Опубликовать новую версию? Незавершённые респонденты продолжат по новой версии.')) return;
+    const live = info.projects.filter((p) => p.status === 'collecting');
+    if (live.length && !window.confirm(`Анкета сейчас собирает ответы в проектах: ${live.map((p) => `«${p.title}»`).join(', ')}. Опубликовать новую версию? Респонденты сразу увидят её, незавершённые продолжат по новой версии.`)) return;
     try {
       const r = await api('POST', `/api/admin/surveys/${id}/publish`);
       await reload();
@@ -177,17 +172,12 @@ export function Editor({ id }: { id: string }) {
     // Окно открываем сразу (иначе браузер заблокирует всплывающее окно), адрес — после сохранения
     const w = window.open('about:blank', '_blank');
     if (!(await saveNow())) { w?.close(); return; }
-    const url = `/s/${id}?preview=1&new=1${startAt ? `&start=${encodeURIComponent(startAt)}` : ''}`;
+    const url = `/s/${id}?preview=1&survey=1&new=1${startAt ? `&start=${encodeURIComponent(startAt)}` : ''}`;
     if (w) w.location.href = url; else window.open(url, '_blank');
   };
 
-  const setStatus = async (status: 'active' | 'closed') => {
-    await api('POST', `/api/admin/surveys/${id}/status`, { status });
-    await reload();
-  };
-
-  const link = `${window.location.origin}/s/${id}`;
   const unpublished = !info.published || JSON.stringify(info.published) !== JSON.stringify(def);
+  const ps = publishState({ version: info.version, unpublished });
   const changeTab = (t: Tab) => {
     setTab(t);
     const u = new URL(window.location.href);
@@ -200,10 +190,10 @@ export function Editor({ id }: { id: string }) {
   return (
     <div className="container editor">
       <div className="editor-head">
-        <button className="icon-btn back" title="Все анкеты" onClick={() => navigate('/admin')}>←</button>
+        <button className="icon-btn back" title="Все анкеты" onClick={() => navigate('/admin/surveys')}>←</button>
         <input className="title-input" value={def.title} placeholder="Название анкеты" aria-label="Название анкеты"
           onChange={(e) => update({ ...def, title: e.target.value })} />
-        {info.archived ? <span className="badge">В архиве</span> : <span className={`badge ${info.status}`}>{STATUS_TEXT[info.status]}</span>}
+        {info.archived ? <span className="badge">В архиве</span> : <span className={`badge ${ps.cls}`}>{ps.text}</span>}
         <span className={`save-state ${save}`} onClick={save === 'error' ? () => flush() : undefined}>{SAVE_TEXT[save]}</span>
         <span className="grow" />
         <span className="undo-group">
@@ -216,10 +206,7 @@ export function Editor({ id }: { id: string }) {
           {!info.published ? 'Опубликовать' : unpublished ? 'Опубликовать изменения' : '✓ Опубликовано'}
         </button>}
         <Menu className="btn btn-secondary menu-trigger" items={[
-          { label: 'Скопировать ссылку на опрос', onClick: () => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); } },
-          { label: 'Скопировать тестовую ссылку', onClick: () => { navigator.clipboard.writeText(`${link}?test=${info.testToken}`); toast('Тестовая ссылка скопирована: черновик, без входа, ответы тестовые'); } },
-          !readOnly && info.status === 'active' && { label: 'Закрыть сбор ответов', onClick: () => setStatus('closed') },
-          !readOnly && info.status === 'closed' && !info.archived && { label: 'Возобновить сбор', onClick: () => setStatus('active') },
+          !readOnly && { label: 'Запустить в новом проекте', onClick: () => setNewProject(true) },
           { label: 'Печатная версия анкеты', onClick: async () => { await saveNow(); window.open(`/admin/s/${id}/print`, '_blank'); } },
           { label: 'История версий', onClick: () => setShowVersions(true), disabled: !info.published },
           !readOnly && { label: 'Дублировать анкету', onClick: async () => { const r = await api('POST', `/api/admin/surveys/${id}/duplicate`); navigate(`/admin/s/${r.id}`); } },
@@ -230,26 +217,29 @@ export function Editor({ id }: { id: string }) {
           },
           !readOnly && {
             label: 'Удалить анкету', danger: true, onClick: async () => {
-              const n = Object.values(info.counts.real).reduce((a, b) => a + b, 0);
-              if (!window.confirm(`Удалить анкету${n ? ` и ${n} ответов` : ''}? Это нельзя отменить.`)) return;
+              if (info.projects.length) return toast('Анкета используется в проектах — сначала удалите их или выберите в них другую анкету');
+              if (!window.confirm('Удалить анкету? Это нельзя отменить.')) return;
               await api('DELETE', `/api/admin/surveys/${id}`);
-              navigate('/admin');
+              navigate('/admin/surveys');
             },
           },
         ]} />
       </div>
 
-      {readOnly && <div className="warn-box readonly-note">Режим просмотра: изменения не сохраняются. Отчёт, выгрузки и предпросмотр доступны.</div>}
+      {readOnly && <div className="warn-box readonly-note">Режим просмотра: изменения не сохраняются. Предпросмотр доступен.</div>}
       <div className="tabs-row">
         <div className="tabs">
-          {([['builder', 'Конструктор'], ['logic', 'Логика'], ['json', 'JSON'], ['settings', 'Настройки'], ['report', 'Отчёт'], ['data', 'Данные']] as [Tab, string][]).map(([t, label]) => (
+          {([['builder', 'Конструктор'], ['logic', 'Логика'], ['json', 'JSON'], ['settings', 'Настройки анкеты']] as [Tab, string][]).map(([t, label]) => (
             <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => changeTab(t)}>{label}</button>
           ))}
         </div>
-        {info.published && (
-          <button className="link-chip" title="Скопировать ссылку" onClick={() => { navigator.clipboard.writeText(link); toast('Ссылка скопирована'); }}>
-            🔗 {link.replace(/^https?:\/\//, '')}
+        {info.projects.map((p) => (
+          <button key={p.id} className="link-chip" title="Открыть проект: сбор, квоты, данные и отчёт" onClick={() => navigate(`/admin/p/${p.id}`)}>
+            ▸ {p.title} · {PROJECT_STATUS_LABELS[p.status]}
           </button>
+        ))}
+        {!info.projects.length && !readOnly && (
+          <button className="link-chip" title="Проект — запуск анкеты: сбор, квоты, данные и отчёт" onClick={() => setNewProject(true)}>+ Запустить в проекте</button>
         )}
         {(errs > 0 || warns > 0) && (
           <button className={`issues-chip${errs ? ' err' : ''}`} onClick={() => setShowIssues(!showIssues)}>
@@ -267,9 +257,8 @@ export function Editor({ id }: { id: string }) {
       {tab === 'builder' && <Builder def={def} onChange={update} issues={validation} focus={focus} onPreview={preview} />}
       {tab === 'logic' && <LogicTab def={def} onOpen={(qid) => { changeTab('builder'); setFocus({ where: qid, n: Date.now() }); }} />}
       {tab === 'json' && <JsonTab def={def} onChange={update} />}
-      {tab === 'settings' && <SettingsTab def={def} onChange={update} surveyId={id} testToken={info.testToken} completed={info.counts.real.completed ?? 0} quotaProgress={info.quotas} />}
-      {tab === 'report' && <ReportTab info={info} />}
-      {tab === 'data' && <DataTab info={info} reload={reload} />}
+      {tab === 'settings' && <SettingsTab def={def} onChange={update} />}
+      {newProject && <NewProjectModal surveyId={id} onClose={() => setNewProject(false)} />}
       {showVersions && (
         <VersionsModal id={id} current={info.version} onClose={() => setShowVersions(false)}
           onRestore={(v, restored) => { update(restored); setShowVersions(false); changeTab('builder'); toast(`Черновик заменён версией ${v}. Отменить — Ctrl+Z`); }} />

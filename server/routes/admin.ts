@@ -3,7 +3,8 @@ import {
   authenticate, checkUserPassword, clearSession, currentUser, hashPassword, isBuiltInLogin, loginBlocked, loginFailed,
   requireAdminRole, requireUser, setSession, testToken,
 } from '../auth.ts';
-import { responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig, type SurveyStatus } from '../db.ts';
+import { projects, responses, surveys, users, type NotifyConfig, type Role, type SheetsConfig } from '../db.ts';
+import { defFor, loadProject } from '../projectCtx.ts';
 import { buildTable, cellToText } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
 import { writeSav } from '../export/sav.ts';
@@ -17,7 +18,7 @@ import { createReadStream } from 'node:fs';
 import { config } from '../config.ts';
 import { validateSurvey } from '../../shared/validate.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
-import type { Condition, Survey } from '../../shared/types.ts';
+import { PROJECT_SETTING_KEYS, effectiveSurvey, type Condition, type ProjectSettings, type ProjectStatus, type Quota, type Survey } from '../../shared/types.ts';
 import { evalCondition } from '../../shared/logic.ts';
 import { expandAllLoops } from '../../shared/loops.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
@@ -135,8 +136,9 @@ export async function adminRoutes(app: FastifyInstance) {
       });
     });
 
-    priv.get('/api/admin/surveys', async () => surveys.list());
+    // ================= Анкеты (конструктор) =================
 
+    priv.get('/api/admin/surveys', async () => surveys.list());
 
     priv.post<{ Body: { definition?: unknown; title?: string } }>('/api/admin/surveys', async (req, reply) => {
       const def = req.body?.definition !== undefined ? migrateSurvey(req.body.definition) : blankSurvey(req.body?.title);
@@ -149,11 +151,8 @@ export async function adminRoutes(app: FastifyInstance) {
     priv.get<{ Params: { id: string } }>('/api/admin/surveys/:id', async (req, reply) => {
       const s = await surveys.get(req.params.id);
       if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
-      // Прогресс квот опубликованной версии
-      const live = s.published;
-      const counts = live?.quotas?.length ? await quotaCounts(s.id, live, false) : null;
-      const quotas = (live?.quotas ?? []).map((q) => ({ id: q.id, title: q.title, limit: q.limit, count: counts?.get(q.id) ?? 0 }));
-      return { ...s, counts: await responses.counts(s.id), sheetsAccount: sheetsStatus(), testToken: testToken(s.id), quotas, telegramConfigured: telegramConfigured() };
+      const used = (await projects.bySurvey(s.id)).map((p) => ({ id: p.id, title: p.title, status: p.status }));
+      return { ...s, testToken: testToken(s.id), projects: used };
     });
 
     priv.put<{ Params: { id: string }; Body: { definition: unknown } }>('/api/admin/surveys/:id', async (req, reply) => {
@@ -173,17 +172,6 @@ export async function adminRoutes(app: FastifyInstance) {
       if (!v.ok) return reply.code(422).send(v);
       const version = await surveys.publish(s.id, req.user!.login);
       return { version };
-    });
-
-    priv.post<{ Params: { id: string }; Body: { status: SurveyStatus } }>('/api/admin/surveys/:id/status', async (req, reply) => {
-      const s = await surveys.get(req.params.id);
-      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
-      const status = req.body?.status;
-      if (status !== 'active' && status !== 'closed') return reply.code(400).send({ error: 'Статус: active или closed' });
-      if (status === 'active' && !s.published) return reply.code(400).send({ error: 'Сначала опубликуйте анкету' });
-      if (status === 'active' && s.archived) return reply.code(400).send({ error: 'Сначала верните анкету из архива' });
-      await surveys.setStatus(s.id, status);
-      return { ok: true };
     });
 
     priv.post<{ Params: { id: string }; Body: { archived: boolean } }>('/api/admin/surveys/:id/archive', async (req, reply) => {
@@ -216,50 +204,173 @@ export async function adminRoutes(app: FastifyInstance) {
       return { id: copy.id };
     });
 
-    priv.delete<{ Params: { id: string } }>('/api/admin/surveys/:id', async (req) => {
+    priv.delete<{ Params: { id: string } }>('/api/admin/surveys/:id', async (req, reply) => {
+      const used = await projects.bySurvey(req.params.id);
+      if (used.length) {
+        return reply.code(400).send({ error: `Анкета используется в проектах: ${used.map((p) => `«${p.title}»`).join(', ')}. Сначала удалите проекты или выберите в них другую анкету.` });
+      }
       await surveys.remove(req.params.id);
       return { ok: true };
     });
 
-    priv.delete<{ Params: { id: string } }>('/api/admin/surveys/:id/test-responses', async (req) => {
+    priv.get<{ Params: { id: string } }>('/api/admin/surveys/:id/export.json', async (req, reply) => {
+      const s = await surveys.get(req.params.id);
+      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
+      reply.header('Content-Disposition', attachment(`${s.draft.title.slice(0, 60)}.json`));
+      return reply.send(JSON.stringify(s.draft, null, 2));
+    });
+
+    // ================= Проекты (сбор, квоты, данные, отчёты) =================
+
+    const PROJECT_STATUSES: ProjectStatus[] = ['development', 'collecting', 'processing', 'archive'];
+
+    priv.get('/api/admin/projects', async () => {
+      const list = await projects.list();
+      return Promise.all(list.map(async (p) => {
+        // Прогресс квот — по опубликованной версии анкеты
+        let quotasFull = 0;
+        if (p.quotas.length) {
+          const l = await loadProject(p.id);
+          if (l?.live) {
+            const counts = await quotaCounts(p.id, l.live, false);
+            quotasFull = p.quotas.filter((q) => (counts.get(q.id) ?? 0) >= q.limit).length;
+          }
+        }
+        return {
+          id: p.id, title: p.title, status: p.status, surveyId: p.surveyId, surveyTitle: p.surveyTitle, counts: p.counts,
+          maxResponses: p.settings.maxResponses ?? null, openFrom: p.settings.openFrom ?? null, closeAt: p.settings.closeAt ?? null,
+          quotas: p.quotas.length, quotasFull, createdAt: p.createdAt, updatedAt: p.updatedAt,
+        };
+      }));
+    });
+
+    priv.post<{ Body: { surveyId?: string; title?: string } }>('/api/admin/projects', async (req, reply) => {
+      const s = req.body?.surveyId ? await surveys.get(req.body.surveyId) : null;
+      if (!s) return reply.code(400).send({ error: 'Выберите анкету для проекта' });
+      const title = String(req.body?.title ?? '').trim() || s.draft.title;
+      const p = await projects.create({ title: title.slice(0, 200), surveyId: s.id });
+      // Настройки сбора и квоты, если они пришли в JSON анкеты (импорт, анкета от ИИ), становятся стартовыми настройками проекта
+      const src = s.published ?? s.draft;
+      const seeded: Record<string, unknown> = {};
+      for (const k of PROJECT_SETTING_KEYS) if (src.settings?.[k] !== undefined) seeded[k] = src.settings[k];
+      if (Object.keys(seeded).length || src.quotas?.length) {
+        await projects.update(p.id, { settings: seeded as ProjectSettings, quotas: src.quotas ?? [] });
+      }
+      return { id: p.id };
+    });
+
+    priv.get<{ Params: { id: string } }>('/api/admin/projects/:id', async (req, reply) => {
+      const l = await loadProject(req.params.id);
+      if (!l) return reply.code(404).send({ error: 'Проект не найден' });
+      const { project: p, survey: s } = l;
+      const counts = l.live && p.quotas.length ? await quotaCounts(p.id, l.live, false) : null;
+      return {
+        id: p.id, title: p.title, status: p.status, settings: p.settings, quotaDefs: p.quotas,
+        quotas: p.quotas.map((q) => ({ id: q.id, title: q.title, limit: q.limit, count: counts?.get(q.id) ?? 0 })),
+        survey: { id: s.id, title: s.draft.title, version: s.version, published: !!s.published, unpublished: !s.published || JSON.stringify(s.published) !== JSON.stringify(s.draft) },
+        // Анкета с настройками проекта: для отчёта, данных и условий квот
+        draft: l.draft, published: l.live,
+        sheets: p.sheets, notify: p.notify, counts: await responses.counts(p.id),
+        sheetsAccount: sheetsStatus(), testToken: testToken(p.id), telegramConfigured: telegramConfigured(),
+        createdAt: p.createdAt, updatedAt: p.updatedAt,
+      };
+    });
+
+    priv.put<{ Params: { id: string }; Body: { title?: string; surveyId?: string; settings?: ProjectSettings; quotas?: Quota[] } }>(
+      '/api/admin/projects/:id',
+      async (req, reply) => {
+        const l = await loadProject(req.params.id);
+        if (!l) return reply.code(404).send({ error: 'Проект не найден' });
+        const b = req.body ?? {};
+        const patch: Parameters<typeof projects.update>[1] = {};
+        if (b.title !== undefined) {
+          const title = String(b.title).trim();
+          if (!title) return reply.code(400).send({ error: 'Укажите название проекта' });
+          patch.title = title.slice(0, 200);
+        }
+        let survey = l.survey;
+        if (b.surveyId !== undefined && b.surveyId !== l.survey.id) {
+          const s = await surveys.get(b.surveyId);
+          if (!s) return reply.code(400).send({ error: 'Анкета не найдена' });
+          if (l.project.status === 'collecting') return reply.code(400).send({ error: 'Во время сбора анкету проекта менять нельзя — сначала остановите сбор' });
+          patch.surveyId = s.id;
+          survey = s;
+        }
+        if (b.settings !== undefined) {
+          const clean: Record<string, unknown> = {};
+          for (const k of PROJECT_SETTING_KEYS) if ((b.settings as Record<string, unknown>)[k] !== undefined) clean[k] = (b.settings as Record<string, unknown>)[k];
+          patch.settings = clean as ProjectSettings;
+        }
+        if (b.quotas !== undefined) {
+          if (!Array.isArray(b.quotas)) return reply.code(400).send({ error: 'quotas: ожидается массив' });
+          patch.quotas = b.quotas;
+        }
+        // Настройки и квоты проверяются вместе с анкетой — условия квот ссылаются на её вопросы
+        const next = { settings: patch.settings ?? l.project.settings, quotas: patch.quotas ?? l.project.quotas };
+        const v = validateSurvey(effectiveSurvey(survey.published ?? survey.draft, next));
+        const own = v.errors.filter((e) => e.where.startsWith('settings.') || e.where.startsWith('квота'));
+        if (own.length) return reply.code(422).send({ error: own.map((e) => `${e.where}: ${e.message}`).join('; '), errors: own });
+        await projects.update(l.project.id, patch);
+        if (patch.quotas || patch.surveyId) resetQuotas(l.project.id);
+        return { ok: true };
+      },
+    );
+
+    priv.post<{ Params: { id: string }; Body: { status: ProjectStatus } }>('/api/admin/projects/:id/status', async (req, reply) => {
+      const l = await loadProject(req.params.id);
+      if (!l) return reply.code(404).send({ error: 'Проект не найден' });
+      const status = req.body?.status;
+      if (!PROJECT_STATUSES.includes(status)) return reply.code(400).send({ error: 'Статус: development, collecting, processing или archive' });
+      if (status === 'collecting' && !l.live) return reply.code(400).send({ error: 'Сначала опубликуйте анкету проекта' });
+      await projects.update(l.project.id, { status });
+      return { ok: true };
+    });
+
+    priv.delete<{ Params: { id: string } }>('/api/admin/projects/:id', async (req) => {
+      await projects.remove(req.params.id);
+      resetQuotas(req.params.id);
+      return { ok: true };
+    });
+
+    priv.delete<{ Params: { id: string } }>('/api/admin/projects/:id/test-responses', async (req) => {
       resetQuotas(req.params.id);
       return { deleted: await responses.deleteTest(req.params.id) };
     });
 
-    // Тестовое заполнение черновика случайными ответами по логике анкеты
-    priv.post<{ Params: { id: string }; Body: { count?: number } }>('/api/admin/surveys/:id/simulate', async (req, reply) => {
-      const s = await surveys.get(req.params.id);
-      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
-      const v = validateSurvey(s.draft);
+    // Тестовое заполнение черновика анкеты случайными ответами по логике — в проект, как тестовые ответы
+    priv.post<{ Params: { id: string }; Body: { count?: number } }>('/api/admin/projects/:id/simulate', async (req, reply) => {
+      const l = await loadProject(req.params.id);
+      if (!l) return reply.code(404).send({ error: 'Проект не найден' });
+      const v = validateSurvey(l.draft);
       if (!v.ok) return reply.code(422).send({ error: 'Сначала исправьте ошибки в анкете', ...v });
       const count = Math.min(Math.max(Number(req.body?.count) || 20, 1), 500);
-      return { count, stats: await simulate(s.id, s.draft, s.version, count) };
+      return { count, stats: await simulate(l.project.id, l.survey.id, l.draft, l.survey.version, count) };
     });
 
-    priv.get<{ Params: { id: string; rid: string } }>('/api/admin/surveys/:id/responses/:rid', async (req, reply) => {
-      const s = await surveys.get(req.params.id);
+    priv.get<{ Params: { id: string; rid: string } }>('/api/admin/projects/:id/responses/:rid', async (req, reply) => {
+      const l = await loadProject(req.params.id);
       const r = await responses.get(req.params.rid);
-      if (!s || !r || r.surveyId !== s.id) return reply.code(404).send({ error: 'Ответ не найден' });
-      return { response: r, survey: r.isTest ? s.draft : s.published ?? s.draft };
+      if (!l || !r || r.projectId !== l.project.id) return reply.code(404).send({ error: 'Ответ не найден' });
+      return { response: r, survey: defFor(l, r.isTest) };
     });
 
-    priv.post<{ Params: { id: string; rid: string }; Body: { rejected: boolean } }>('/api/admin/surveys/:id/responses/:rid/reject', async (req, reply) => {
+    priv.post<{ Params: { id: string; rid: string }; Body: { rejected: boolean } }>('/api/admin/projects/:id/responses/:rid/reject', async (req, reply) => {
       const r = await responses.get(req.params.rid);
-      if (!r || r.surveyId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
+      if (!r || r.projectId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
       await responses.update(r.id, { rejected: !!req.body?.rejected });
-      resetQuotas(r.surveyId);
+      resetQuotas(req.params.id);
       return { ok: true };
     });
 
-    priv.delete<{ Params: { id: string; rid: string } }>('/api/admin/surveys/:id/responses/:rid', async (req, reply) => {
+    priv.delete<{ Params: { id: string; rid: string } }>('/api/admin/projects/:id/responses/:rid', async (req, reply) => {
       const r = await responses.get(req.params.rid);
-      if (!r || r.surveyId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
+      if (!r || r.projectId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
       await responses.remove(r.id);
-      resetQuotas(r.surveyId);
+      resetQuotas(req.params.id);
       return { ok: true };
     });
 
-    priv.get<{ Params: { id: string } }>('/api/admin/surveys/:id/responses', async (req) => {
+    priv.get<{ Params: { id: string } }>('/api/admin/projects/:id/responses', async (req) => {
       const list = await responses.list(req.params.id, { includeTest: true, includeRejected: true });
       return list.slice(-200).reverse().map((r) => ({
         id: r.id, status: r.status, isTest: r.isTest, rejected: r.rejected, startedAt: r.startedAt, completedAt: r.completedAt,
@@ -268,18 +379,18 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     // Отчёт: распределения ответов и места, где бросают анкету
-    priv.get<{ Params: { id: string }; Querystring: { statuses?: string; test?: string; filter?: string } }>('/api/admin/surveys/:id/report', async (req, reply) => {
-      const s = await surveys.get(req.params.id);
-      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
+    priv.get<{ Params: { id: string }; Querystring: { statuses?: string; test?: string; filter?: string } }>('/api/admin/projects/:id/report', async (req, reply) => {
+      const l = await loadProject(req.params.id);
+      if (!l) return reply.code(404).send({ error: 'Проект не найден' });
       const test = req.query.test === '1';
-      const def = test ? s.draft : s.published ?? s.draft;
+      const def = defFor(l, test);
       const statuses = (req.query.statuses?.split(',').filter((x) => ALL_STATUSES.includes(x as ResponseStatus)) ?? ['completed']) as ResponseStatus[];
       // Подгруппа: условие как у showIf (по ответам и параметрам ссылки)
       let filter: Condition | undefined;
       if (req.query.filter) {
         try { filter = JSON.parse(req.query.filter); } catch { return reply.code(400).send({ error: 'Фильтр: некорректный JSON' }); }
       }
-      const all = (await responses.list(s.id, { includeTest: test }))
+      const all = (await responses.list(l.project.id, { includeTest: test }))
         .filter((r) => r.isTest === test)
         .filter((r) => !filter || evalCondition(filter, { survey: def, answers: r.answers, params: r.params, seed: r.id }));
       const unfinished = all
@@ -289,22 +400,22 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     priv.get<{ Params: { id: string; format: string }; Querystring: { statuses?: string; test?: string; from?: string; to?: string; timings?: string; rejected?: string } }>(
-      '/api/admin/surveys/:id/export.:format',
+      '/api/admin/projects/:id/export.:format',
       async (req, reply) => {
-        const s = await surveys.get(req.params.id);
-        if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
-        const def = req.query.test === '1' ? s.draft : s.published ?? s.draft;
+        const l = await loadProject(req.params.id);
+        if (!l) return reply.code(404).send({ error: 'Проект не найден' });
+        const def = defFor(l, req.query.test === '1');
         const statuses = (req.query.statuses?.split(',').filter((x) => ALL_STATUSES.includes(x as ResponseStatus)) ?? ['completed']) as ResponseStatus[];
         // Даты — дни в формате YYYY-MM-DD (по UTC-границам суток сервера); to — включительно
         const day = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined);
         const from = day(req.query.from) ? `${req.query.from}T00:00:00` : undefined;
         const to = day(req.query.to) ? new Date(Date.parse(`${req.query.to}T00:00:00Z`) + 86400_000).toISOString().slice(0, 19) : undefined;
-        const list = (await responses.list(s.id, {
+        const list = (await responses.list(l.project.id, {
           includeTest: req.query.test === '1', statuses, includeRejected: req.query.rejected === '1', from, to,
         })).filter((r) => (req.query.test === '1' ? r.isTest : !r.isTest));
         const table = buildTable(def, list, { timings: req.query.timings === '1' });
         const date = new Date().toISOString().slice(0, 10);
-        const base = `${def.title.slice(0, 60)}_${date}${req.query.test === '1' ? '_test' : ''}`;
+        const base = `${l.project.title.slice(0, 60)}_${date}${req.query.test === '1' ? '_test' : ''}`;
         if (req.params.format === 'xlsx') {
           reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
           reply.header('Content-Disposition', attachment(`${base}.xlsx`));
@@ -322,19 +433,15 @@ export async function adminRoutes(app: FastifyInstance) {
             .map((row) => row.map((x) => esc(String(x ?? ''))).join(';'));
           reply.header('Content-Type', 'text/csv; charset=utf-8');
           reply.header('Content-Disposition', attachment(`${base}.csv`));
-          return reply.send('\ufeff' + lines.join('\r\n'));
+          return reply.send('﻿' + lines.join('\r\n'));
         }
-        if (req.params.format === 'json') {
-          reply.header('Content-Disposition', attachment(`${def.title.slice(0, 60)}.json`));
-          return reply.send(JSON.stringify(s.draft, null, 2));
-        }
-        return reply.code(400).send({ error: 'Формат: xlsx, sav, csv или json' });
+        return reply.code(400).send({ error: 'Формат: xlsx, sav или csv' });
       },
     );
 
-    priv.put<{ Params: { id: string }; Body: Partial<NotifyConfig> | null }>('/api/admin/surveys/:id/notify', async (req, reply) => {
-      const s = await surveys.get(req.params.id);
-      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
+    priv.put<{ Params: { id: string }; Body: Partial<NotifyConfig> | null }>('/api/admin/projects/:id/notify', async (req, reply) => {
+      const p = await projects.get(req.params.id);
+      if (!p) return reply.code(404).send({ error: 'Проект не найден' });
       const b = req.body ?? {};
       const webhookUrl = String(b.webhookUrl ?? '').trim() || undefined;
       if (webhookUrl && !/^https?:\/\/\S+$/i.test(webhookUrl)) return reply.code(400).send({ error: 'Адрес вебхука должен начинаться с http:// или https://' });
@@ -342,24 +449,24 @@ export async function adminRoutes(app: FastifyInstance) {
       if (telegramChatId && !/^(-?\d+|@\w{4,})$/.test(telegramChatId)) return reply.code(400).send({ error: 'ID чата Telegram: число (например, -1001234567890) или @имя_канала' });
       const everyN = Math.max(0, Math.round(Number(b.everyN) || 0)) || undefined;
       const cfg: NotifyConfig | null = webhookUrl || telegramChatId
-        ? { webhookUrl, telegramChatId, everyN, quotaFull: !!b.quotaFull, limitReached: !!b.limitReached, lastError: s.notify?.lastError ?? null, lastSentAt: s.notify?.lastSentAt }
+        ? { webhookUrl, telegramChatId, everyN, quotaFull: !!b.quotaFull, limitReached: !!b.limitReached, lastError: p.notify?.lastError ?? null, lastSentAt: p.notify?.lastSentAt }
         : null;
-      await surveys.setNotify(s.id, cfg);
+      await projects.setNotify(p.id, cfg);
       return { ok: true, notify: cfg };
     });
 
-    priv.post<{ Params: { id: string } }>('/api/admin/surveys/:id/notify/test', async (req, reply) => {
-      const s = await surveys.get(req.params.id);
-      if (!s?.notify) return reply.code(400).send({ error: 'Сначала сохраните вебхук или чат Telegram' });
-      const error = await send(s.id, s.published?.title ?? s.title, s.notify, { kind: 'test' });
+    priv.post<{ Params: { id: string } }>('/api/admin/projects/:id/notify/test', async (req, reply) => {
+      const p = await projects.get(req.params.id);
+      if (!p?.notify) return reply.code(400).send({ error: 'Сначала сохраните вебхук или чат Telegram' });
+      const error = await send(p.id, p.title, p.notify, { kind: 'test' });
       return error ? reply.code(502).send({ error }) : { ok: true };
     });
 
-    priv.put<{ Params: { id: string }; Body: Partial<SheetsConfig> | null }>('/api/admin/surveys/:id/sheets', async (req, reply) => {
-      const s = await surveys.get(req.params.id);
-      if (!s) return reply.code(404).send({ error: 'Анкета не найдена' });
+    priv.put<{ Params: { id: string }; Body: Partial<SheetsConfig> | null }>('/api/admin/projects/:id/sheets', async (req, reply) => {
+      const p = await projects.get(req.params.id);
+      if (!p) return reply.code(404).send({ error: 'Проект не найден' });
       if (!req.body || !req.body.spreadsheetId) {
-        await surveys.setSheets(s.id, null);
+        await projects.setSheets(p.id, null);
         return { ok: true };
       }
       // Принимаем и полную ссылку на таблицу, и её ID
@@ -370,22 +477,22 @@ export async function adminRoutes(app: FastifyInstance) {
         auto: req.body.auto !== false,
         statuses: (req.body.statuses?.filter((x) => ALL_STATUSES.includes(x)) ?? ['completed']) as ResponseStatus[],
         values: req.body.values === 'codes' ? 'codes' : 'labels',
-        lastSyncAt: s.sheets?.lastSyncAt,
-        lastError: s.sheets?.lastError ?? null,
+        lastSyncAt: p.sheets?.lastSyncAt,
+        lastError: p.sheets?.lastError ?? null,
       };
-      await surveys.setSheets(s.id, cfg);
+      await projects.setSheets(p.id, cfg);
       return { ok: true, sheets: cfg };
     });
 
-    priv.post<{ Params: { id: string } }>('/api/admin/surveys/:id/sheets/sync', async (req, reply) => {
-      const s = await surveys.get(req.params.id);
-      if (!s?.sheets) return reply.code(400).send({ error: 'Google Sheets не настроен для этой анкеты' });
+    priv.post<{ Params: { id: string } }>('/api/admin/projects/:id/sheets/sync', async (req, reply) => {
+      const p = await projects.get(req.params.id);
+      if (!p?.sheets) return reply.code(400).send({ error: 'Google Sheets не настроен для этого проекта' });
       try {
-        const n = await queueFullSync(s.id, s.sheets);
-        await surveys.setSheets(s.id, { ...s.sheets, lastSyncAt: new Date().toISOString(), lastError: null });
+        const n = await queueFullSync(p.id, p.sheets);
+        await projects.setSheets(p.id, { ...p.sheets, lastSyncAt: new Date().toISOString(), lastError: null });
         return { rows: n };
       } catch (e) {
-        await surveys.setSheets(s.id, { ...s.sheets, lastError: (e as Error).message });
+        await projects.setSheets(p.id, { ...p.sheets, lastError: (e as Error).message });
         return reply.code(502).send({ error: (e as Error).message });
       }
     });

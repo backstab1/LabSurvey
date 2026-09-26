@@ -3,7 +3,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { GoogleAuth } from 'google-auth-library';
 import { config } from './config.ts';
-import { responses, surveys, type SheetsConfig } from './db.ts';
+import { projects, responses, type SheetsConfig } from './db.ts';
+import { loadProject } from './projectCtx.ts';
 import { buildTable, cellToText, withLabels } from './export/table.ts';
 
 const API = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -47,11 +48,11 @@ async function ensureSheet(cfg: SheetsConfig): Promise<void> {
   }
 }
 
-async function buildValues(surveyId: string, cfg: SheetsConfig) {
-  const s = await surveys.get(surveyId);
-  if (!s?.published) throw new Error('Анкета не опубликована');
-  const list = await responses.list(surveyId, { statuses: cfg.statuses });
-  const table = buildTable(s.published, list);
+async function buildValues(projectId: string, cfg: SheetsConfig) {
+  const l = await loadProject(projectId);
+  if (!l?.live) throw new Error('Анкета проекта не опубликована');
+  const list = await responses.list(projectId, { statuses: cfg.statuses });
+  const table = buildTable(l.live, list);
   const rows = cfg.values === 'labels' ? withLabels(table) : table.rows;
   return {
     header: table.vars.map((v) => v.name),
@@ -61,9 +62,9 @@ async function buildValues(surveyId: string, cfg: SheetsConfig) {
 }
 
 /** Полная перезапись листа */
-export async function fullSync(surveyId: string, cfg: SheetsConfig): Promise<number> {
+export async function fullSync(projectId: string, cfg: SheetsConfig): Promise<number> {
   await ensureSheet(cfg);
-  const { header, rows } = await buildValues(surveyId, cfg);
+  const { header, rows } = await buildValues(projectId, cfg);
   await request('POST', `${API}/${cfg.spreadsheetId}/values/${range(cfg.sheetName, 'A:ZZZ')}:clear`, {});
   await request('PUT', `${API}/${cfg.spreadsheetId}/values/${range(cfg.sheetName, 'A1')}?valueInputOption=RAW`, {
     values: [header, ...rows],
@@ -72,15 +73,15 @@ export async function fullSync(surveyId: string, cfg: SheetsConfig): Promise<num
 }
 
 /** Дописывает одного респондента; если структура столбцов изменилась — перезаписывает лист целиком */
-async function appendOne(surveyId: string, responseId: string, cfg: SheetsConfig): Promise<void> {
+async function appendOne(projectId: string, responseId: string, cfg: SheetsConfig): Promise<void> {
   await ensureSheet(cfg);
-  const { header, rows, ids } = await buildValues(surveyId, cfg);
+  const { header, rows, ids } = await buildValues(projectId, cfg);
   const idx = ids.indexOf(responseId);
   if (idx < 0) return;
   const current = await request('GET', `${API}/${cfg.spreadsheetId}/values/${range(cfg.sheetName, '1:1')}`);
   const currentHeader: string[] = current.values?.[0] ?? [];
   if (currentHeader.join('\u0001') !== header.join('\u0001')) {
-    await fullSync(surveyId, cfg);
+    await fullSync(projectId, cfg);
     return;
   }
   await request(
@@ -93,28 +94,27 @@ async function appendOne(surveyId: string, responseId: string, cfg: SheetsConfig
 // Очередь по анкетам — записи в одну таблицу идут последовательно
 const queues = new Map<string, Promise<void>>();
 
-export function queueResponseSync(surveyId: string, responseId: string): void {
-  const prev = queues.get(surveyId) ?? Promise.resolve();
+export function queueResponseSync(projectId: string, responseId: string): void {
+  const prev = queues.get(projectId) ?? Promise.resolve();
   const next = prev.then(async () => {
-    const s = await surveys.get(surveyId);
-    const cfg = s?.sheets;
+    const cfg = (await projects.get(projectId))?.sheets;
     if (!cfg?.auto || !cfg.spreadsheetId) return;
     const r = await responses.get(responseId);
     if (!r || r.isTest || !cfg.statuses.includes(r.status)) return;
     try {
-      await appendOne(surveyId, responseId, cfg);
-      await surveys.setSheets(surveyId, { ...cfg, lastSyncAt: new Date().toISOString(), lastError: null });
+      await appendOne(projectId, responseId, cfg);
+      await projects.setSheets(projectId, { ...cfg, lastSyncAt: new Date().toISOString(), lastError: null });
     } catch (e) {
-      console.error(`[sheets] ${surveyId}:`, e);
-      await surveys.setSheets(surveyId, { ...cfg, lastError: (e as Error).message });
+      console.error(`[sheets] ${projectId}:`, e);
+      await projects.setSheets(projectId, { ...cfg, lastError: (e as Error).message });
     }
   });
-  queues.set(surveyId, next);
+  queues.set(projectId, next);
 }
 
-export function queueFullSync(surveyId: string, cfg: SheetsConfig): Promise<number> {
-  const prev = queues.get(surveyId) ?? Promise.resolve();
-  const result = prev.then(() => fullSync(surveyId, cfg));
-  queues.set(surveyId, result.then(() => undefined, () => undefined));
+export function queueFullSync(projectId: string, cfg: SheetsConfig): Promise<number> {
+  const prev = queues.get(projectId) ?? Promise.resolve();
+  const result = prev.then(() => fullSync(projectId, cfg));
+  queues.set(projectId, result.then(() => undefined, () => undefined));
   return result;
 }

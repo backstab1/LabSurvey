@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes } from 'node:crypto';
 import { config } from './config.ts';
-import type { Answers, Survey } from '../shared/types.ts';
+import { stripProjectFields, type Answers, type ProjectSettings, type ProjectStatus, type Quota, type Survey } from '../shared/types.ts';
 import { migrateSurvey } from '../shared/migrate.ts';
 import type { ResponseRecord, ResponseStatus } from '../shared/variables.ts';
 
@@ -62,6 +62,22 @@ if (!responseCols.includes('timings')) db.exec('ALTER TABLE responses ADD COLUMN
 if (!responseCols.includes('rejected')) db.exec('ALTER TABLE responses ADD COLUMN rejected INTEGER NOT NULL DEFAULT 0');
 if (!versionCols.includes('published_by')) db.exec('ALTER TABLE survey_versions ADD COLUMN published_by TEXT');
 db.exec(`
+  CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    survey_id TEXT NOT NULL REFERENCES surveys(id),
+    status TEXT NOT NULL DEFAULT 'development',
+    settings TEXT,
+    quotas TEXT,
+    sheets TEXT,
+    notify TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS projects_survey ON projects(survey_id);
+`);
+migrateToProjects();
+db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     login TEXT PRIMARY KEY COLLATE NOCASE,
     password TEXT NOT NULL,
@@ -71,6 +87,78 @@ db.exec(`
     last_login_at TEXT
   );
 `);
+
+/**
+ * Переход на проекты (один раз): каждая анкета становится проектом с тем же ID — ссылки респондентов и ответы
+ * сохраняются. Настройки сбора, квоты, Google Sheets и уведомления переезжают из анкеты в проект.
+ */
+function migrateToProjects() {
+  const cols = (db.prepare('PRAGMA table_info(responses)').all() as { name: string }[]).map((c) => c.name);
+  if (cols.includes('project_id')) return;
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('BEGIN');
+  try {
+    const t = new Date().toISOString();
+    for (const s of db.prepare('SELECT * FROM surveys').all() as Record<string, unknown>[]) {
+      const draft = JSON.parse(s.draft as string) as Survey;
+      const live = s.published ? (JSON.parse(s.published as string) as Survey) : null;
+      const src = live ?? draft;
+      const settings: Record<string, unknown> = {};
+      for (const k of ['openFrom', 'closeAt', 'maxResponses', 'password', 'allowRetake', 'uniqueParam', 'maxStartsPerIpHour', 'minDurationSec']) {
+        const v = (src.settings as Record<string, unknown> | undefined)?.[k];
+        if (v !== undefined) settings[k] = v;
+      }
+      const status: ProjectStatus = s.archived === 1 ? 'archive' : s.status === 'active' ? 'collecting' : s.status === 'closed' ? 'processing' : 'development';
+      db.prepare(`INSERT INTO projects (id, title, survey_id, status, settings, quotas, sheets, notify, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        s.id as string, s.title as string, s.id as string, status,
+        Object.keys(settings).length ? JSON.stringify(settings) : null,
+        src.quotas?.length ? JSON.stringify(src.quotas) : null,
+        (s.sheets as string) ?? null, (s.notify as string) ?? null, (s.created_at as string) ?? t, t,
+      );
+      db.prepare('UPDATE surveys SET draft = ?, published = ?, archived = 0 WHERE id = ?').run(
+        JSON.stringify(stripProjectFields(draft)), live ? JSON.stringify(stripProjectFields(live)) : null, s.id as string,
+      );
+    }
+    db.exec(`
+      CREATE TABLE responses_new (
+        id TEXT PRIMARY KEY,
+        project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+        survey_id TEXT NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        is_test INTEGER NOT NULL DEFAULT 0,
+        answers TEXT NOT NULL DEFAULT '{}',
+        history TEXT NOT NULL DEFAULT '[]',
+        current_page TEXT,
+        params TEXT NOT NULL DEFAULT '{}',
+        ip TEXT,
+        user_agent TEXT,
+        started_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        completed_at TEXT,
+        duration_sec INTEGER,
+        ending TEXT,
+        timings TEXT,
+        rejected INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT INTO responses_new (id, project_id, survey_id, version, status, is_test, answers, history, current_page, params, ip, user_agent,
+        started_at, updated_at, completed_at, duration_sec, ending, timings, rejected)
+        SELECT id, survey_id, survey_id, version, status, is_test, answers, history, current_page, params, ip, user_agent,
+        started_at, updated_at, completed_at, duration_sec, ending, timings, rejected FROM responses;
+      DROP TABLE responses;
+      ALTER TABLE responses_new RENAME TO responses;
+      CREATE INDEX responses_project ON responses(project_id, is_test, status);
+      CREATE INDEX responses_survey ON responses(survey_id);
+    `);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
 
 /** Согласованная копия базы в файл (работает, пока сервис принимает ответы) */
 export function backupTo(file: string): void {
@@ -124,7 +212,23 @@ export interface SurveyVersion {
   questions: number;
 }
 
+export interface ProjectRow {
+  id: string;
+  title: string;
+  surveyId: string;
+  status: ProjectStatus;
+  settings: ProjectSettings;
+  quotas: Quota[];
+  sheets: SheetsConfig | null;
+  notify: NotifyConfig | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface StoredResponse extends ResponseRecord {
+  /** Проект; null — предпросмотр анкеты из конструктора (вне проекта) */
+  projectId: string | null;
+  /** Анкета */
   surveyId: string;
   /** Своё сообщение / редирект из сработавшего действия «Завершить» или «Отсеять» */
   ending?: { message?: string; redirect?: string } | null;
@@ -161,9 +265,25 @@ function toSurvey(r: Row): SurveyRow {
   };
 }
 
+function toProject(r: Row): ProjectRow {
+  return {
+    id: r.id as string,
+    title: r.title as string,
+    surveyId: r.survey_id as string,
+    status: r.status as ProjectStatus,
+    settings: r.settings ? JSON.parse(r.settings as string) : {},
+    quotas: r.quotas ? JSON.parse(r.quotas as string) : [],
+    sheets: r.sheets ? JSON.parse(r.sheets as string) : null,
+    notify: r.notify ? JSON.parse(r.notify as string) : null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  };
+}
+
 function toResponse(r: Row): StoredResponse {
   return {
     id: r.id as string,
+    projectId: (r.project_id as string) ?? null,
     surveyId: r.survey_id as string,
     version: r.version as number,
     status: r.status as ResponseStatus,
@@ -185,20 +305,13 @@ function toResponse(r: Row): StoredResponse {
 }
 
 export const surveys = {
-  async list(): Promise<(Omit<SurveyRow, 'draft' | 'published' | 'notify'> & { counts: Record<string, number> })[]> {
-    const rows = db.prepare('SELECT id, title, version, status, sheets, archived, created_at, updated_at FROM surveys ORDER BY updated_at DESC').all() as Row[];
-    const counts = db.prepare(
-      'SELECT survey_id, status, COUNT(*) AS n FROM responses WHERE is_test = 0 GROUP BY survey_id, status',
-    ).all() as Row[];
-    return rows.map((r) => {
-      const c: Record<string, number> = {};
-      for (const x of counts) if (x.survey_id === r.id) c[x.status as string] = x.n as number;
-      return {
-        id: r.id as string, title: r.title as string, version: r.version as number, status: r.status as SurveyStatus,
-        sheets: r.sheets ? JSON.parse(r.sheets as string) : null, archived: r.archived === 1,
-        createdAt: r.created_at as string, updatedAt: r.updated_at as string, counts: c,
-      };
-    });
+  async list(): Promise<{ id: string; title: string; version: number; archived: boolean; createdAt: string; updatedAt: string; projects: number; unpublished: boolean }[]> {
+    const rows = db.prepare(`SELECT s.id, s.title, s.version, s.archived, s.created_at, s.updated_at, (s.published IS NULL OR s.published <> s.draft) AS unpublished,
+      (SELECT COUNT(*) FROM projects p WHERE p.survey_id = s.id) AS projects FROM surveys s ORDER BY s.updated_at DESC`).all() as Row[];
+    return rows.map((r) => ({
+      id: r.id as string, title: r.title as string, version: r.version as number, archived: r.archived === 1,
+      createdAt: r.created_at as string, updatedAt: r.updated_at as string, projects: r.projects as number, unpublished: r.unpublished === 1,
+    }));
   },
 
   async get(id: string): Promise<SurveyRow | null> {
@@ -224,8 +337,7 @@ export const surveys = {
     const t = now();
     db.exec('BEGIN');
     try {
-      db.prepare('UPDATE surveys SET published = draft, version = ?, status = CASE status WHEN \'draft\' THEN \'active\' ELSE status END, updated_at = ? WHERE id = ?')
-        .run(version, t, id);
+      db.prepare('UPDATE surveys SET published = draft, version = ?, updated_at = ? WHERE id = ?').run(version, t, id);
       db.prepare('INSERT INTO survey_versions (survey_id, version, definition, published_at, published_by) VALUES (?, ?, ?, ?, ?)')
         .run(id, version, JSON.stringify(s.draft), t, by);
       db.exec('COMMIT');
@@ -236,14 +348,8 @@ export const surveys = {
     return version;
   },
 
-  async setStatus(id: string, status: SurveyStatus): Promise<void> {
-    db.prepare('UPDATE surveys SET status = ?, updated_at = ? WHERE id = ?').run(status, now(), id);
-  },
-
   async setArchived(id: string, archived: boolean): Promise<void> {
-    // Архивная анкета не собирает ответы
-    db.prepare(`UPDATE surveys SET archived = ?, status = CASE WHEN ? = 1 AND status = 'active' THEN 'closed' ELSE status END WHERE id = ?`)
-      .run(archived ? 1 : 0, archived ? 1 : 0, id);
+    db.prepare('UPDATE surveys SET archived = ? WHERE id = ?').run(archived ? 1 : 0, id);
   },
 
   async versions(id: string): Promise<SurveyVersion[]> {
@@ -262,16 +368,64 @@ export const surveys = {
     return r ? (migrateSurvey(JSON.parse(r.definition as string)) as Survey) : null;
   },
 
+  async remove(id: string): Promise<void> {
+    db.prepare('DELETE FROM surveys WHERE id = ?').run(id);
+  },
+};
+
+export const projects = {
+  async list(): Promise<(ProjectRow & { surveyTitle: string; counts: Record<string, number> })[]> {
+    const rows = db.prepare(`SELECT p.*, s.title AS survey_title FROM projects p JOIN surveys s ON s.id = p.survey_id ORDER BY p.updated_at DESC`).all() as Row[];
+    const counts = db.prepare(
+      'SELECT project_id, status, COUNT(*) AS n FROM responses WHERE is_test = 0 AND rejected = 0 AND project_id IS NOT NULL GROUP BY project_id, status',
+    ).all() as Row[];
+    return rows.map((r) => {
+      const c: Record<string, number> = {};
+      for (const x of counts) if (x.project_id === r.id) c[x.status as string] = x.n as number;
+      return { ...toProject(r), surveyTitle: r.survey_title as string, counts: c };
+    });
+  },
+
+  async get(id: string): Promise<ProjectRow | null> {
+    const r = db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as Row | undefined;
+    return r ? toProject(r) : null;
+  },
+
+  async bySurvey(surveyId: string): Promise<ProjectRow[]> {
+    return (db.prepare('SELECT * FROM projects WHERE survey_id = ? ORDER BY created_at').all(surveyId) as Row[]).map(toProject);
+  },
+
+  async create(p: { title: string; surveyId: string }): Promise<ProjectRow> {
+    let id = newId(8);
+    // ID проекта — в ссылке респондента (/s/ID): не должен совпадать с ID анкеты
+    while (db.prepare('SELECT 1 FROM surveys WHERE id = ? UNION SELECT 1 FROM projects WHERE id = ?').get(id, id)) id = newId(8);
+    const t = now();
+    db.prepare('INSERT INTO projects (id, title, survey_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(id, p.title, p.surveyId, t, t);
+    return (await this.get(id))!;
+  },
+
+  async update(id: string, patch: { title?: string; surveyId?: string; status?: ProjectStatus; settings?: ProjectSettings; quotas?: Quota[] }): Promise<void> {
+    const sets: string[] = ['updated_at = ?'];
+    const vals: (string | null)[] = [now()];
+    if (patch.title !== undefined) { sets.push('title = ?'); vals.push(patch.title); }
+    if (patch.surveyId !== undefined) { sets.push('survey_id = ?'); vals.push(patch.surveyId); }
+    if (patch.status !== undefined) { sets.push('status = ?'); vals.push(patch.status); }
+    if (patch.settings !== undefined) { sets.push('settings = ?'); vals.push(Object.keys(patch.settings).length ? JSON.stringify(patch.settings) : null); }
+    if (patch.quotas !== undefined) { sets.push('quotas = ?'); vals.push(patch.quotas.length ? JSON.stringify(patch.quotas) : null); }
+    vals.push(id);
+    db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  },
+
   async setNotify(id: string, notify: NotifyConfig | null): Promise<void> {
-    db.prepare('UPDATE surveys SET notify = ? WHERE id = ?').run(notify ? JSON.stringify(notify) : null, id);
+    db.prepare('UPDATE projects SET notify = ? WHERE id = ?').run(notify ? JSON.stringify(notify) : null, id);
   },
 
   async setSheets(id: string, sheets: SheetsConfig | null): Promise<void> {
-    db.prepare('UPDATE surveys SET sheets = ? WHERE id = ?').run(sheets ? JSON.stringify(sheets) : null, id);
+    db.prepare('UPDATE projects SET sheets = ? WHERE id = ?').run(sheets ? JSON.stringify(sheets) : null, id);
   },
 
   async remove(id: string): Promise<void> {
-    db.prepare('DELETE FROM surveys WHERE id = ?').run(id);
+    db.prepare('DELETE FROM projects WHERE id = ?').run(id);
   },
 };
 
@@ -280,9 +434,9 @@ export const responses = {
     const id = newId(12);
     const t = now();
     db.prepare(`INSERT INTO responses
-      (id, survey_id, version, status, is_test, answers, history, current_page, params, ip, user_agent, started_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      id, r.surveyId, r.version, r.status, r.isTest ? 1 : 0, JSON.stringify(r.answers), JSON.stringify(r.history),
+      (id, project_id, survey_id, version, status, is_test, answers, history, current_page, params, ip, user_agent, started_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      id, r.projectId, r.surveyId, r.version, r.status, r.isTest ? 1 : 0, JSON.stringify(r.answers), JSON.stringify(r.history),
       r.currentPage, JSON.stringify(r.params), r.ip, r.userAgent, r.startedAt, t,
     );
     return (await this.get(id))!;
@@ -315,12 +469,12 @@ export const responses = {
     db.prepare(`UPDATE responses SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
   },
 
-  /** Ответы анкеты; бракованные — только с includeRejected, from / to — по времени начала (ISO) */
-  async list(surveyId: string, opts: {
+  /** Ответы проекта; бракованные — только с includeRejected, from / to — по времени начала (ISO) */
+  async list(projectId: string, opts: {
     includeTest?: boolean; statuses?: ResponseStatus[]; includeRejected?: boolean; from?: string; to?: string;
   } = {}): Promise<StoredResponse[]> {
-    let sql = 'SELECT * FROM responses WHERE survey_id = ?';
-    const vals: (string | number)[] = [surveyId];
+    let sql = 'SELECT * FROM responses WHERE project_id = ?';
+    const vals: (string | number)[] = [projectId];
     if (!opts.includeTest) sql += ' AND is_test = 0';
     if (!opts.includeRejected) sql += ' AND rejected = 0';
     if (opts.from) { sql += ' AND started_at >= ?'; vals.push(opts.from); }
@@ -334,24 +488,24 @@ export const responses = {
   },
 
   /** Последняя настоящая (не тестовая) анкета с этим значением параметра ссылки */
-  async findByParam(surveyId: string, key: string, value: string): Promise<StoredResponse | null> {
-    const r = db.prepare(`SELECT * FROM responses WHERE survey_id = ? AND is_test = 0 AND json_extract(params, ?) = ?
-      ORDER BY started_at DESC LIMIT 1`).get(surveyId, `$."${key.replace(/"/g, '')}"`, value) as Row | undefined;
+  async findByParam(projectId: string, key: string, value: string): Promise<StoredResponse | null> {
+    const r = db.prepare(`SELECT * FROM responses WHERE project_id = ? AND is_test = 0 AND json_extract(params, ?) = ?
+      ORDER BY started_at DESC LIMIT 1`).get(projectId, `$."${key.replace(/"/g, '')}"`, value) as Row | undefined;
     return r ? toResponse(r) : null;
   },
 
   /** Сколько настоящих анкет начато с этого IP за последние sinceSec секунд */
-  async countByIp(surveyId: string, ip: string, sinceSec: number): Promise<number> {
+  async countByIp(projectId: string, ip: string, sinceSec: number): Promise<number> {
     const since = new Date(Date.now() - sinceSec * 1000).toISOString();
-    const r = db.prepare('SELECT COUNT(*) AS n FROM responses WHERE survey_id = ? AND is_test = 0 AND ip = ? AND started_at >= ?')
-      .get(surveyId, ip, since) as Row;
+    const r = db.prepare('SELECT COUNT(*) AS n FROM responses WHERE project_id = ? AND is_test = 0 AND ip = ? AND started_at >= ?')
+      .get(projectId, ip, since) as Row;
     return r.n as number;
   },
 
   /** Счётчики по статусам; бракованные анкеты считаются отдельно (rejected) и в статусы не входят */
-  async counts(surveyId: string): Promise<{ real: Record<string, number>; test: number; rejected: number }> {
-    const rows = db.prepare('SELECT is_test, status, rejected, COUNT(*) AS n FROM responses WHERE survey_id = ? GROUP BY is_test, status, rejected')
-      .all(surveyId) as Row[];
+  async counts(projectId: string): Promise<{ real: Record<string, number>; test: number; rejected: number }> {
+    const rows = db.prepare('SELECT is_test, status, rejected, COUNT(*) AS n FROM responses WHERE project_id = ? GROUP BY is_test, status, rejected')
+      .all(projectId) as Row[];
     const real: Record<string, number> = {};
     let test = 0;
     let rejected = 0;
@@ -367,8 +521,8 @@ export const responses = {
     db.prepare('DELETE FROM responses WHERE id = ?').run(id);
   },
 
-  async deleteTest(surveyId: string): Promise<number> {
-    return Number(db.prepare('DELETE FROM responses WHERE survey_id = ? AND is_test = 1').run(surveyId).changes);
+  async deleteTest(projectId: string): Promise<number> {
+    return Number(db.prepare('DELETE FROM responses WHERE project_id = ? AND is_test = 1').run(projectId).changes);
   },
 };
 

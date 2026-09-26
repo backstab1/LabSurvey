@@ -528,3 +528,47 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   info: 'Информационный блок',
   hidden: 'Скрытая переменная',
 };
+
+// ---- Проекты ----
+
+/**
+ * Проект — запуск анкеты: статус сбора, сроки, лимиты, доступ, квоты, данные и отчёты.
+ * У проекта одна анкета; одну анкету можно запускать в нескольких проектах (волны, разные панели).
+ */
+export type ProjectStatus = 'development' | 'collecting' | 'processing' | 'archive';
+
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  development: 'Разработка',
+  collecting: 'Сбор данных',
+  processing: 'Обработка',
+  archive: 'Архив',
+};
+
+/** Настройки сбора: живут в проекте и накладываются на настройки анкеты */
+export const PROJECT_SETTING_KEYS = [
+  'openFrom', 'closeAt', 'maxResponses', 'password', 'allowRetake', 'uniqueParam', 'maxStartsPerIpHour', 'minDurationSec',
+] as const;
+export type ProjectSettings = Pick<SurveySettings, (typeof PROJECT_SETTING_KEYS)[number]>;
+
+export interface ProjectConfig {
+  settings?: ProjectSettings;
+  quotas?: Quota[];
+}
+
+/** Анкета с настройками сбора и квотами проекта — её видит движок опроса, выгрузка и отчёт */
+export function effectiveSurvey(survey: Survey, project: ProjectConfig | null): Survey {
+  if (!project) return survey;
+  const own = { ...survey.settings } as Record<string, unknown>;
+  for (const k of PROJECT_SETTING_KEYS) delete own[k];
+  const settings = { ...own, ...project.settings } as SurveySettings;
+  const { quotas: _q, ...rest } = survey;
+  return { ...rest, settings, ...(project.quotas?.length ? { quotas: project.quotas } : {}) };
+}
+
+/** Убирает из анкеты то, что теперь задаётся в проекте (настройки сбора и квоты) */
+export function stripProjectFields(survey: Survey): Survey {
+  const settings = { ...survey.settings } as Record<string, unknown>;
+  for (const k of PROJECT_SETTING_KEYS) delete settings[k];
+  const { quotas: _q, ...rest } = survey;
+  return { ...rest, ...(Object.keys(settings).length ? { settings: settings as SurveySettings } : {}) };
+}

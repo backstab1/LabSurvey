@@ -43,28 +43,37 @@ async function adminContext(): Promise<{ ctx: BrowserContext; page: Page }> {
   await page.getByLabel('Логин').fill('admin');
   await page.getByLabel('Пароль').fill('e2e-secret');
   await page.getByRole('button', { name: 'Войти' }).click();
-  await page.getByRole('heading', { name: 'Анкеты' }).waitFor();
+  await page.getByRole('heading', { name: 'Проекты' }).waitFor();
   return { ctx, page };
 }
 
 const phone = () => browser!.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, locale: 'ru-RU' });
 
-/** Создать и опубликовать анкету через API от имени вошедшего админа */
+/** Создать и опубликовать анкету через API от имени вошедшего админа и запустить её в проекте; возвращает ID проекта (ссылка /s/ID) */
 async function publishVia(ctx: BrowserContext, definition: unknown): Promise<string> {
   const created = await (await ctx.request.post(`${base}/api/admin/surveys`, { data: { definition } })).json();
   await ctx.request.post(`${base}/api/admin/surveys/${created.id}/publish`);
-  return created.id;
+  const project = await (await ctx.request.post(`${base}/api/admin/projects`, { data: { surveyId: created.id } })).json();
+  await ctx.request.post(`${base}/api/admin/projects/${project.id}/status`, { data: { status: 'collecting' } });
+  return project.id;
 }
 
 test('admin creates a survey from a template, respondent completes it on a phone, results show up', async (t) => {
   if (!needBrowser(t)) return;
   const { ctx, page } = await adminContext();
+  await page.locator('.top-nav a', { hasText: 'Анкеты' }).click();
   await page.getByRole('button', { name: '+ Новая анкета' }).click();
   await page.locator('.template-card').filter({ has: page.locator('strong', { hasText: /^NPS$/ }) }).click();
   await page.waitForURL(/\/admin\/s\/\w+/);
-  const id = page.url().match(/\/admin\/s\/(\w+)/)![1];
   await page.getByRole('button', { name: 'Опубликовать' }).click();
   await page.locator('.toast', { hasText: 'Опубликовано' }).waitFor();
+  // Запуск: проект с этой анкетой → «Начать сбор данных»
+  await page.getByRole('button', { name: '+ Запустить в проекте' }).click();
+  await page.getByRole('button', { name: 'Создать проект' }).click();
+  await page.waitForURL(/\/admin\/p\/\w+/);
+  const id = page.url().match(/\/admin\/p\/(\w+)/)![1];
+  await page.getByRole('button', { name: 'Начать сбор данных' }).click();
+  await page.locator('.badge', { hasText: 'Сбор данных' }).waitFor();
 
   const mobile = await phone();
   const r = await mobile.newPage();
@@ -88,6 +97,7 @@ test('admin creates a survey from a template, respondent completes it on a phone
 test('builder: add a question, type options with the keyboard, see it in JSON, undo', async (t) => {
   if (!needBrowser(t)) return;
   const { ctx, page } = await adminContext();
+  await page.locator('.top-nav a', { hasText: 'Анкеты' }).click();
   await page.getByRole('button', { name: '+ Новая анкета' }).click();
   await page.locator('.template-card', { hasText: 'Пустая анкета' }).click();
   await page.waitForURL(/\/admin\/s\/\w+/);
@@ -165,8 +175,8 @@ test('respondent walks a nested loop on a phone without horizontal scrolling', a
   await mobile.close();
 
   // Ответы повторов лежат под ID копий
-  const list = await (await ctx.request.get(`${base}/api/admin/surveys/${id}/responses`)).json();
-  const one = await (await ctx.request.get(`${base}/api/admin/surveys/${id}/responses/${list[0].id}`)).json();
+  const list = await (await ctx.request.get(`${base}/api/admin/projects/${id}/responses`)).json();
+  const one = await (await ctx.request.get(`${base}/api/admin/projects/${id}/responses/${list[0].id}`)).json();
   assert.equal(one.response.answers.SAT_2_2.v, 5);
   assert.equal(one.response.answers.SAT_4_2.v, 5);
   assert.equal(one.response.answers.FREQ_4.v, 2);

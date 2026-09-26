@@ -661,3 +661,26 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
 .flag-row.disabled { opacity: .45; cursor: default; }
 .list-item.is-group .list-text { font-weight: 700; }
 .list-item.is-group > .list-row { background: #f7f8fa; }
+
+/* Проекты */
+.top-nav { display: flex; gap: 2px; margin-left: 18px; }
+.top-nav a { padding: 6px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 500; font-size: 14px; }
+.top-nav a:hover { color: var(--text); background: #f1f3f6; }
+.top-nav a.active { color: var(--accent); background: var(--accent-soft); }
+.badge.status-development { background: #eceff3; color: #4a515b; }
+.badge.status-collecting { background: var(--ok-soft); color: var(--ok); }
+.badge.status-processing { background: var(--warn-soft); color: var(--warn); }
+.badge.status-archive { background: #eceff3; color: var(--muted); }
+.quota-line { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(100px, 2fr) auto; gap: 12px; align-items: center; font-size: 14px; }
+.quota-line .quota-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
+@media (max-width: 640px) { .top-nav { margin-left: 8px; } .top-nav a { padding: 6px 8px; } }
+@media (max-width: 640px) {
+  .user-menu .muted { display: none; }
+  .topbar .logo { font-size: 16px; }
+}
+@media (max-width: 420px) {
+  .top-nav { margin-left: 4px; }
+  .top-nav a { padding: 6px; font-size: 13px; }
+  .user-menu { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+}

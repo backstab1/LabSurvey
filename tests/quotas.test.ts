@@ -11,6 +11,7 @@ import type { Survey } from '../shared/types.ts';
 process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'surveylab-quotas-'));
 process.env.ADMIN_PASSWORD = 'secret';
 const { buildApp } = await import('../server/app.ts');
+const { launch } = await import('./helpers.ts');
 
 let app: FastifyInstance;
 let cookie = '';
@@ -60,8 +61,8 @@ test('quotas are validated and follow renames', () => {
 test('full quota ends the survey with overquota status and redirect', async () => {
   await login();
   const created = await call('POST', '/api/admin/surveys', { definition: survey });
-  const sid = created.json.id;
-  await call('POST', `/api/admin/surveys/${sid}/publish`);
+  await call('POST', `/api/admin/surveys/${created.json.id}/publish`);
+  const sid = await launch(call, created.json.id);
   cookie = '';
 
   assert.equal((await pass(sid, 1)).status, 'completed');
@@ -75,14 +76,14 @@ test('full quota ends the survey with overquota status and redirect', async () =
   assert.equal((await pass(sid, 2, { src: 'vk' })).status, 'overquota');
 
   await login();
-  const info = (await call('GET', `/api/admin/surveys/${sid}`)).json;
+  const info = (await call('GET', `/api/admin/projects/${sid}`)).json;
   assert.deepEqual(info.quotas.map((q: { id: string; count: number }) => [q.id, q.count]), [['QT_m', 2], ['QT_vk', 0]]);
   assert.equal(info.counts.real.overquota, 2);
 
   // Отчёт по подгруппе: только женщины
-  const all = (await call('GET', `/api/admin/surveys/${sid}/report`)).json;
+  const all = (await call('GET', `/api/admin/projects/${sid}/report`)).json;
   assert.equal(all.total, 3);
-  const women = (await call('GET', `/api/admin/surveys/${sid}/report?filter=${encodeURIComponent(JSON.stringify({ q: 'SEX', op: 'eq', value: 2 }))}`)).json;
+  const women = (await call('GET', `/api/admin/projects/${sid}/report?filter=${encodeURIComponent(JSON.stringify({ q: 'SEX', op: 'eq', value: 2 }))}`)).json;
   assert.equal(women.total, 1);
-  assert.equal((await call('GET', `/api/admin/surveys/${sid}/report?filter=%7Bbad`)).status, 400);
+  assert.equal((await call('GET', `/api/admin/projects/${sid}/report?filter=%7Bbad`)).status, 400);
 });
