@@ -9,7 +9,7 @@ import { blockOf } from '../../../shared/logic.ts';
 import { CALC_FUNCTIONS, parseCalc } from '../../../shared/calc.ts';
 import { allIds } from '../../../shared/refactor.ts';
 import { ID_RE, RESERVED_IDS } from '../../../shared/validate.ts';
-import { Flag, Menu, Modal, NumField, Segmented, compact } from './common.tsx';
+import { Flag, Menu, Modal, NumField, Segmented, compact, toast } from './common.tsx';
 import { newQuestion, TYPE_ICONS } from './Builder.tsx';
 import {
   CHOICE_TYPES, QUESTION_TYPE_LABELS, settingsOf, type Action, type MatrixQuestion, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
@@ -100,7 +100,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
         <Menu items={[
           { label: 'Предпросмотр с этого вопроса', onClick: onPreview },
           { label: 'Дублировать', onClick: onDuplicate },
-          { label: 'Копировать (JSON)', onClick: () => navigator.clipboard.writeText(JSON.stringify(q, null, 2)) },
+          { label: 'Копировать (JSON)', onClick: () => { navigator.clipboard.writeText(JSON.stringify(q, null, 2)); toast(`${q.id} скопирован — вставьте через «+» в любой анкете`); } },
           { label: 'Удалить вопрос', onClick: onDelete, danger: true },
         ]} />
         <button className="btn btn-primary btn-sm" onClick={onClose}>Готово</button>
@@ -120,7 +120,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
               <label className="field" style={{ width: 130 }}><span>ID / переменная</span>
                 <input className={`input mono${idError ? ' invalid' : ''}`} value={idDraft} title="Все ссылки на вопрос обновятся автоматически"
                   onChange={(e) => setIdDraft(e.target.value)} onBlur={commitId}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitId(); } if (e.key === 'Escape') { setIdDraft(q.id); setIdError(''); } }} />
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitId(); } if (e.key === 'Escape' && idDraft !== q.id) { e.preventDefault(); setIdDraft(q.id); setIdError(''); } }} />
                 {idError && <span className="field-error">{idError}</span>}
               </label>
               <label className="field grow"><span>Тип</span>

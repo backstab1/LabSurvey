@@ -6,7 +6,7 @@ import { ReportTab } from './ReportTab.tsx';
 import { InviteesTab } from './InviteesTab.tsx';
 import { TablesTab, type TableSet } from './TablesTab.tsx';
 import { ConditionField } from './ConditionEditor.tsx';
-import { Menu, Modal, compact, toast } from './common.tsx';
+import { Menu, Modal, compact, confirmLeave, toast, useUnsaved } from './common.tsx';
 import { nextId } from '../../../shared/refactor.ts';
 import { allQuestions } from '../../../shared/logic.ts';
 import {
@@ -217,11 +217,18 @@ export function ProjectPage({ id }: { id: string }) {
   }, [id]);
   useEffect(() => { reload().then((r) => r && setTitle(r.title)); }, [reload]);
 
+  const docTitle = info?.title;
+  useEffect(() => {
+    document.title = docTitle ? `${docTitle} — SurveyLAB` : 'SurveyLAB';
+    return () => { document.title = 'SurveyLAB'; };
+  }, [docTitle]);
+
   if (error) return <div className="container"><div className="error-box">{error}</div></div>;
   if (!info) return <div className="container muted">Загрузка…</div>;
 
   const link = `${window.location.origin}/s/${id}`;
   const changeTab = (t: Tab) => {
+    if (t === tab || !confirmLeave()) return;
     setTab(t);
     const u = new URL(window.location.href);
     u.searchParams.set('tab', t);
@@ -230,8 +237,10 @@ export function ProjectPage({ id }: { id: string }) {
   const saveTitle = async () => {
     if (title.trim() === info.title) return;
     if (!title.trim()) { setTitle(info.title); return; }
-    await api('PUT', `/api/admin/projects/${id}`, { title });
-    await reload();
+    try {
+      await api('PUT', `/api/admin/projects/${id}`, { title: title.trim() });
+      await reload();
+    } catch (e) { toast((e as Error).message); setTitle(info.title); }
   };
   const setStatus = async (status: ProjectStatus) => {
     try {
@@ -328,7 +337,7 @@ function Overview({ info, readOnly, client, setStatus, reload, onTab }: {
     <div className="stack">
       <div className="card stack">
         <div className="row" style={{ alignItems: 'center' }}>
-          <h2 className="grow" style={{ margin: 0 }}>Статус: {PROJECT_STATUS_LABELS[info.status]}</h2>
+          <h2 className="grow" style={{ margin: 0 }}>{readOnly ? `Статус: ${PROJECT_STATUS_LABELS[info.status]}` : 'Статус проекта'}</h2>
           {!readOnly && (
             <select className="input" style={{ width: 'auto' }} value={info.status} aria-label="Статус проекта"
               onChange={(e) => setStatus(e.target.value as ProjectStatus)}>
@@ -550,6 +559,7 @@ function PanelsTab({ info, readOnly, reload }: { info: ProjectInfo; readOnly: bo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const dirty = JSON.stringify(panels) !== JSON.stringify(info.panels);
+  useUnsaved(dirty);
   const setAt = (i: number, patch: Partial<Panel>) => setPanels(panels.map((p, k) => (k === i ? compact({ ...p, ...patch }) : p)));
   const add = () => {
     const used = new Set(panels.map((p) => p.id));
@@ -668,6 +678,7 @@ function QuotasTab({ info, readOnly, reload }: { info: ProjectInfo; readOnly: bo
   const [quotas, setQuotas] = useState<Quota[]>(info.quotaDefs);
   const [busy, setBusy] = useState(false);
   const dirty = JSON.stringify(quotas) !== JSON.stringify(info.quotaDefs);
+  useUnsaved(dirty);
   const def = info.published ?? info.draft;
   const setAt = (i: number, patch: Partial<Quota>) => setQuotas(quotas.map((q, k) => (k === i ? compact({ ...q, ...patch }) : q)));
   const add = () => {
@@ -747,6 +758,7 @@ function CollectionSettings({ info, readOnly, reload }: { info: ProjectInfo; rea
   const [st, setSt] = useState<ProjectSettings>(info.settings);
   const [busy, setBusy] = useState(false);
   const dirty = JSON.stringify(compact(st)) !== JSON.stringify(compact(info.settings));
+  useUnsaved(dirty);
   const set = (patch: Partial<ProjectSettings>) => setSt(compact({ ...st, ...patch }));
   const done = info.counts.real.completed ?? 0;
   const testLink = `${window.location.origin}/s/${info.id}?test=${info.testToken}`;

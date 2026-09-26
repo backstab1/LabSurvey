@@ -67,6 +67,13 @@
 .editor-head > * { flex-shrink: 0; }
 .editor-head .title-input { flex-shrink: 1; }
 @media (max-width: 1000px) { .editor-head { flex-wrap: wrap; } .editor-head .save-state { display: none; } }
+/* Шапка редактора анкеты закреплена под верхней панелью: «Опубликовать» и статус сохранения видны на длинной анкете */
+@media (min-width: 1001px) {
+  .survey-editor .editor-head { position: sticky; top: 52px; z-index: 16; background: var(--bg); margin: -8px 0 0; padding: 8px 0; }
+  .survey-editor .outline { top: 120px; max-height: calc(100vh - 136px); }
+  .survey-editor .bulk-bar { top: 116px; }
+  .survey-editor .settings-nav { top: 112px; }
+}
 .editor-head .back { font-size: 20px; }
 .title-input {
   font-size: 22px; font-weight: 700; border: 1px solid transparent; border-radius: 8px; padding: 4px 8px; background: none;
@@ -715,11 +722,12 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .daily-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; border-bottom: 1px solid var(--border); }
 .daily-col { flex: 1; min-width: 3px; height: 100%; position: relative; }
 .daily-col:hover { background: #f0f3f8; }
-.daily-started, .daily-done { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 2px 2px 0 0; }
+/* Столбик не шире 40px: при паре дней не превращается в плиту на четверть экрана */
+.daily-started, .daily-done { position: absolute; left: 50%; width: min(100%, 40px); transform: translateX(-50%); bottom: 0; border-radius: 2px 2px 0 0; }
 .daily-started { background: #d7e2f7; }
 .daily-done { background: var(--accent); }
 .daily-axis { display: flex; gap: 2px; font-size: 11px; color: var(--muted); height: 14px; }
-.daily-axis span { flex: 1; min-width: 3px; white-space: nowrap; }
+.daily-axis span { flex: 1; min-width: 3px; white-space: nowrap; text-align: center; }
 .daily-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
 .daily-key.done { background: var(--accent); }
 .daily-key.started { background: #d7e2f7; }
@@ -786,3 +794,6 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .image-pick img { width: 100%; height: 64px; object-fit: contain; }
 .image-pick span { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .image-pick:hover, .image-pick.current { border-color: var(--accent); background: var(--accent-soft); }
+
+/* Ссылки-кнопки, которые сейчас нельзя нажать (например, выгрузка без статусов) */
+.links-disabled a.btn { opacity: .5; pointer-events: none; }

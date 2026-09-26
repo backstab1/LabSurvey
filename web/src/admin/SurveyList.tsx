@@ -38,9 +38,14 @@ export function SurveyList() {
   const load = () => api<Row[]>('GET', '/api/admin/surveys').then(setRows);
   useEffect(() => { load(); }, []);
 
+  const shown = (rows ?? []).filter((r) => (status === 'archived' ? r.archived : !r.archived)
+    && r.title.toLowerCase().includes(query.trim().toLowerCase()));
+
   const createFrom = async (t: Template) => {
-    const r = await api('POST', '/api/admin/surveys', t.survey ? { definition: t.survey } : {});
-    navigate(`/admin/s/${r.id}`);
+    try {
+      const r = await api('POST', '/api/admin/surveys', t.survey ? { definition: t.survey } : {});
+      navigate(`/admin/s/${r.id}`);
+    } catch (e) { toast((e as Error).message); }
   };
 
   return (
@@ -69,8 +74,7 @@ export function SurveyList() {
               <tr><th>Название</th><th>Публикация</th><th>Проекты</th><th className="wide-only">Изменена</th><th /></tr>
             </thead>
             <tbody>
-              {rows.filter((r) => (status === 'archived' ? r.archived : !r.archived)
-                && r.title.toLowerCase().includes(query.trim().toLowerCase())).map((r) => {
+              {shown.map((r) => {
                 const ps = publishState(r);
                 return (
                 <tr key={r.id} className="clickable" onClick={() => navigate(`/admin/s/${r.id}`)}>
@@ -83,7 +87,9 @@ export function SurveyList() {
                       { label: 'Открыть', onClick: () => navigate(`/admin/s/${r.id}`) },
                       { label: 'Предпросмотр', onClick: () => window.open(`/s/${r.id}?preview=1&survey=1&new=1`, '_blank') },
                       editable && { label: 'Запустить в новом проекте', onClick: () => setProjectFor(r.id) },
-                      editable && { label: 'Дублировать', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/duplicate`); load(); } },
+                      editable && { label: 'Дублировать', onClick: async () => {
+                        try { await api('POST', `/api/admin/surveys/${r.id}/duplicate`); await load(); toast(`Создана копия «${r.title}»`); } catch (e) { toast((e as Error).message); }
+                      } },
                       editable && { label: r.archived ? 'Вернуть из архива' : 'В архив', onClick: async () => { await api('POST', `/api/admin/surveys/${r.id}/archive`, { archived: !r.archived }); load(); } },
                       editable && {
                         label: 'Удалить', danger: true, onClick: async () => {
@@ -99,6 +105,7 @@ export function SurveyList() {
                 </tr>
                 );
               })}
+              {shown.length === 0 && <tr><td colSpan={5} className="muted">{status === 'archived' && !query ? 'В архиве пусто' : 'Ничего не найдено'}</td></tr>}
             </tbody>
           </table>
         )}

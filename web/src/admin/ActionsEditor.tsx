@@ -51,7 +51,12 @@ export function describeActions(def: Survey, q: Question, list: Action[] | undef
   if (!list?.length) return '';
   return list.map((a) => {
     const cond = a.if ? `если ${describeCondition(def, a.if)} → ` : '';
-    const target = a.do === 'goTo' || a.do === 'setValue' || a.do === 'skipQuestion' || a.do === 'markAnswered' ? ` ${a.target ?? ''}` : '';
+    // Переход — коротко: «перейти к блоку «О вас»» вместо общего названия действия
+    if (a.do === 'goTo') {
+      const b = def.blocks.find((x) => x.id === a.target);
+      return `${cond}перейти к ${b ? `блоку «${b.title || b.id}»` : a.target ?? '?'}`;
+    }
+    const target = a.do === 'setValue' || a.do === 'skipQuestion' || a.do === 'markAnswered' ? ` ${a.target ?? ''}` : '';
     return `${cond}${actionLabel(a, q)}${target}`;
   }).join('; ');
 }

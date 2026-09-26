@@ -2,7 +2,7 @@ import './admin.css';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { ChangePassword, ROLE_LABELS, UsersPage, type Role } from './UsersPage.tsx';
-import { Menu, Toaster } from './common.tsx';
+import { Menu, Toaster, confirmLeave } from './common.tsx';
 import { SurveyList } from './SurveyList.tsx';
 import { ProjectList, ProjectPage } from './ProjectPage.tsx';
 import { Editor } from './Editor.tsx';
@@ -20,6 +20,7 @@ export const canEdit = (me: Me) => me.role !== 'viewer' && me.role !== 'client';
 export const isClient = (me: Me) => me.role === 'client';
 
 export function navigate(path: string) {
+  if (!confirmLeave()) return;
   window.history.pushState(null, '', path);
   window.dispatchEvent(new PopStateEvent('popstate'));
 }

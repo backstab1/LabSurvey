@@ -13,6 +13,29 @@ export function IssuesList({ issues, onPick }: { issues: Issue[]; onPick?: (wher
   );
 }
 
+/** Формы с несохранёнными правками (кнопка «Сохранить» ещё не нажата) */
+const dirtyForms = new Set<symbol>();
+
+/** Отмечает форму «есть несохранённые правки»: закрытие вкладки браузера и переходы внутри админки спросят подтверждение */
+export function useUnsaved(dirty: boolean) {
+  const [key] = useState(() => Symbol('form'));
+  useEffect(() => {
+    if (!dirty) return;
+    dirtyForms.add(key);
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', h);
+    return () => { dirtyForms.delete(key); window.removeEventListener('beforeunload', h); };
+  }, [dirty, key]);
+}
+
+/** true — можно уходить: несохранённого нет или пользователь согласился их потерять */
+export function confirmLeave(): boolean {
+  if (!dirtyForms.size) return true;
+  if (!window.confirm('Есть несохранённые изменения. Уйти без сохранения?')) return false;
+  dirtyForms.clear();
+  return true;
+}
+
 let toastSetter: ((s: string) => void) | null = null;
 export function toast(msg: string) { toastSetter?.(msg); }
 
@@ -92,11 +115,13 @@ export function Menu({ items, label = '⋯', title = 'Ещё', className = 'icon
 }
 
 /** Выпадающий список с группами и поиском (как в Survey Studio) */
-export function SearchSelect({ value, groups, onChange, className = '' }: {
+export function SearchSelect({ value, groups, onChange, className = '', placeholder = '— выберите —' }: {
   value: string;
   groups: { label: string; items: { value: string; label: string }[] }[];
   onChange: (v: string) => void;
   className?: string;
+  /** Подпись, когда ничего не выбрано */
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -119,7 +144,7 @@ export function SearchSelect({ value, groups, onChange, className = '' }: {
     <div className={`search-select ${className}`} ref={ref}>
       <button type="button" className="input search-select-btn" aria-haspopup="listbox" aria-expanded={open}
         onClick={() => { setOpen(!open); setActive(Math.max(0, flat.findIndex((i) => i.value === value))); }}>
-        <span>{current?.label ?? '— выберите —'}</span><span className="muted">▾</span>
+        <span className={current ? undefined : 'muted'}>{current?.label ?? placeholder}</span><span className="muted">▾</span>
       </button>
       {open && (
         <div className="search-select-list" role="listbox">

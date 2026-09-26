@@ -43,12 +43,14 @@ h1, h2, h3 { line-height: 1.25; }
   background: var(--surface);
 }
 textarea.input { resize: vertical; }
-.input:focus, .btn:focus-visible, .option:focus-within, .scale-point:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Рамка фокуса у варианта — только при работе с клавиатуры: при касании на телефоне хватает выделения выбранного */
+.input:focus, .btn:focus-visible, .option:has(:focus-visible), .scale-point:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .muted { color: var(--muted); }
 
 /* ---------- Прохождение опроса ---------- */
 .runner { max-width: 760px; margin: 0 auto; padding: 16px 16px 48px; }
-.runner-card { background: var(--surface); border-radius: 14px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.runner-card { background: var(--surface); border-radius: 14px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.06); overflow-wrap: break-word; }
+.runner button, .runner label { -webkit-tap-highlight-color: transparent; }
 .preview-banner { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 14px; margin-bottom: 12px; }
 .progress { height: 6px; background: #e3e6ea; border-radius: 3px; overflow: hidden; margin-bottom: 16px; }
 .progress-fill { height: 100%; background: var(--accent); transition: width .3s; }
@@ -68,7 +70,7 @@ textarea.input { resize: vertical; }
   display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer; background: var(--surface); transition: background .1s, border-color .1s;
 }
-.option:hover { border-color: #b8c0cc; }
+@media (hover: hover) { .option:hover { border-color: #b8c0cc; } }
 .option.selected { border-color: var(--accent); background: var(--accent-soft); }
 .option input { width: 20px; height: 20px; margin: 2px 0 0; flex-shrink: 0; accent-color: var(--accent); }
 .option.extra { margin-top: 12px; }

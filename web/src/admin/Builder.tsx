@@ -376,7 +376,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                     onDropHere={() => { if (drag && drop) moveQuestion(drag, drop); endDrag(); }}
                     onDuplicate={() => mutate((d) => {
                       const copy = structuredClone(q);
-                      copy.id = nextId(allIds(d), 'Q');
+                      copy.id = nextId(allIds(d), copy.type === 'hidden' ? 'H' : 'Q');
                       d.blocks[bi].questions.splice(qi + 1, 0, copy);
                     })}
                     onDelete={() => { if (window.confirm(`Удалить ${q.id}?`)) mutate((d) => { d.blocks[bi].questions.splice(qi, 1); }); }}
@@ -415,7 +415,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
           }}
           onDuplicate={() => {
             const copy = structuredClone(openQ);
-            copy.id = nextId(allIds(def), 'Q');
+            copy.id = nextId(allIds(def), copy.type === 'hidden' ? 'H' : 'Q');
             mutate((d) => { d.blocks[open.bi].questions.splice(open.qi + 1, 0, copy); });
             setOpen({ bi: open.bi, qi: open.qi + 1 });
           }}

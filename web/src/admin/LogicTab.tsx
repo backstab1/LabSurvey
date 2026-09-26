@@ -15,6 +15,8 @@ interface Arc { from: string; to: string; lane: number; y1: number; y2: number; 
 
 /** Примерное время: ~12 секунд на вопрос */
 const minutes = (n: number) => Math.max(1, Math.round((n * 12) / 60));
+/** «2» или «2–4»: одинаковые края диапазона не повторяем */
+const minutesRange = (a: number, b: number) => (minutes(a) === minutes(b) ? `${minutes(a)}` : `${minutes(a)}–${minutes(b)}`);
 
 export function LogicTab({ def, onOpen }: { def: Survey; onOpen: (id: string) => void }) {
   const flow = useMemo(() => analyzeFlow(def), [def]);
@@ -77,7 +79,7 @@ export function LogicTab({ def, onOpen }: { def: Survey; onOpen: (id: string) =>
         <Stat value={stats.questions} label="вопросов" />
         <Stat
           value={stats.minPath === null ? '—' : stats.minPath === stats.maxPath ? `${stats.minPath}` : `${stats.minPath}–${stats.maxPath}`}
-          label={stats.minPath === null ? 'завершить нельзя' : `вопросов на пути до конца · ≈ ${minutes(stats.minPath)}${stats.maxPath !== stats.minPath ? `–${minutes(stats.maxPath ?? 0)}` : ''} мин`} />
+          label={stats.minPath === null ? 'завершить нельзя' : `вопросов на пути до конца · ≈ ${minutesRange(stats.minPath, stats.maxPath ?? stats.minPath)} мин`} />
         <Stat value={stats.conditional} label="показываются по условию" />
         <Stat value={stats.jumps} label="переходов" />
         <Stat value={stats.screenouts} label="точек отсева" />

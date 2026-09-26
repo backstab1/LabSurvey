@@ -61,7 +61,11 @@ export function Editor({ id }: { id: string }) {
     setInfo(r);
     return r;
   }, [id]);
-  useEffect(() => { reload().then((r) => { setDef(r.draft); latest.current = r.draft; }); }, [reload]);
+  const [loadError, setLoadError] = useState('');
+  useEffect(() => {
+    reload().then((r) => { setDef(r.draft); latest.current = r.draft; })
+      .catch((e) => setLoadError(e instanceof ApiError && e.status === 404 ? 'Анкета не найдена — возможно, её удалили.' : (e as Error).message));
+  }, [reload]);
 
   // Автосохранение черновика через секунду после последней правки
   const flush = useCallback(async () => {
@@ -154,6 +158,14 @@ export function Editor({ id }: { id: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Название во вкладке браузера — чтобы различать несколько открытых анкет
+  const docTitle = def?.title;
+  useEffect(() => {
+    document.title = docTitle ? `${docTitle} — SurveyLAB` : 'SurveyLAB';
+    return () => { document.title = 'SurveyLAB'; };
+  }, [docTitle]);
+
+  if (loadError) return <div className="container"><div className="error-box">{loadError}</div><p><a href="/admin/surveys" onClick={(e) => { e.preventDefault(); navigate('/admin/surveys'); }}>← Все анкеты</a></p></div>;
   if (!info || !def || !validation) return <div className="container muted">Загрузка…</div>;
 
   const saveNow = async () => (save === 'saved' ? true : flush());
@@ -191,7 +203,7 @@ export function Editor({ id }: { id: string }) {
   const warns = validation.warnings.length;
 
   return (
-    <div className="container editor">
+    <div className="container editor survey-editor">
       <div className="editor-head">
         <button className="icon-btn back" title="Все анкеты" onClick={() => navigate('/admin/surveys')}>←</button>
         <input className="title-input" value={def.title} placeholder="Название анкеты" aria-label="Название анкеты"

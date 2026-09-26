@@ -45,6 +45,7 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
   const panelCodes = [...new Set([...info.panels.map((p) => p.id), ...info.panelCounts.map((c) => c.panel).filter((x): x is string => !!x)])];
   const panelTitle = (code: string) => info.panels.find((p) => p.id === code)?.title || code;
   const matchPanel = (r: RespRow) => !opts.panel || (opts.panel === '-' ? !r.params.panel : r.params.panel === opts.panel);
+  const shownRecent = (recent ?? []).filter((r) => (showTest || !r.isTest) && matchPanel(r));
   const exportUrl = (format: string, test = false) => {
     const q = new URLSearchParams({ statuses: statuses.join(',') });
     if (test) q.set('test', '1');
@@ -129,7 +130,8 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
             <label className="check"><input type="checkbox" checked={opts.rejected} onChange={(e) => setOpts({ ...opts, rejected: e.target.checked })} />Включая брак</label>
           )}
         </div>
-        <div className="row">
+        {!statuses.length && <div className="warn-box">Отметьте хотя бы один статус — иначе выгружать нечего.</div>}
+        <div className={`row${statuses.length ? '' : ' links-disabled'}`}>
           <a className="btn btn-primary" href={exportUrl('xlsx')}>Excel (.xlsx)</a>
           <a className="btn btn-primary" href={exportUrl('sav')}>SPSS (.sav)</a>
           <a className="btn btn-secondary" href={exportUrl('csv')}>CSV</a>
@@ -150,11 +152,13 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
           <h2 className="grow" style={{ margin: 0 }}>Последние ответы</h2>
           {!client && <label className="check small"><input type="checkbox" checked={showTest} onChange={(e) => setShowTest(e.target.checked)} />показывать тестовые</label>}
         </div>
-        {!recent ? <p className="muted">Загрузка…</p> : recent.length === 0 ? <p className="muted">Ответов пока нет</p> : (
+        {!recent ? <p className="muted">Загрузка…</p> : recent.length === 0 ? <p className="muted">Ответов пока нет</p> : !shownRecent.length ? (
+          <p className="muted">{opts.panel ? 'По выбранной панели ответов нет' : 'Пока только тестовые ответы — включите «показывать тестовые»'}</p>
+        ) : (
           <table className="table">
             <thead><tr><th>ID</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Время</th><th>Ответов</th><th>Параметры</th></tr></thead>
             <tbody>
-              {recent.filter((r) => (showTest || !r.isTest) && matchPanel(r)).slice(0, 100).map((r) => (
+              {shownRecent.slice(0, 100).map((r) => (
                 <tr key={r.id} className={`clickable${r.rejected ? ' muted' : ''}`} onClick={() => setViewing(r.id)} title="Открыть ответ">
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{r.id}</td>
                   <td>

@@ -124,7 +124,7 @@ export function TablesTab({ info, readOnly, reload }: { info: ProjectInfo; readO
               ))}
             </div>
             <div className="row" style={{ gap: 8 }}>
-              <SearchSelect className="grow" value="" groups={rowGroups}
+              <SearchSelect className="grow" value="" groups={rowGroups} placeholder="+ Добавить вопрос…"
                 onChange={(v) => !spec.rows.some((r) => refKey(r) === v) && set({ rows: [...spec.rows, keyRef(v)] })} />
               <button className="btn-link small" onClick={() => set({ rows: cand.rows.filter((q) => q.type !== 'text' && q.type !== 'phone').map((q) => ({ q: q.id })) })}>все вопросы</button>
             </div>
@@ -138,7 +138,7 @@ export function TablesTab({ info, readOnly, reload }: { info: ProjectInfo; readO
                 </span>
               ))}
             </div>
-            <SearchSelect value="" groups={colGroups}
+            <SearchSelect value="" groups={colGroups} placeholder="+ Добавить разрез…"
               onChange={(v) => !spec.cols.some((r) => refKey(r) === v) && set({ cols: [...spec.cols, keyRef(v)] })} />
           </div>
         </div>
