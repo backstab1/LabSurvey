@@ -13,6 +13,7 @@ import type { ValidationResult } from '../../../shared/validate.ts';
 export const TYPE_ICONS: Record<QuestionType, string> = {
   single: '◉', multi: '☑', dropdown: '▾', ranking: '⇅', text: '✎', number: '#', scale: '⋯',
   matrix: '▦', date: '◷', phone: '☏', info: 'ℹ', hidden: '⊘',
+  slider: '⟷', sum: 'Σ', file: '⇪', hotspot: '⌖', maxdiff: '±', conjoint: '⊞',
 };
 
 export function newQuestion(type: QuestionType, id: string): Question {
@@ -28,6 +29,19 @@ export function newQuestion(type: QuestionType, id: string): Question {
         columns: [{ code: 1, text: 'Плохо' }, { code: 2, text: 'Средне' }, { code: 3, text: 'Хорошо' }],
       };
     case 'hidden': return { ...base, type, valueType: 'string' };
+    case 'slider': return { ...base, type, min: 0, max: 100 };
+    case 'sum': return { ...base, type, options: [{ code: 1, text: '' }, { code: 2, text: '' }], total: 100, unit: '%' };
+    case 'file': return { ...base, type, accept: 'image', maxFiles: 1 };
+    case 'hotspot': return { ...base, type, image: '', options: [] };
+    case 'maxdiff': return { ...base, type, options: [{ code: 1, text: '' }], perSet: 4 };
+    case 'conjoint':
+      return {
+        ...base, type, tasks: 8, alternatives: 3,
+        attributes: [
+          { id: 'A1', text: 'Цена', levels: [{ code: 1, text: '199 ₽' }, { code: 2, text: '249 ₽' }, { code: 3, text: '299 ₽' }] },
+          { id: 'A2', text: 'Объём', levels: [{ code: 1, text: '250 мл' }, { code: 2, text: '350 мл' }] },
+        ],
+      };
     default: return { ...base, type } as Question;
   }
 }

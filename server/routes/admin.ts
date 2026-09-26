@@ -11,6 +11,9 @@ import { writeSav } from '../export/sav.ts';
 import { queueFullSync, sheetsStatus } from '../sheets.ts';
 import { simulate } from '../simulate.ts';
 import { dailyStats } from '../daily.ts';
+import { IMAGE_EXT, MIME, removeUploads, uploadPath } from '../uploads.ts';
+import { designTable } from '../../shared/designExport.ts';
+import { findQuestion } from '../../shared/logic.ts';
 import { buildCrosstabs, type CrosstabSpec } from '../../shared/crosstab.ts';
 import { writeCrosstabXlsx, type Measure } from '../export/crosstabXlsx.ts';
 import { auditHooks, auditLogin } from '../audit.ts';
@@ -403,12 +406,14 @@ export async function adminRoutes(app: FastifyInstance) {
 
     priv.delete<{ Params: { id: string } }>('/api/admin/projects/:id', async (req) => {
       await projects.remove(req.params.id);
+      removeUploads(req.params.id);
       resetQuotas(req.params.id);
       return { ok: true };
     });
 
     priv.delete<{ Params: { id: string } }>('/api/admin/projects/:id/test-responses', async (req) => {
       resetQuotas(req.params.id);
+      for (const r of (await responses.list(req.params.id, { includeTest: true, includeRejected: true })).filter((x) => x.isTest)) removeUploads(req.params.id, r.id);
       return { deleted: await responses.deleteTest(req.params.id) };
     });
 
@@ -490,8 +495,39 @@ export async function adminRoutes(app: FastifyInstance) {
       const r = await responses.get(req.params.rid);
       if (!r || r.projectId !== req.params.id) return reply.code(404).send({ error: 'Ответ не найден' });
       await responses.remove(r.id);
+      removeUploads(req.params.id, r.id);
       resetQuotas(req.params.id);
       return { ok: true };
+    });
+
+    // Файл респондента (вопрос «Загрузка файла»): картинки открываются в браузере, документы скачиваются
+    priv.get<{ Params: { id: string; rid: string; file: string } }>('/api/admin/projects/:id/files/:rid/:file', async (req, reply) => {
+      const r = await responses.get(req.params.rid);
+      const p = r && r.projectId === req.params.id ? uploadPath(req.params.id, r.id, req.params.file) : null;
+      if (!p) return reply.code(404).send({ error: 'Файл не найден' });
+      const ext = p.split('.').pop()!;
+      const name = Object.values(r!.answers).map((a) => a.o?.[req.params.file]).find(Boolean) ?? req.params.file;
+      reply.header('Content-Type', MIME[ext] ?? 'application/octet-stream').header('X-Content-Type-Options', 'nosniff')
+        .header('Cache-Control', 'private, max-age=86400')
+        .header('Content-Disposition', IMAGE_EXT.includes(ext as never) ? 'inline' : attachment(name));
+      return reply.send(createReadStream(p));
+    });
+
+    // Дизайн MaxDiff / конджойнта: показанные наборы и выборы, по строке на вариант (карточку)
+    priv.get<{ Params: { id: string }; Querystring: { q?: string; statuses?: string; test?: string } }>('/api/admin/projects/:id/design.csv', async (req, reply) => {
+      const l = await loadProject(req.params.id);
+      if (!l) return reply.code(404).send({ error: 'Проект не найден' });
+      const def = expandAllLoops(defFor(l, req.query.test === '1'));
+      const q = req.query.q ? findQuestion(def, req.query.q) : undefined;
+      if (!q || (q.type !== 'maxdiff' && q.type !== 'conjoint')) return reply.code(400).send({ error: 'Укажите вопрос MaxDiff или конджойнт' });
+      const statuses = (req.query.statuses?.split(',').filter((x) => ALL_STATUSES.includes(x as ResponseStatus)) ?? ['completed']) as ResponseStatus[];
+      const list = (await responses.list(l.project.id, { includeTest: req.query.test === '1', statuses }))
+        .filter((r) => (req.query.test === '1' ? r.isTest : !r.isTest));
+      const esc = (x: string) => (/[;"\n\r]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x);
+      const csv = designTable(q, list).map((row) => row.map((c) => esc(String(c))).join(';')).join('\r\n');
+      reply.header('Content-Type', 'text/csv; charset=utf-8');
+      reply.header('Content-Disposition', attachment(`${l.project.title.slice(0, 60)}_${q.id}_дизайн.csv`));
+      return reply.send('﻿' + csv);
     });
 
     priv.get<{ Params: { id: string } }>('/api/admin/projects/:id/responses', async (req) => {

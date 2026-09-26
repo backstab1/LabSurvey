@@ -1,6 +1,7 @@
 // Случайные допустимые ответы — для тестового заполнения анкеты.
 import { answerRows, resolveOptions } from './logic.ts';
 import { validateAnswer } from './answers.ts';
+import { conjointShape, maxdiffDesign } from './choiceDesign.ts';
 import type { Answer, Question, RespondentContext } from './types.ts';
 
 const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -62,6 +63,40 @@ function candidate(ctx: RespondentContext, q: Question): Answer | undefined {
     }
     case 'phone':
       return { v: q.format === 'international' ? '+4915112345678' : `+7916${String(Math.floor(between(1000000, 9999999)))}` };
+    case 'slider': {
+      const step = q.step ?? 1;
+      const steps = Math.floor((q.max - q.min) / step);
+      return { v: Number((q.min + Math.floor(Math.random() * (steps + 1)) * step).toFixed(6)) };
+    }
+    case 'sum': {
+      const items = q.options.filter((o) => !o.hidden);
+      const total = q.total ?? 100;
+      const weights = items.map(() => Math.random());
+      const w = weights.reduce((a, b) => a + b, 0);
+      const parts = weights.map((x) => Math.floor((x / w) * total));
+      parts[0] += total - parts.reduce((a, b) => a + b, 0);
+      return { v: Object.fromEntries(items.map((o, i) => [String(o.code), parts[i]])) };
+    }
+    case 'hotspot': {
+      const items = shuffle(q.options.filter((o) => !o.hidden));
+      const min = q.minSelected ?? 1;
+      const max = Math.min(q.maxSelected ?? items.length, items.length);
+      return { v: items.slice(0, Math.max(min, Math.ceil(between(min - 0.01, max)))).map((o) => o.code) };
+    }
+    case 'maxdiff': {
+      const v: Record<string, number[]> = {};
+      maxdiffDesign(q, ctx.seed).forEach((set, i) => {
+        const s = shuffle(set);
+        v[String(i + 1)] = [s[0], s[1]];
+      });
+      return { v };
+    }
+    case 'conjoint': {
+      const { tasks, alternatives } = conjointShape(q);
+      const v: Record<string, number> = {};
+      for (let t = 1; t <= tasks; t++) v[String(t)] = q.none && Math.random() < 0.1 ? 0 : 1 + Math.floor(Math.random() * alternatives);
+      return { v };
+    }
     default:
       return undefined;
   }

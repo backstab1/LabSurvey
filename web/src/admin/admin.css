@@ -750,3 +750,15 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .xtab-sig { color: #1c7c3a; font-weight: 700; margin-left: 2px; }
 .xtab-count, .xtab-rowPct { color: var(--muted); font-size: 12px; }
 .xtab-stat td { font-weight: 500; }
+/* Редакторы новых типов */
+.hotspot-editor { position: relative; display: inline-block; max-width: 100%; cursor: crosshair; user-select: none; touch-action: none; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.hotspot-editor img { display: block; max-width: 100%; max-height: 420px; pointer-events: none; }
+.hotspot-edit-area { position: absolute; border: 2px solid var(--accent); background: rgba(47, 111, 237, .15); cursor: pointer; }
+.hotspot-edit-area span { position: absolute; top: 0; left: 0; background: var(--accent); color: #fff; font-size: 11px; padding: 0 4px; border-bottom-right-radius: 4px; }
+.hotspot-edit-area.active { border-color: #6b3fb5; background: rgba(107, 63, 181, .2); }
+.hotspot-edit-area.drawing { border-style: dashed; pointer-events: none; }
+.hotspot-row.active .input.grow { border-color: #6b3fb5; }
+.conjoint-attr { border: 1px solid var(--border); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.report-files { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.report-files img { width: 96px; height: 96px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
+.report-file { font-size: 13px; }

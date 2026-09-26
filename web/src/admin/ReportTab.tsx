@@ -64,7 +64,7 @@ export function ReportTab({ info }: { info: ProjectInfo }) {
             <div className="muted small">
               Анкет в отчёте: <strong>{report.total}</strong>{filterJson ? <> · подгруппа: {describeCondition(def, filter)}</> : null}. Проценты — от ответивших на вопрос.
             </div>
-            {report.questions.map((q) => <QuestionBlock key={q.id} q={q} />)}
+            {report.questions.map((q) => <QuestionBlock key={q.id} q={q} projectId={info.id} />)}
           </>
         )
       )}
@@ -79,7 +79,7 @@ export function ReportTab({ info }: { info: ProjectInfo }) {
   );
 }
 
-function QuestionBlock({ q }: { q: QuestionReport }) {
+function QuestionBlock({ q, projectId }: { q: QuestionReport; projectId: string }) {
   return (
     <div className="card stack report-q">
       <div className="report-q-head">
@@ -103,7 +103,26 @@ function QuestionBlock({ q }: { q: QuestionReport }) {
           {q.stats.max !== undefined && <span>Макс <strong>{q.stats.max}</strong></span>}
         </div>
       )}
-      {q.rows && <Bars rows={q.rows} note={q.type === 'multi' ? 'Можно было выбрать несколько — сумма больше 100%' : undefined} />}
+      {q.rows && <Bars rows={q.rows} note={q.type === 'multi' || q.type === 'hotspot' ? 'Можно было выбрать несколько — сумма больше 100%' : undefined} />}
+      {q.means && (
+        <table className="table report-table">
+          <thead><tr><th>Вариант</th><th>Среднее</th></tr></thead>
+          <tbody>{q.means.map((m) => <tr key={m.label}><td>{m.label}</td><td>{m.mean}</td></tr>)}</tbody>
+        </table>
+      )}
+      {q.files && q.files.length > 0 && (
+        <div className="report-files">
+          {q.files.map((f) => {
+            const url = `/api/admin/projects/${projectId}/files/${f.rid}/${f.id}`;
+            return /\.(jpg|png|gif|webp)$/.test(f.id)
+              ? <a key={`${f.rid}/${f.id}`} href={url} target="_blank" rel="noreferrer" title={f.name}><img src={url} alt={f.name} loading="lazy" /></a>
+              : <a key={`${f.rid}/${f.id}`} href={url} className="report-file">📄 {f.name}</a>;
+          })}
+        </div>
+      )}
+      {(q.type === 'maxdiff' || q.type === 'conjoint') && (
+        <p className="muted small" style={{ margin: 0 }}>Анализ — по выгрузке (выборы по наборам) и файлу дизайна во вкладке «Данные».</p>
+      )}
       {q.ranks && (
         <table className="table report-table">
           <thead><tr><th>Вариант</th><th>Средний ранг</th><th>На 1-м месте</th><th>Ранжировали</th></tr></thead>

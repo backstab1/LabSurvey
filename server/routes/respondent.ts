@@ -10,7 +10,9 @@ import { afterComplete } from '../notify.ts';
 import {
   actionError, allQuestions, answerRows, cleanAnswers, endingAction, evalCondition, findPage, firstPage, paramAnswer, isQuestionVisible, nextPage, pipe, pipeUrl, progressPercent,
 } from '../../shared/logic.ts';
-import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
+import { fileIds, isEmptyAnswer, normalizeAnswer, validateAnswer } from '../../shared/answers.ts';
+import { IMAGE_EXT, MIME, countUploads, detectType, saveUpload, uploadPath } from '../uploads.ts';
+import { createReadStream } from 'node:fs';
 import { expandAllLoops, withLoops } from '../../shared/loops.ts';
 import { END, INVITE_PARAM, PANEL_PARAM, RESERVED_PARAMS as RESERVED, SCREENOUT, settingsOf, type Answer, type Panel, type Answers, type RespondentContext, type Survey } from '../../shared/types.ts';
 import type { ResponseStatus } from '../../shared/variables.ts';
@@ -260,6 +262,9 @@ async function finalize(
 }
 
 export async function respondentRoutes(app: FastifyInstance) {
+  // Загрузка файла приходит телом запроса целиком (имя — в заголовке x-file-name)
+  app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: 21 * 1024 * 1024 }, (_req, body, done) => done(null, body));
+
   async function load(id: string, rid: string) {
     // Сессия принадлежит проекту или (предпросмотр из конструктора) анкете — адрес должен совпадать
     const r = rid ? await responses.get(rid) : null;
@@ -441,6 +446,11 @@ export async function respondentRoutes(app: FastifyInstance) {
         return { ...stateOf(survey, r, panels), resynced: true };
       }
       const { errors, pageAnswers, page } = checkPage(survey, r, r.currentPage, req.body.answers, true);
+      // Файлы должны быть загружены именно в эту анкету
+      for (const q of page.questions) {
+        if (q.type !== 'file' || !pageAnswers[q.id]) continue;
+        if (fileIds(pageAnswers[q.id].v).some((id) => !uploadPath(ownerOf(r), r.id, id))) errors[q.id] = 'Файл не найден — загрузите его ещё раз';
+      }
       if (Object.keys(errors).length) return reply.code(422).send({ errors });
 
       const answers = mergePage(r.answers, page, pageAnswers);
@@ -470,6 +480,43 @@ export async function respondentRoutes(app: FastifyInstance) {
       return stateOf(survey, (await responses.get(r.id))!, panels);
     },
   );
+
+  // Загрузка файла для вопроса текущего экрана: проверяются тип (по содержимому), размер и число файлов
+  app.post<{ Params: { id: string }; Querystring: { rid?: string; q?: string }; Body: Buffer }>('/api/s/:id/upload', async (req, reply) => {
+    const loaded = await load(req.params.id, String(req.query.rid ?? ''));
+    if (!loaded) return reply.code(404).send({ error: 'Сессия не найдена' });
+    const { survey, r } = loaded;
+    if (r.status !== 'in_progress' || !r.currentPage) return reply.code(400).send({ error: 'Анкета уже завершена' });
+    const page = findPage(ctxOf(survey, r, r.answers).survey, r.currentPage) ?? findPage(expandAllLoops(survey), r.currentPage);
+    const q = page?.questions.find((x) => x.id === req.query.q);
+    if (!q || q.type !== 'file') return reply.code(400).send({ error: 'Вопрос не найден' });
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || !buf.length) return reply.code(400).send({ error: 'Пустой файл' });
+    const maxMb = q.maxSizeMb ?? 10;
+    if (buf.length > maxMb * 1024 * 1024) return reply.code(413).send({ error: `Файл больше ${maxMb} МБ` });
+    let name = 'файл';
+    try { name = decodeURIComponent(String(req.headers['x-file-name'] ?? 'файл')).replace(/[\r\n"\\/]/g, '_').slice(0, 200) || 'файл'; } catch { /* имя не важно */ }
+    const ext = detectType(buf, name);
+    const allowed = (q.accept ?? 'image') === 'image' ? (IMAGE_EXT as readonly string[]) : Object.keys(MIME);
+    if (!ext || !allowed.includes(ext)) {
+      return reply.code(415).send({ error: (q.accept ?? 'image') === 'image' ? 'Можно загрузить только фото или картинку (JPG, PNG, WEBP, GIF, HEIC)' : 'Такой тип файла не поддерживается' });
+    }
+    if (countUploads(ownerOf(r), r.id) >= 30) return reply.code(429).send({ error: 'Слишком много файлов' });
+    const id = saveUpload(ownerOf(r), r.id, buf, ext);
+    return { id, name, size: buf.length, type: MIME[ext] };
+  });
+
+  // Свой файл — для миниатюры при возврате к вопросу
+  app.get<{ Params: { id: string }; Querystring: { rid?: string; f?: string } }>('/api/s/:id/file', async (req, reply) => {
+    const loaded = await load(req.params.id, String(req.query.rid ?? ''));
+    const p = loaded ? uploadPath(ownerOf(loaded.r), loaded.r.id, String(req.query.f ?? '')) : null;
+    if (!p) return reply.code(404).send({ error: 'Файл не найден' });
+    const ext = p.split('.').pop()!;
+    reply.header('Content-Type', MIME[ext] ?? 'application/octet-stream').header('X-Content-Type-Options', 'nosniff')
+      .header('Cache-Control', 'private, max-age=3600')
+      .header('Content-Disposition', IMAGE_EXT.includes(ext as never) ? 'inline' : 'attachment');
+    return reply.send(createReadStream(p));
+  });
 
   app.post<{ Params: { id: string }; Body: { rid: string; page: string; answers?: Answers } }>(
     '/api/s/:id/back',

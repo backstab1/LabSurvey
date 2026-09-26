@@ -134,6 +134,30 @@ export function varModels(survey: Survey, ref: VarRef, responses: ResponseRecord
         num: (r) => (inScale(ans(r)) ? (ans(r) as number) : null),
       }];
     }
+    case 'hotspot': {
+      const opts = q.options.filter((o) => !o.hidden);
+      return [{
+        key: q.id, title: title(q), multi: true, categories: opts.map((o) => ({ key: String(o.code), label: plain(o.text) })),
+        cats: (r) => {
+          const v = ans(r);
+          return Array.isArray(v) && v.length ? v.map(String) : null;
+        },
+      }];
+    }
+    case 'sum':
+      return q.options.filter((o) => !o.hidden).map((o) => ({
+        key: `${q.id}.${o.code}`, title: `${title(q)} — ${plain(o.text)}`, multi: false, categories: [],
+        cats: (r) => (ans(r) && typeof ans(r) === 'object' ? [] : null),
+        num: (r) => {
+          const v = ans(r);
+          return v && typeof v === 'object' && !Array.isArray(v) ? ((v as Record<string, number>)[String(o.code)] ?? 0) : null;
+        },
+      }));
+    case 'file':
+    case 'maxdiff':
+    case 'conjoint':
+      return [];
+    case 'slider':
     case 'number':
       return [{
         key: q.id, title: title(q), multi: false, categories: [],
@@ -278,6 +302,6 @@ export function crosstabCandidates(survey: Survey) {
   return {
     rows: qs,
     // В шапку — только вопросы с вариантами (и строки матрицы) и скрытые переменные
-    cols: qs.filter((q) => ['single', 'dropdown', 'multi', 'scale', 'matrix', 'hidden', 'ranking'].includes(q.type)),
+    cols: qs.filter((q) => ['single', 'dropdown', 'multi', 'scale', 'matrix', 'hidden', 'ranking', 'hotspot'].includes(q.type)),
   };
 }

@@ -1,5 +1,11 @@
 import { answerRows, groupOf, resolveOptions } from './logic.ts';
+import { conjointDesign, conjointShape, maxdiffDesign } from './choiceDesign.ts';
 import type { Answer, Option, Question, RespondentContext } from './types.ts';
+
+/** Имя сохранённого файла: ID (12 знаков) и расширение */
+export const FILE_ID_RE = /^[a-z0-9]{12}\.(jpg|png|gif|webp|heic|pdf|docx|xlsx|pptx)$/;
+/** Ответ на загрузку файла — ID файлов через запятую; исходные имена — в o[ID] */
+export const fileIds = (v: unknown): string[] => (typeof v === 'string' && v ? v.split(',') : []);
 
 export function isRequired(q: Question): boolean {
   if (q.type === 'info' || q.type === 'hidden') return false;
@@ -85,7 +91,7 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
 
   if (q.type === 'matrix') return validateMatrix(ctx, q, a, required);
 
-  if (empty) return required ? (q.requiredMessage || 'Пожалуйста, ответьте на вопрос') : null;
+  if (empty) return required ? (q.requiredMessage || (q.type === 'slider' ? 'Передвиньте ползунок' : 'Пожалуйста, ответьте на вопрос')) : null;
   const v = a!.v;
 
   switch (q.type) {
@@ -171,6 +177,70 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
       }
       return null;
     }
+    case 'slider': {
+      if (typeof v !== 'number' || !isFinite(v)) return 'Передвиньте ползунок';
+      if (v < q.min || v > q.max) return 'Значение вне шкалы';
+      const step = q.step ?? 1;
+      const k = (v - q.min) / step;
+      if (Math.abs(k - Math.round(k)) > 1e-6) return 'Значение вне шкалы';
+      return null;
+    }
+    case 'sum': {
+      if (typeof v !== 'object' || Array.isArray(v) || v === null) return 'Некорректный ответ';
+      const codes = new Set(q.options.filter((o) => !o.hidden).map((o) => String(o.code)));
+      let total = 0;
+      for (const [k, x] of Object.entries(v)) {
+        if (!codes.has(k) || typeof x !== 'number' || !isFinite(x) || x < 0) return 'Введите неотрицательные числа';
+        total += x;
+      }
+      const need = q.total ?? 100;
+      const unit = q.unit ?? '%';
+      const fmt = (n: number) => `${Math.round(n * 100) / 100}${unit === '%' ? '%' : ` ${unit}`}`;
+      if ((q.mode ?? 'exact') === 'exact' && Math.abs(total - need) > 1e-6) return `Сумма должна быть ${fmt(need)}, сейчас ${fmt(total)}`;
+      if (q.mode === 'max' && total > need + 1e-6) return `Сумма не может быть больше ${fmt(need)}, сейчас ${fmt(total)}`;
+      return null;
+    }
+    case 'file': {
+      const ids = fileIds(v);
+      if (typeof v !== 'string' || !ids.length || ids.some((id) => !FILE_ID_RE.test(id)) || new Set(ids).size !== ids.length) return 'Некорректный ответ';
+      if (ids.length > (q.maxFiles ?? 1)) return `Не больше ${q.maxFiles ?? 1} файлов`;
+      return null;
+    }
+    case 'hotspot': {
+      if (!Array.isArray(v) || v.some((x) => typeof x !== 'number') || new Set(v).size !== v.length) return 'Некорректный ответ';
+      const codes = new Set(q.options.filter((o) => !o.hidden).map((o) => o.code));
+      if (v.some((c) => !codes.has(c))) return 'Некорректный ответ';
+      if (q.minSelected && v.length < q.minSelected) return `Отметьте не меньше ${q.minSelected} мест на картинке`;
+      if (q.maxSelected && v.length > q.maxSelected) return `Отметьте не больше ${q.maxSelected} мест на картинке`;
+      return null;
+    }
+    case 'maxdiff': {
+      if (typeof v !== 'object' || Array.isArray(v) || v === null) return 'Некорректный ответ';
+      const design = maxdiffDesign(q, ctx.seed);
+      const answers = v as Record<string, unknown>;
+      if (Object.keys(answers).some((k) => !(Number(k) >= 1 && Number(k) <= design.length))) return 'Некорректный ответ';
+      for (let i = 0; i < design.length; i++) {
+        const pick = answers[String(i + 1)];
+        if (pick === undefined) return design.length > 1 ? `Ответьте во всех наборах (набор ${i + 1} из ${design.length})` : 'Выберите ответы';
+        if (!Array.isArray(pick) || pick.length !== 2 || !pick.every((c) => design[i].includes(c as number))) return 'Некорректный ответ';
+        if (pick[0] === pick[1]) return `Набор ${i + 1}: один и тот же вариант не может быть и самым, и наименее важным`;
+      }
+      return null;
+    }
+    case 'conjoint': {
+      if (typeof v !== 'object' || Array.isArray(v) || v === null) return 'Некорректный ответ';
+      const { tasks, alternatives } = conjointShape(q);
+      const answers = v as Record<string, unknown>;
+      if (Object.keys(answers).some((k) => !(Number(k) >= 1 && Number(k) <= tasks))) return 'Некорректный ответ';
+      for (let t = 1; t <= tasks; t++) {
+        const c = answers[String(t)];
+        if (c === undefined) return tasks > 1 ? `Сделайте выбор во всех заданиях (задание ${t} из ${tasks})` : 'Сделайте выбор';
+        if (!Number.isInteger(c) || (c as number) < (q.none ? 0 : 1) || (c as number) > alternatives) return 'Некорректный ответ';
+      }
+      // Дизайн строится по ID ответа — проверка, что он доступен (вопрос не сломан)
+      if (!conjointDesign(q, ctx.seed).length) return 'Некорректный вопрос';
+      return null;
+    }
   }
   return null;
 }
@@ -239,6 +309,16 @@ export function normalizeAnswer(q: Question, a: Answer): Answer {
   const out: Answer = { v: a.v };
   if (q.type === 'phone' && typeof a.v === 'string') out.v = normalizePhone(a.v, q.format) ?? a.v;
   if (q.type === 'text' && typeof a.v === 'string') out.v = a.v.trim();
+  // Распределение суммы: пустые поля — не ответ
+  if (q.type === 'sum' && a.v && typeof a.v === 'object' && !Array.isArray(a.v)) {
+    out.v = Object.fromEntries(Object.entries(a.v).filter(([, x]) => typeof x === 'number' && isFinite(x)));
+  }
+  // Файлы: имена храним только для приложенных
+  if (q.type === 'file') {
+    const ids = new Set(fileIds(a.v));
+    const o = Object.fromEntries(Object.entries(a.o ?? {}).filter(([k, t]) => ids.has(k) && typeof t === 'string').map(([k, t]) => [k, t.slice(0, 200)]));
+    return Object.keys(o).length ? { ...out, o } : out;
+  }
   if (a.o) {
     const selected = new Set<string>();
     if (typeof a.v === 'number') selected.add(String(a.v));

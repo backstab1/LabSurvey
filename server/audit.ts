@@ -91,6 +91,7 @@ const RULES: Record<string, Rule> = {
   },
   'POST /api/admin/projects/:id/invitees/:iid/reissue': { action: 'Выдал новую персональную ссылку', target: project(), details: (req) => ({ invitee: p(req, 'iid') }) },
   'GET /api/admin/projects/:id/crosstab.xlsx': { action: 'Выгрузил таблицы (XLSX)', target: project() },
+  'GET /api/admin/projects/:id/design.csv': { action: 'Выгрузил дизайн MaxDiff / конджойнта', target: project(), details: (req) => ({ question: req.query?.q }) },
   'PUT /api/admin/projects/:id/notify': { action: 'Настроил уведомления', target: project() },
   'PUT /api/admin/projects/:id/sheets': { action: 'Настроил Google Sheets', target: project() },
   'POST /api/admin/projects/:id/sheets/sync': { action: 'Синхронизировал Google Sheets', target: project() },

@@ -13,7 +13,7 @@ const TYPE_LABELS: Record<string, string> = { survey: 'Анкета', project: '
 const DETAIL_LABELS: Record<string, string> = {
   version: 'версия', role: 'роль', disabled: 'отключён', password: 'пароль', projects: 'проектов', statuses: 'статусы', test: 'тестовые',
   panel: 'панель', period: 'период', from: 'из', deleted: 'удалено', count: 'анкет', response: 'ответ', status: 'статус', app: 'приложение',
-  survey: 'анкета', file: 'файл',
+  survey: 'анкета', file: 'файл', question: 'вопрос', added: 'добавлено', skipped: 'пропущено', invitee: 'человек',
 };
 
 function detailsText(d: Record<string, unknown> | null): string {

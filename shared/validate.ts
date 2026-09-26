@@ -22,7 +22,10 @@ export const RESERVED_IDS = new Set([
   'resp_id', 'status', 'speeder', 'started_at', 'completed_at', 'duration_sec', 'ip', 'user_agent', 'is_test', 'version',
 ].map((s) => s.toLowerCase()));
 
-const TYPES = new Set(['single', 'multi', 'dropdown', 'ranking', 'text', 'number', 'scale', 'matrix', 'date', 'phone', 'info', 'hidden']);
+const TYPES = new Set([
+  'single', 'multi', 'dropdown', 'ranking', 'text', 'number', 'scale', 'matrix', 'date', 'phone', 'info', 'hidden',
+  'slider', 'sum', 'file', 'hotspot', 'maxdiff', 'conjoint',
+]);
 const SCRIPT_KEYS = {
   survey: ['init'],
   question: ['beforeShow', 'onShow', 'onChange', 'validate'],
@@ -598,6 +601,71 @@ function validateQuestion(
       break;
     case 'phone':
       if (q.format !== undefined && q.format !== 'ru' && q.format !== 'international') err(w, 'format: ru или international');
+      break;
+    case 'slider': {
+      if (typeof q.min !== 'number' || typeof q.max !== 'number' || !isFinite(q.min) || !isFinite(q.max)) { err(w, 'min и max — числа'); break; }
+      if (q.min >= q.max) err(w, 'min должно быть меньше max');
+      if (q.step !== undefined && (typeof q.step !== 'number' || q.step <= 0 || q.step > q.max - q.min)) err(w, 'step: положительное число не больше диапазона');
+      if (q.start !== undefined && (typeof q.start !== 'number' || q.start < q.min || q.start > q.max)) err(w, 'start: число от min до max');
+      for (const k of ['minLabel', 'maxLabel', 'midLabel', 'unit'] as const) if (q[k] !== undefined && typeof q[k] !== 'string') err(w, `${k}: строка`);
+      break;
+    }
+    case 'sum':
+      validateOptions(q.options, w, 'options', err);
+      if (Array.isArray(q.options) && q.options.some((o) => o?.other || o?.exclusive || o?.group)) err(w, 'В распределении суммы нет «другого», исключающих вариантов и групп');
+      if (q.total !== undefined && (typeof q.total !== 'number' || q.total <= 0)) err(w, 'total: положительное число');
+      if (q.mode !== undefined && q.mode !== 'exact' && q.mode !== 'max') err(w, 'mode: exact или max');
+      if (q.unit !== undefined && typeof q.unit !== 'string') err(w, 'unit: строка');
+      break;
+    case 'file':
+      if (q.accept !== undefined && q.accept !== 'image' && q.accept !== 'any') err(w, 'accept: image или any');
+      if (q.maxFiles !== undefined && (!isInt(q.maxFiles) || q.maxFiles < 1 || q.maxFiles > 10)) err(w, 'maxFiles: от 1 до 10');
+      if (q.maxSizeMb !== undefined && (typeof q.maxSizeMb !== 'number' || q.maxSizeMb <= 0 || q.maxSizeMb > 20)) err(w, 'maxSizeMb: до 20');
+      break;
+    case 'hotspot':
+      if (typeof q.image !== 'string' || !/^(https?:\/\/|\/)\S+$/i.test(q.image)) err(w, 'image: адрес картинки https://… или /…');
+      validateOptions(q.options, w, 'options', err);
+      if (Array.isArray(q.options)) {
+        q.options.forEach((o, i) => {
+          const a = o?.area;
+          const ok = isObj(a) && [a.x, a.y, a.w, a.h].every((n) => typeof n === 'number' && n >= 0 && n <= 100) && a.w > 0 && a.h > 0
+            && a.x + a.w <= 100.01 && a.y + a.h <= 100.01;
+          if (!ok) err(w, `options[${i + 1}].area: {x, y, w, h} в процентах картинки (0–100)`);
+        });
+      }
+      if (q.minSelected !== undefined && (!isInt(q.minSelected) || q.minSelected < 1)) err(w, 'minSelected: целое ≥ 1');
+      if (q.maxSelected !== undefined && (!isInt(q.maxSelected) || q.maxSelected < 1)) err(w, 'maxSelected: целое ≥ 1');
+      break;
+    case 'maxdiff': {
+      validateOptions(q.options, w, 'options', err);
+      if (Array.isArray(q.options) && q.options.some((o) => o?.other || o?.exclusive || o?.group)) err(w, 'В MaxDiff нет «другого», исключающих вариантов и групп');
+      const n = Array.isArray(q.options) ? q.options.filter((o) => !o?.hidden).length : 0;
+      if (n < 3) err(w, 'MaxDiff: нужно хотя бы 3 варианта');
+      if (q.perSet !== undefined && (!isInt(q.perSet) || q.perSet < 2 || q.perSet > 7)) err(w, 'perSet: от 2 до 7');
+      else if (isInt(q.perSet) && q.perSet > n) err(w, 'perSet больше числа вариантов');
+      if (q.sets !== undefined && (!isInt(q.sets) || q.sets < 1 || q.sets > 40)) err(w, 'sets: от 1 до 40');
+      else if (n >= 3 && isInt(q.sets) && q.sets * (q.perSet ?? 4) < n) warn(w, 'Наборов мало: не каждый вариант будет показан');
+      for (const k of ['bestLabel', 'worstLabel'] as const) if (q[k] !== undefined && typeof q[k] !== 'string') err(w, `${k}: строка`);
+      break;
+    }
+    case 'conjoint':
+      if (!Array.isArray(q.attributes) || q.attributes.length < 2) { err(w, 'attributes: нужно хотя бы 2 атрибута'); break; }
+      {
+        const ids = new Set<string>();
+        q.attributes.forEach((a, i) => {
+          const aw = `${w} → атрибут ${isObj(a) && typeof a.id === 'string' ? a.id : i + 1}`;
+          if (!isObj(a)) return err(aw, 'Ожидается {id, text, levels}');
+          if (typeof a.id !== 'string' || !ID_RE.test(a.id)) err(aw, 'id: латиница, цифры и _, начинается с буквы');
+          else if (ids.has(a.id.toLowerCase())) err(aw, 'id атрибута повторяется');
+          else ids.add(a.id.toLowerCase());
+          if (typeof a.text !== 'string' || !a.text.trim()) err(aw, 'Нужно название атрибута');
+          validateOptions(a.levels, aw, 'levels', err);
+          if (Array.isArray(a.levels) && a.levels.filter((l) => !l?.hidden).length < 2) err(aw, 'Нужно хотя бы 2 уровня');
+        });
+      }
+      if (q.tasks !== undefined && (!isInt(q.tasks) || q.tasks < 1 || q.tasks > 30)) err(w, 'tasks: от 1 до 30');
+      if (q.alternatives !== undefined && (!isInt(q.alternatives) || q.alternatives < 2 || q.alternatives > 5)) err(w, 'alternatives: от 2 до 5');
+      if (q.none !== undefined && (typeof q.none !== 'string' || !q.none.trim())) err(w, 'none: текст варианта «Ничего из этого»');
       break;
     case 'hidden':
       if (q.valueType !== undefined && q.valueType !== 'number' && q.valueType !== 'string') err(w, 'valueType: number или string');

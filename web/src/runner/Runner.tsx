@@ -1,3 +1,4 @@
+import { UploadContext } from './AdvancedViews.tsx';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../api.ts';
 import { QuestionView } from './QuestionView.tsx';
@@ -367,9 +368,11 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
       }}>
         {blockTitle && <div className="page-title">{rich(pipe(blockTitle, ctx))}</div>}
         {numbered && <div className="q-number">Вопрос {state.step}</div>}
-        {visible.map((q) => (
-          <QuestionView key={q.id} q={q} ctx={ctx} answer={local[q.id]} error={errors[q.id]} onChange={(a) => setAnswer(q.id, a)} />
-        ))}
+        <UploadContext.Provider value={{ surveyId, rid: state.rid }}>
+          {visible.map((q) => (
+            <QuestionView key={q.id} q={q} ctx={ctx} answer={local[q.id]} error={errors[q.id]} onChange={(a) => setAnswer(q.id, a)} />
+          ))}
+        </UploadContext.Provider>
         {pageError && <div className="q-error page-error" role="alert">{pageError}</div>}
         <label className="hp-field" aria-hidden="true">Не заполняйте это поле
           <input ref={hpRef} name="website" type="text" tabIndex={-1} autoComplete="off" defaultValue="" />

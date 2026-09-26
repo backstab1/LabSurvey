@@ -229,3 +229,76 @@ html.embedded .runner { padding-top: 0; padding-bottom: 8px; }
 .matrix.no-marker .cell:hover { background: #f0f3f8; }
 .matrix.no-marker .cell.selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
 .matrix-shared { margin-top: 12px; }
+
+/* ---------- Слайдер ---------- */
+.slider { padding: 6px 2px 0; }
+.slider-value { text-align: center; font-size: 22px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+.slider.untouched .slider-value { font-size: 15px; font-weight: 400; color: var(--muted); }
+.slider input[type=range] { width: 100%; height: 36px; margin: 0; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+.slider input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--accent) var(--fill), #dfe3e8 var(--fill)); }
+.slider input[type=range]::-moz-range-track { height: 8px; border-radius: 4px; background: #dfe3e8; }
+.slider input[type=range]::-moz-range-progress { height: 8px; border-radius: 4px; background: var(--accent); }
+.slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); box-shadow: 0 1px 4px rgba(0, 0, 0, .2); }
+.slider input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); }
+.slider.untouched input[type=range]::-webkit-slider-runnable-track { background: #dfe3e8; }
+.slider.untouched input[type=range]::-moz-range-progress { background: transparent; }
+.slider.untouched input[type=range]::-webkit-slider-thumb { border-color: #9aa3ae; }
+.slider-labels { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.slider-labels span:last-child { text-align: right; }
+.slider-labels .mid { text-align: center; }
+
+/* ---------- Распределение суммы ---------- */
+.sum-input { display: flex; flex-direction: column; gap: 8px; }
+.sum-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px 6px 14px; background: var(--surface); }
+.sum-label { flex: 1; min-width: 0; }
+.sum-field { display: flex; align-items: center; gap: 6px; }
+.sum-field .input { width: 84px; text-align: right; min-height: 40px; }
+.sum-total { font-size: 14px; padding: 8px 12px; border-radius: 8px; background: #f0f2f5; color: var(--muted); }
+.sum-total.ok { background: var(--ok-soft); color: var(--ok); }
+.sum-total.over { background: var(--danger-soft); color: var(--danger); }
+
+/* ---------- Загрузка файла ---------- */
+.file-upload { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.file-list { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.file-item { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: var(--radius); padding: 6px; background: var(--surface); }
+.file-item img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; background: #f0f2f5; }
+.file-icon { width: 56px; text-align: center; font-size: 28px; }
+.file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.file-pick { cursor: pointer; }
+.file-pick.busy { opacity: .6; pointer-events: none; }
+
+/* ---------- Клик по картинке ---------- */
+.hotspot-img { position: relative; display: inline-block; max-width: 100%; user-select: none; -webkit-user-select: none; }
+.hotspot-img img { display: block; max-width: 100%; height: auto; border-radius: 8px; }
+.hotspot-area { position: absolute; border: 0; background: transparent; padding: 0; cursor: pointer; border-radius: 4px; min-height: 0; }
+.hotspot-area:hover, .hotspot-area:focus-visible { background: rgba(47, 111, 237, .12); outline: 2px dashed rgba(47, 111, 237, .6); }
+.show-areas .hotspot-area { outline: 2px dashed rgba(47, 111, 237, .55); }
+.hotspot-area.selected { background: rgba(47, 111, 237, .28); outline: 3px solid var(--accent); }
+
+/* ---------- MaxDiff и конджойнт ---------- */
+.steps-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.steps-mid { flex: 1; text-align: center; }
+.steps-label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.maxdiff-table { width: 100%; border-collapse: collapse; }
+.maxdiff-table th { font-size: 12px; font-weight: 500; color: var(--muted); padding: 4px; width: 84px; vertical-align: bottom; }
+.maxdiff-table td { border-top: 1px solid var(--border); padding: 4px; text-align: center; }
+.maxdiff-table td.maxdiff-item { text-align: center; padding: 10px 6px; }
+.maxdiff-table .cell { display: flex; justify-content: center; align-items: center; min-height: 44px; cursor: pointer; }
+.maxdiff-table .cell input { width: 22px; height: 22px; accent-color: var(--accent); margin: 0; }
+.maxdiff-table tr.best td { background: var(--ok-soft); }
+.maxdiff-table tr.worst td { background: var(--danger-soft); }
+.conjoint-wrap { overflow-x: auto; }
+.conjoint-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.conjoint-table th, .conjoint-table td { padding: 8px; text-align: center; border-bottom: 1px solid var(--border); font-size: 15px; }
+.conjoint-table thead th { font-size: 13px; color: var(--muted); font-weight: 500; }
+.conjoint-table tbody th { text-align: left; font-weight: 500; color: var(--muted); font-size: 13px; width: 28%; }
+.conjoint-table td { cursor: pointer; }
+.conjoint-table td.chosen, .conjoint-table th.chosen { background: var(--accent-soft); }
+.conjoint-pick td { border-bottom: 0; }
+.conjoint-pick .btn { width: 100%; padding: 0 6px; min-height: 40px; font-size: 14px; }
+.conjoint-none { margin-top: 10px; width: 100%; }
+@media (max-width: 640px) {
+  .conjoint-table th, .conjoint-table td { padding: 6px 4px; font-size: 14px; }
+  .conjoint-table tbody th { width: 30%; font-size: 12px; }
+  .maxdiff-table th { width: 64px; font-size: 11px; }
+}

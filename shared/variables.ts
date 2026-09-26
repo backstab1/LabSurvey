@@ -1,5 +1,6 @@
 // Модель переменных для выгрузки (Excel, SPSS, Google Sheets): одна строка — один респондент
 import { allOptions, allRows } from './logic.ts';
+import { conjointShape, maxdiffShape } from './choiceDesign.ts';
 import type { Answers, Option, Survey } from './types.ts';
 
 export type ResponseStatus = 'in_progress' | 'completed' | 'screened_out' | 'terminated' | 'overquota';
@@ -281,6 +282,77 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
             },
           });
           break;
+        case 'slider':
+          add({
+            name: q.id, label: text, kind: 'numeric', measure: 'scale', decimals: Number.isInteger(q.step ?? 1) && Number.isInteger(q.min) ? 0 : 2,
+            get: (r) => (typeof ans(r)?.v === 'number' ? (ans(r)!.v as number) : null),
+          });
+          break;
+        case 'sum':
+          for (const o of q.options.filter((x) => !x.noExport)) {
+            add({
+              name: `${q.id}_${o.code}`, label: `${text}: ${clean(o.text)}`, kind: 'numeric', measure: 'scale', decimals: 2,
+              get: (r) => {
+                const v = ans(r)?.v;
+                return v && typeof v === 'object' && !Array.isArray(v) ? ((v as Record<string, number>)[String(o.code)] ?? 0) : null;
+              },
+            });
+          }
+          break;
+        case 'hotspot':
+          for (const o of q.options.filter((x) => !x.noExport)) {
+            add({
+              name: `${q.id}_${o.code}`, label: `${text}: ${clean(o.text)}`, kind: 'numeric', measure: 'nominal', valueLabels: SELECTED_LABELS,
+              get: (r) => {
+                const v = ans(r)?.v;
+                return Array.isArray(v) ? (v.includes(o.code) ? 1 : 0) : null;
+              },
+            });
+          }
+          break;
+        case 'file':
+          add({
+            name: `${q.id}_n`, label: `${text}: сколько файлов`, kind: 'numeric', measure: 'scale',
+            get: (r) => (typeof ans(r)?.v === 'string' && ans(r)!.v ? String(ans(r)!.v).split(',').length : null),
+          });
+          add({
+            name: `${q.id}_files`, label: `${text}: файлы (ID ответа/ID файла)`, kind: 'string', measure: 'nominal',
+            get: (r) => (typeof ans(r)?.v === 'string' && ans(r)!.v ? String(ans(r)!.v).split(',').map((id) => `${r.id}/${id}`).join(' ') : null),
+          });
+          break;
+        case 'maxdiff': {
+          // Сырые выборы по наборам; какие варианты были в наборе — в файле дизайна
+          const labels = q.options.map((o) => ({ value: o.code, label: clean(o.text) }));
+          for (let s = 1; s <= maxdiffShape(q).sets; s++) {
+            for (const [k, idx, word] of [['best', 0, 'лучший'], ['worst', 1, 'худший']] as const) {
+              add({
+                name: `${q.id}_s${s}_${k}`, label: `${text}: набор ${s} — ${word}`, kind: 'numeric', measure: 'nominal', valueLabels: labels,
+                get: (r) => {
+                  const v = ans(r)?.v;
+                  const pick = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, number[]>)[String(s)] : undefined;
+                  return Array.isArray(pick) ? pick[idx] : null;
+                },
+              });
+            }
+          }
+          break;
+        }
+        case 'conjoint': {
+          const { tasks, alternatives } = conjointShape(q);
+          const labels = Array.from({ length: alternatives }, (_, i) => ({ value: i + 1, label: `Карточка ${i + 1}` }));
+          if (q.none) labels.unshift({ value: 0, label: clean(q.none) });
+          for (let t = 1; t <= tasks; t++) {
+            add({
+              name: `${q.id}_t${t}`, label: `${text}: задание ${t} — выбранная карточка`, kind: 'numeric', measure: 'nominal', valueLabels: labels,
+              get: (r) => {
+                const v = ans(r)?.v;
+                const c = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, number>)[String(t)] : undefined;
+                return typeof c === 'number' ? c : null;
+              },
+            });
+          }
+          break;
+        }
         case 'info':
           break;
       }

@@ -134,6 +134,10 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
           <a className="btn btn-primary" href={exportUrl('sav')}>SPSS (.sav)</a>
           <a className="btn btn-secondary" href={exportUrl('csv')}>CSV</a>
           {!client && <a className="btn btn-secondary" href={`/api/admin/surveys/${info.survey.id}/export.json`}>Анкета (.json)</a>}
+          {allQuestions(info.published ?? info.draft).filter((q) => q.type === 'maxdiff' || q.type === 'conjoint').map((q) => (
+            <a key={q.id} className="btn btn-secondary" title="Что показано каждому респонденту и что он выбрал — по строке на вариант / карточку"
+              href={`/api/admin/projects/${info.id}/design.csv?q=${q.id}&statuses=${statuses.join(',')}`}>Дизайн {q.id} (CSV)</a>
+          ))}
         </div>
         <p className="muted" style={{ margin: 0, fontSize: 14 }}>
           Excel содержит листы «Коды», «Метки» и «Кодбук». Время — по часовому поясу сервера выгрузки (по умолчанию Москва).
@@ -265,6 +269,16 @@ function ResponseModal({ editable, surveyId, rid, onClose, onDeleted, onChanged 
                   <td style={{ verticalAlign: 'top' }}>
                     <div className="muted small">{rich(pipe(q.text, ctx))}</div>
                     <div>{answerText(ctx, q) || '—'}</div>
+                    {q.type === 'file' && typeof r.answers[q.id]?.v === 'string' && (
+                      <div className="report-files">
+                        {String(r.answers[q.id].v).split(',').map((id) => {
+                          const url = `/api/admin/projects/${surveyId}/files/${r.id}/${id}`;
+                          return /\.(jpg|png|gif|webp)$/.test(id)
+                            ? <a key={id} href={url} target="_blank" rel="noreferrer"><img src={url} alt={r.answers[q.id].o?.[id] ?? id} /></a>
+                            : <a key={id} href={url} className="report-file">📄 {r.answers[q.id].o?.[id] ?? id}</a>;
+                        })}
+                      </div>
+                    )}
                   </td>
                   <td className="muted small" style={{ width: 60, textAlign: 'right', verticalAlign: 'top' }} title="Время на вопросе">
                     {r.timings?.[q.id] !== undefined ? `${r.timings[q.id]} с` : ''}

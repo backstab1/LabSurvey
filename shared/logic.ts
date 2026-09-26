@@ -39,7 +39,7 @@ export function blockOf(survey: Survey, questionId: string): Block | undefined {
   return survey.blocks.find((b) => b.questions.some((q) => q.id === questionId));
 }
 
-export function hasOptions(q: Question): q is Extract<Question, { options: Option[] }> {
+export function hasOptions(q: Question): q is Extract<Question, { type: 'single' | 'multi' | 'dropdown' | 'ranking' }> {
   return q.type === 'single' || q.type === 'multi' || q.type === 'dropdown' || q.type === 'ranking';
 }
 
@@ -359,6 +359,11 @@ export function paramAnswer(ctx: RespondentContext, q: Question): AnswerValue | 
       return Number.isInteger(num) && ((num >= q.from && num <= q.to) || q.extraOptions?.some((o) => o.code === num)) ? num : undefined;
     case 'number':
       return isFinite(num) && (q.min === undefined || num >= q.min) && (q.max === undefined || num <= q.max) ? num : undefined;
+    case 'slider': {
+      const step = q.step ?? 1;
+      const k = (num - q.min) / step;
+      return isFinite(num) && num >= q.min && num <= q.max && Math.abs(k - Math.round(k)) < 1e-6 ? num : undefined;
+    }
     case 'date':
       return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
     case 'text':
@@ -427,7 +432,8 @@ export function markValue(ctx: RespondentContext, a: Action): AnswerValue | unde
     case 'single':
     case 'dropdown':
     case 'scale':
-    case 'number': {
+    case 'number':
+    case 'slider': {
       const n = num(Array.isArray(raw) ? raw[0] : raw);
       return isFinite(n) ? n : undefined;
     }
@@ -685,6 +691,29 @@ export function answerText(ctx: RespondentContext, q: Question, rowCode?: string
       return Object.entries(v)
         .map(([r, rv]) => `${rows.find((x) => String(x.code) === r)?.text ?? r}: ${rowVal(rv)}`)
         .join('; ');
+    }
+    case 'slider':
+      return typeof a.v === 'number' ? `${a.v}${q.unit ? (q.unit === '%' ? '%' : ` ${q.unit}`) : ''}` : '';
+    case 'sum': {
+      if (typeof a.v !== 'object' || Array.isArray(a.v) || a.v === null) return '';
+      const v = a.v as Record<string, number>;
+      if (rowCode !== undefined) return v[rowCode] !== undefined ? String(v[rowCode]) : '';
+      return q.options.filter((o) => v[String(o.code)] !== undefined).map((o) => `${o.text}: ${v[String(o.code)]}`).join('; ');
+    }
+    case 'hotspot':
+      return Array.isArray(a.v) ? a.v.map((c) => q.options.find((o) => o.code === c)?.text ?? String(c)).join(', ') : '';
+    case 'file': {
+      const ids = typeof a.v === 'string' && a.v ? a.v.split(',') : [];
+      return ids.map((id) => a.o?.[id] ?? id).join(', ');
+    }
+    case 'maxdiff': {
+      if (typeof a.v !== 'object' || Array.isArray(a.v) || a.v === null) return '';
+      const t = (c: number) => q.options.find((o) => o.code === c)?.text ?? String(c);
+      return Object.entries(a.v as Record<string, number[]>).map(([s, p]) => `${s}: + ${t(p[0])} / − ${t(p[1])}`).join('; ');
+    }
+    case 'conjoint': {
+      if (typeof a.v !== 'object' || Array.isArray(a.v) || a.v === null) return '';
+      return Object.entries(a.v as Record<string, number>).map(([s, c]) => `${s}: ${c === 0 ? (q.none ?? '—') : `карточка ${c}`}`).join('; ');
     }
     default:
       return String(a.v ?? '');

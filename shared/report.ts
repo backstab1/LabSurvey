@@ -28,6 +28,10 @@ export interface QuestionReport {
   ranks?: { label: string; mean: number; first: number; n: number }[];
   /** Открытые ответы и «Другое» — последние по времени */
   texts?: string[];
+  /** Распределение суммы: среднее по каждому варианту */
+  means?: { label: string; mean: number }[];
+  /** Загрузка файлов: последние файлы (ID ответа, ID файла, исходное имя) */
+  files?: { rid: string; id: string; name: string }[];
 }
 
 export interface DropOff {
@@ -121,6 +125,30 @@ export function buildReport(survey: Survey, responses: ResponseRecord[], unfinis
         }
         break;
       }
+      case 'sum': {
+        rep.means = q.options.filter((o) => !o.hidden).map((o) => {
+          const xs = answered.map((r) => (r.answers[q.id].v as Record<string, number>)[String(o.code)] ?? 0);
+          return { label: o.text, mean: xs.length ? round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0 };
+        });
+        break;
+      }
+      case 'hotspot': {
+        rep.rows = q.options.filter((o) => !o.hidden).map((o) => {
+          const count = answered.filter((r) => (r.answers[q.id].v as number[]).includes(o.code)).length;
+          return { code: o.code, label: o.text, count, pct: pct(count, n) };
+        });
+        break;
+      }
+      case 'file': {
+        rep.files = answered.flatMap((r) => String(r.answers[q.id].v).split(',').map((id) => ({ rid: r.id, id, name: r.answers[q.id].o?.[id] ?? id })))
+          .slice(0, TEXTS);
+        break;
+      }
+      case 'maxdiff':
+      case 'conjoint':
+        // Анализ — по выгрузке ответов и файлу дизайна
+        break;
+      case 'slider':
       case 'number': {
         const values = answered.map((r) => r.answers[q.id].v as number).filter((v) => typeof v === 'number').sort((a, b) => a - b);
         if (values.length) {

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { ConjointBody, FileBody, HotspotBody, MaxDiffBody, SliderBody } from './AdvancedEditors.tsx';
 import { ConditionField } from './ConditionEditor.tsx';
 import { ActionsEditor } from './ActionsEditor.tsx';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
@@ -324,6 +325,36 @@ function TypeBody({ def, q, set }: { def: Survey; q: Question; set: (p: Patch) =
       );
     case 'hidden':
       return <HiddenBody q={q} set={set} />;
+    case 'slider':
+      return <SliderBody q={q} set={set} />;
+    case 'file':
+      return <FileBody q={q} set={set} />;
+    case 'hotspot':
+      return <HotspotBody q={q} set={set} />;
+    case 'sum':
+      return (
+        <>
+          <ListButton title="Между чем распределить" options={q.options} onClick={() => setList('options')} />
+          <div className="row" style={{ alignItems: 'end', marginTop: 10, flexWrap: 'wrap' }}>
+            <NumField label="Сколько распределить" width={160} placeholder="100" value={q.total} onChange={(v) => set({ total: v })} />
+            <label className="field"><span>Единица</span>
+              <input className="input" style={{ width: 100 }} placeholder="%" value={q.unit ?? ''} onChange={(e) => set({ unit: e.target.value || undefined })} />
+            </label>
+            <Segmented value={q.mode ?? 'exact'} onChange={(v) => set({ mode: v === 'exact' ? undefined : v })}
+              options={[{ value: 'exact', label: 'Ровно столько' }, { value: 'max', label: 'Не больше' }]} />
+          </div>
+          {list === 'options' && dialog('Между чем распределить', q.options, 'options', { flags: true, noExport: true, quickAdd: true })}
+        </>
+      );
+    case 'maxdiff':
+      return (
+        <>
+          <MaxDiffBody q={q} set={set} listButton={<ListButton title="Варианты" options={q.options} onClick={() => setList('options')} />} />
+          {list === 'options' && dialog('Варианты', q.options, 'options', { flags: true, quickAdd: true })}
+        </>
+      );
+    case 'conjoint':
+      return <ConjointBody q={q} set={set} />;
     default:
       return null;
   }

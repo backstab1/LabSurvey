@@ -17,7 +17,10 @@ function opsFor(q: Question | undefined, isParam: boolean): ConditionOp[] {
   if (isParam) return ['eq', 'neq', 'in', 'notIn', 'answered', 'notAnswered'];
   switch (q?.type) {
     case 'multi':
+    case 'hotspot':
     case 'ranking': return ['contains', 'notContains', 'containsAny', 'containsAll', 'answered', 'notAnswered'];
+    case 'file': case 'maxdiff': case 'conjoint': return ['answered', 'notAnswered'];
+    case 'sum': return ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'answered', 'notAnswered'];
     case 'single': case 'dropdown': return ['eq', 'neq', 'in', 'notIn', 'answered', 'notAnswered'];
     case 'matrix': return ['eq', 'neq', 'in', 'notIn', 'gt', 'gte', 'lt', 'lte', 'answered', 'notAnswered'];
     case 'text': case 'phone': return ['eq', 'neq', 'answered', 'notAnswered'];
@@ -29,6 +32,7 @@ function opsFor(q: Question | undefined, isParam: boolean): ConditionOp[] {
 function valueChoices(def: Survey, q: Question | undefined, row: number | undefined): Option[] | null {
   if (!q) return null;
   if (q.type === 'single' || q.type === 'multi' || q.type === 'dropdown' || q.type === 'ranking') return allOptions(def, q);
+  if (q.type === 'hotspot') return q.options;
   if (q.type === 'matrix') return row !== undefined ? q.columns : null;
   if (q.type === 'scale') {
     const pts = Array.from({ length: q.to - q.from + 1 }, (_, i) => q.from + i);

@@ -49,6 +49,8 @@ export interface Option {
   script?: string;
   /** Столбец матрицы: один на всю таблицу (например, «Ничего из перечисленного») — отмечает все строки */
   shared?: boolean;
+  /** Клик по картинке (hotspot): прямоугольная область в процентах от размера картинки */
+  area?: { x: number; y: number; w: number; h: number };
 }
 
 /** Перенос вариантов из другого вопроса (single/multi/dropdown или строки матрицы) */
@@ -314,6 +316,90 @@ export interface HiddenQuestion extends QuestionBase {
   calc?: string;
 }
 
+/** Слайдер: число, выбранное ползунком; ответ засчитывается, только если респондент сдвинул ползунок */
+export interface SliderQuestion extends QuestionBase {
+  type: 'slider';
+  min: number;
+  max: number;
+  /** Шаг, по умолчанию 1 */
+  step?: number;
+  /** Где ползунок стоит до ответа (по умолчанию — посередине) */
+  start?: number;
+  /** Подписи под краями и серединой шкалы */
+  minLabel?: string;
+  maxLabel?: string;
+  midLabel?: string;
+  /** Единица рядом со значением: «%», «₽», «лет» */
+  unit?: string;
+}
+
+/** Распределение суммы: раздать total (100 баллов, 100%) между вариантами */
+export interface SumQuestion extends QuestionBase {
+  type: 'sum';
+  options: Option[];
+  /** Сколько распределить, по умолчанию 100 */
+  total?: number;
+  /** exact — сумма должна быть ровно total (по умолчанию), max — не больше total */
+  mode?: 'exact' | 'max';
+  /** Единица: «%» (по умолчанию), «баллов», «₽» */
+  unit?: string;
+}
+
+/** Загрузка файла респондентом: фото, скриншот, документ */
+export interface FileQuestion extends QuestionBase {
+  type: 'file';
+  /** image — только картинки (по умолчанию), any — картинки, PDF и документы Office */
+  accept?: 'image' | 'any';
+  /** Сколько файлов можно приложить, по умолчанию 1 (до 10) */
+  maxFiles?: number;
+  /** Размер одного файла, МБ, по умолчанию 10 (до 20) */
+  maxSizeMb?: number;
+}
+
+/** Клик по картинке: респондент отмечает области на изображении (упаковка, макет, полка) */
+export interface HotspotQuestion extends QuestionBase {
+  type: 'hotspot';
+  /** Картинка (https://… или /путь) */
+  image: string;
+  /** Области: вариант с area {x, y, w, h} в процентах */
+  options: Option[];
+  minSelected?: number;
+  maxSelected?: number;
+  /** Показывать границы областей (по умолчанию скрыты — респондент ищет сам) */
+  showAreas?: boolean;
+}
+
+/** MaxDiff (best–worst): в каждом наборе выбрать самый и наименее важный вариант */
+export interface MaxDiffQuestion extends QuestionBase {
+  type: 'maxdiff';
+  options: Option[];
+  /** Вариантов в наборе, по умолчанию 4 */
+  perSet?: number;
+  /** Сколько наборов; по умолчанию — чтобы каждый вариант показался около 3 раз */
+  sets?: number;
+  bestLabel?: string;
+  worstLabel?: string;
+}
+
+/** Атрибут конджойнта: например «Цена» с уровнями 199 / 249 / 299 ₽ */
+export interface ConjointAttribute {
+  id: string;
+  text: string;
+  levels: Option[];
+}
+
+/** Конджойнт (выбор из альтернатив, CBC): в каждом задании выбрать лучшую из сгенерированных карточек */
+export interface ConjointQuestion extends QuestionBase {
+  type: 'conjoint';
+  attributes: ConjointAttribute[];
+  /** Заданий на респондента, по умолчанию 8 */
+  tasks?: number;
+  /** Карточек в задании, по умолчанию 3 */
+  alternatives?: number;
+  /** Текст варианта «Ничего из этого» (нет — вариант не показывается) */
+  none?: string;
+}
+
 export type Question =
   | ChoiceQuestion
   | MultiQuestion
@@ -325,7 +411,13 @@ export type Question =
   | DateQuestion
   | PhoneQuestion
   | InfoBlock
-  | HiddenQuestion;
+  | HiddenQuestion
+  | SliderQuestion
+  | SumQuestion
+  | FileQuestion
+  | HotspotQuestion
+  | MaxDiffQuestion
+  | ConjointQuestion;
 
 export type QuestionType = Question['type'];
 
@@ -536,6 +628,12 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   phone: 'Телефон',
   info: 'Информационный блок',
   hidden: 'Скрытая переменная',
+  slider: 'Слайдер',
+  sum: 'Распределение суммы',
+  file: 'Загрузка файла',
+  hotspot: 'Клик по картинке',
+  maxdiff: 'MaxDiff',
+  conjoint: 'Конджойнт',
 };
 
 // ---- Проекты ----

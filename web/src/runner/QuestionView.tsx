@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { groupOf, pipe, resolveOptions, resolveRows } from '../../../shared/logic.ts';
 import { isRequired } from '../../../shared/answers.ts';
 import { rich } from './rich.tsx';
+import { Conjoint, FileUpload, Hotspot, MaxDiff, Slider, SumInput } from './AdvancedViews.tsx';
 import { settingsOf } from '../../../shared/types.ts';
 import type { Answer, MatrixQuestion, NumberQuestion, Option, Question, RankingQuestion, RespondentContext, ScaleQuestion, TextQuestion } from '../../../shared/types.ts';
 
@@ -48,6 +49,12 @@ function Body({ q, ctx, answer, onChange }: Omit<Props, 'error'>) {
           onChange={(e) => onChange(e.target.value ? { v: e.target.value } : undefined)} />
       );
     case 'phone': return <PhoneInput format={q.format ?? 'ru'} answer={answer} onChange={onChange} />;
+    case 'slider': return <Slider q={q} answer={answer} onChange={onChange} />;
+    case 'sum': return <SumInput q={q} answer={answer} onChange={onChange} />;
+    case 'file': return <FileUpload q={q} answer={answer} onChange={onChange} />;
+    case 'hotspot': return <Hotspot q={q} answer={answer} onChange={onChange} />;
+    case 'maxdiff': return <MaxDiff q={q} ctx={ctx} answer={answer} onChange={onChange} />;
+    case 'conjoint': return <Conjoint q={q} ctx={ctx} answer={answer} onChange={onChange} />;
     default: return null;
   }
 }

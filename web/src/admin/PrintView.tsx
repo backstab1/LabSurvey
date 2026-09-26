@@ -109,6 +109,12 @@ function PrintQuestion({ def, q, n }: { def: Survey; q: Question; n: number | nu
   if (q.type === 'phone') specs.push(q.format === 'international' ? 'международный формат' : '+7');
   if (q.type === 'matrix') specs.push(`${q.mode === 'single' ? 'один ответ' : 'несколько ответов'} в строке${q.requiredRows === 'none' ? ', строки необязательны' : typeof q.requiredRows === 'number' ? `, минимум ${q.requiredRows} строк` : ''}`);
   if (q.type === 'hidden') specs.push(q.fromParam ? `из параметра ссылки ?${q.fromParam}` : 'задаётся действием или скриптом');
+  if (q.type === 'slider') specs.push(`${q.min}–${q.max}${q.step ? `, шаг ${q.step}` : ''}${q.unit ? ` ${q.unit}` : ''}`);
+  if (q.type === 'sum') specs.push(`${(q.mode ?? 'exact') === 'exact' ? 'ровно' : 'не больше'} ${q.total ?? 100} ${q.unit ?? '%'}: ${q.options.map((o) => o.text).join(' / ')}`);
+  if (q.type === 'file') specs.push(`${(q.accept ?? 'image') === 'image' ? 'фото' : 'файлы'}, до ${q.maxFiles ?? 1} шт., до ${q.maxSizeMb ?? 10} МБ`);
+  if (q.type === 'hotspot') specs.push(`области: ${q.options.map((o) => o.text).join(', ')}`);
+  if (q.type === 'maxdiff') specs.push(`наборы по ${q.perSet ?? 4}: ${q.options.map((o) => o.text).join(', ')}`);
+  if (q.type === 'conjoint') specs.push(`${q.tasks ?? 8} заданий × ${q.alternatives ?? 3} карточки; ${q.attributes.map((a) => `${a.text}: ${a.levels.map((l) => l.text).join(' / ')}`).join('; ')}`);
 
   const after = describeActions(def, q, q.actions?.after);
   const answerable = q.type !== 'info' && q.type !== 'hidden';
