@@ -1,6 +1,6 @@
 // Модель переменных для выгрузки (Excel, SPSS, Google Sheets): одна строка — один респондент
 import { allOptions, allRows } from './logic.ts';
-import type { Answers, Survey } from './types.ts';
+import type { Answers, Option, Survey } from './types.ts';
 
 export type ResponseStatus = 'in_progress' | 'completed' | 'screened_out' | 'terminated' | 'overquota';
 
@@ -71,6 +71,21 @@ function toDate(iso: string | null): Date | null {
   return iso ? new Date(iso) : null;
 }
 
+/** Переменная открытого значения варианта: текст, а для «число» — числовая */
+function otherVar(name: string, label: string, o: Option, get: (r: ResponseRecord) => string | null | undefined): VarDef {
+  if (o.otherType === 'number') {
+    return {
+      name, label, kind: 'numeric', measure: 'scale', decimals: o.otherDecimals ? 2 : 0,
+      get: (r) => {
+        const t = get(r);
+        const n = t ? Number(t.replace(',', '.')) : NaN;
+        return isFinite(n) ? n : null;
+      },
+    };
+  }
+  return { name, label, kind: 'string', measure: 'nominal', get: (r) => get(r) ?? null };
+}
+
 export function buildVariables(survey: Survey, responses: ResponseRecord[], opts: { timings?: boolean } = {}): VarDef[] {
   const vars: VarDef[] = [];
   const used = new Set<string>();
@@ -125,23 +140,20 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
       switch (q.type) {
         case 'single':
         case 'dropdown': {
-          const opts = allOptions(survey, q);
+          const opts = allOptions(survey, q).filter((o) => !o.group);
           add({
             name: q.id, label: text, kind: 'numeric', measure: 'nominal',
             valueLabels: opts.map((o) => ({ value: o.code, label: clean(o.text) })),
             get: (r) => (typeof ans(r)?.v === 'number' ? (ans(r)!.v as number) : null),
           });
-          for (const o of opts.filter((x) => x.other)) {
-            add({
-              name: `${q.id}_${o.code}_other`, label: `${text}: ${clean(o.text)} (текст)`, kind: 'string', measure: 'nominal',
-              get: (r) => ans(r)?.o?.[String(o.code)] ?? null,
-            });
+          for (const o of opts.filter((x) => x.other && !x.noExportOther)) {
+            add(otherVar(`${q.id}_${o.code}_other`, `${text}: ${clean(o.text)} (${o.otherType === 'number' ? 'число' : 'текст'})`, o, (r) => ans(r)?.o?.[String(o.code)]));
           }
           break;
         }
         case 'multi': {
-          const opts = allOptions(survey, q);
-          for (const o of opts) {
+          const opts = allOptions(survey, q).filter((o) => !o.group);
+          for (const o of opts.filter((x) => !x.noExport)) {
             add({
               name: `${q.id}_${o.code}`, label: `${text}: ${clean(o.text)}`, kind: 'numeric', measure: 'nominal',
               valueLabels: SELECTED_LABELS,
@@ -151,16 +163,13 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
               },
             });
           }
-          for (const o of opts.filter((x) => x.other)) {
-            add({
-              name: `${q.id}_${o.code}_other`, label: `${text}: ${clean(o.text)} (текст)`, kind: 'string', measure: 'nominal',
-              get: (r) => ans(r)?.o?.[String(o.code)] ?? null,
-            });
+          for (const o of opts.filter((x) => x.other && !x.noExportOther)) {
+            add(otherVar(`${q.id}_${o.code}_other`, `${text}: ${clean(o.text)} (${o.otherType === 'number' ? 'число' : 'текст'})`, o, (r) => ans(r)?.o?.[String(o.code)]));
           }
           break;
         }
         case 'ranking': {
-          for (const o of allOptions(survey, q)) {
+          for (const o of allOptions(survey, q).filter((x) => !x.group && !x.noExport)) {
             add({
               name: `${q.id}_${o.code}`, label: `${text}: ${clean(o.text)} (место)`, kind: 'numeric', measure: 'ordinal',
               get: (r) => {
@@ -180,6 +189,7 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
             return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, number | number[]>)[String(code)] : undefined;
           };
           for (const row of rows) {
+            if (row.noExport) continue;
             if (q.mode === 'single') {
               add({
                 name: `${q.id}_${row.code}`, label: `${text}: ${clean(row.text)}`, kind: 'numeric', measure: 'ordinal',
@@ -202,7 +212,7 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
                 });
               }
             }
-            if (row.other) {
+            if (row.other && !row.noExportOther) {
               add({
                 name: `${q.id}_${row.code}_other`, label: `${text}: ${clean(row.text)} (текст)`, kind: 'string', measure: 'nominal',
                 get: (r) => ans(r)?.o?.[String(row.code)] ?? null,

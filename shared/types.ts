@@ -19,6 +19,36 @@ export interface Option {
   score?: number;
   /** Картинка варианта (https://…) */
   image?: string;
+  /** Тип открытого значения (при other): число, дата или время; по умолчанию — текст */
+  otherType?: 'number' | 'date' | 'time';
+  /** Открытое значение-текст — большим полем */
+  otherMultiline?: boolean;
+  /** Открытое значение-число может быть дробным */
+  otherDecimals?: boolean;
+  /** Открытое значение можно оставить пустым */
+  otherOptional?: boolean;
+  /** Не показывать текст варианта (например, вариант-картинка) */
+  hideText?: boolean;
+  /** Не выгружать переменные этого варианта (multi, ranking, строки матрицы) */
+  noExport?: boolean;
+  /** Не выгружать открытое значение варианта */
+  noExportOther?: boolean;
+  /** Заголовок группы: не выбирается, объединяет варианты до следующего заголовка */
+  group?: boolean;
+  /** Для заголовка группы: сам заголовок не показывать (группа остаётся — для перемешивания и «блокирующего в группе») */
+  groupHidden?: boolean;
+  /** Для multi: выбор снимает остальные варианты своей группы */
+  groupExclusive?: boolean;
+  /** Показывать всегда: действия «скрыть варианты» на него не действуют */
+  alwaysShow?: boolean;
+  /** Не становится повтором цикла, когда вопрос — источник цикла */
+  noLoop?: boolean;
+  /** Всегда в конце списка; в нескольких колонках — отдельной строкой под ними */
+  bottom?: boolean;
+  /** Проверка при «Далее», если вариант выбран: JS, вернуть строку — текст ошибки. sl.value — открытое значение */
+  script?: string;
+  /** Столбец матрицы: один на всю таблицу (например, «Ничего из перечисленного») — отмечает все строки */
+  shared?: boolean;
 }
 
 /** Перенос вариантов из другого вопроса (single/multi/dropdown или строки матрицы) */
@@ -76,6 +106,7 @@ export interface SurveyScripts {
  * Выполняются по порядку; у каждого может быть условие `if`.
  */
 export type BeforeActionKind =
+  | 'skip'             // не показывать вопрос
   | 'hideOptions'      // скрыть варианты (строки матрицы) с кодами codes
   | 'showOnlyOptions'  // показать только варианты с кодами codes
   | 'hideOptionsFrom'  // скрыть варианты, выбранные (filter: selected) или невыбранные в вопросе question
@@ -84,6 +115,8 @@ export type BeforeActionKind =
   | 'setValue';        // записать value в скрытую переменную target
 
 export type AfterActionKind =
+  | 'skipQuestion'     // пропустить (не показывать) более поздний вопрос target
+  | 'markAnswered'     // записать ответ value в более поздний вопрос target и не показывать его
   | 'goTo'             // перейти к вопросу или странице target
   | 'end'              // завершить анкету
   | 'screenout'        // отсеять респондента
@@ -150,6 +183,12 @@ interface ChoiceBase extends QuestionBase {
   showOtherAlways?: boolean;
   /** Варианты в несколько колонок (на телефоне — всегда одна) */
   columnCount?: number;
+  /** Строка поиска над вариантами */
+  search?: boolean;
+  /** Группы вариантов свёрнуты, пока респондент их не раскроет */
+  collapseGroups?: boolean;
+  /** Без кружков и квадратиков: варианты — плитки */
+  hideMarker?: boolean;
 }
 
 export interface ChoiceQuestion extends ChoiceBase {
@@ -231,6 +270,8 @@ export interface MatrixQuestion extends QuestionBase {
   progressiveRows?: boolean;
   /** Карусель: по одной строке на экране, после ответа — следующая */
   carousel?: boolean;
+  /** Без кружков и квадратиков в ячейках */
+  hideMarker?: boolean;
   /** all — обязательны все строки, none — ни одна, число — минимум заполненных строк */
   requiredRows?: 'all' | 'none' | number;
 }

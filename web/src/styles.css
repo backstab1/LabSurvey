@@ -205,3 +205,22 @@ html.embedded .runner { padding-top: 0; padding-bottom: 8px; }
 .debug-panel table { border-collapse: collapse; margin-top: 8px; width: 100%; }
 .debug-panel td { padding: 3px 8px 3px 0; vertical-align: top; border-top: 1px solid #eef0f3; color: var(--text); }
 .debug-panel td.mono { font-family: var(--mono); white-space: nowrap; color: var(--muted); }
+
+/* Группы вариантов, поиск, варианты без маркеров */
+.option-search { margin-bottom: 10px; }
+.option-group + .option-group, .option-group + .options, .options + .option-group, .options + .options { margin-top: 12px; }
+.option-group-head { font-weight: 600; font-size: 14px; color: #4a515b; margin: 0 0 8px; display: flex; gap: 8px; align-items: center; }
+.option-group-head.toggle {
+  width: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: #f7f8fa; padding: 10px 14px; cursor: pointer;
+  text-align: left; font: inherit; font-weight: 600; font-size: 14px; color: var(--text);
+}
+.option-group-head .chev { color: var(--muted); width: 12px; }
+.no-marker .option input, .matrix.no-marker .cell input, .no-marker .carousel .cell input {
+  position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none;
+}
+.no-marker .option { position: relative; }
+.no-marker .option.selected { box-shadow: inset 0 0 0 1px var(--accent); }
+.matrix.no-marker .cell { border-radius: 8px; position: relative; }
+.matrix.no-marker .cell:hover { background: #f0f3f8; }
+.matrix.no-marker .cell.selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.matrix-shared { margin-top: 12px; }

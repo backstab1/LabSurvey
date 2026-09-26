@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { pipe, resolveOptions, resolveRows } from '../../../shared/logic.ts';
+import { groupOf, pipe, resolveOptions, resolveRows } from '../../../shared/logic.ts';
 import { isRequired } from '../../../shared/answers.ts';
 import { rich } from './rich.tsx';
 import { settingsOf } from '../../../shared/types.ts';
@@ -52,61 +52,130 @@ function Body({ q, ctx, answer, onChange }: Omit<Props, 'error'>) {
   }
 }
 
-function OtherInput({ value, onChange, placeholder = 'Укажите ваш вариант', autoFocus }: {
-  value: string; onChange: (s: string) => void; placeholder?: string; autoFocus?: boolean;
+/** Поле открытого значения варианта: текст, большое поле, число, дата или время */
+function OtherInput({ value, onChange, placeholder = 'Укажите ваш вариант', autoFocus, opt }: {
+  value: string; onChange: (s: string) => void; placeholder?: string; autoFocus?: boolean; opt?: Option;
 }) {
-  return <input className="input other-input" value={value} placeholder={placeholder} maxLength={500} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />;
+  const common = { className: 'input other-input', value, autoFocus, onChange: (e: { target: { value: string } }) => onChange(e.target.value) };
+  switch (opt?.otherType) {
+    case 'number':
+      return <input {...common} inputMode={opt.otherDecimals ? 'decimal' : 'numeric'} placeholder={opt.otherDecimals ? 'Число' : 'Целое число'} maxLength={30} />;
+    case 'date': return <input {...common} type="date" />;
+    case 'time': return <input {...common} type="time" />;
+    default:
+      return opt?.otherMultiline
+        ? <textarea {...common} rows={3} placeholder={placeholder} maxLength={2000} />
+        : <input {...common} placeholder={placeholder} maxLength={500} />;
+  }
 }
+
+/** Варианты разбиты на группы по заголовкам; head — заголовок или null для вариантов до первого заголовка */
+function splitGroups(options: Option[]): { head: Option | null; items: Option[] }[] {
+  const out: { head: Option | null; items: Option[] }[] = [{ head: null, items: [] }];
+  for (const o of options) {
+    if (o.group) out.push({ head: o, items: [] });
+    else out[out.length - 1].items.push(o);
+  }
+  return out.filter((g) => g.head || g.items.length);
+}
+
+const plainText = (s: string) => s.replace(/!\[[^\]]*\]\([^)]*\)|[*_[\]()]/g, '').toLowerCase();
 
 function Choice({ q, options, multi, answer, onChange, max, otherAlways }: {
   q: Question; options: Option[]; multi: boolean; answer?: Answer; onChange: (a: Answer | undefined) => void; max?: number; otherAlways?: boolean;
 }) {
   const selected: number[] = multi ? ((answer?.v as number[]) ?? []) : typeof answer?.v === 'number' ? [answer.v] : [];
   const others = answer?.o ?? {};
+  const cq = q as Extract<Question, { type: 'single' | 'multi' }>;
+  const [query, setQuery] = useState('');
+  const [openGroups, setOpenGroups] = useState<Set<number>>(() => new Set());
 
+  // Что снимается при выборе варианта: исключающие, а для «блокирующего в группе» — остальные в группе
+  const cleared = (o: Option, current: number[]) => {
+    const byCode = (c: number) => options.find((x) => x.code === c);
+    const group = o.groupExclusive ? groupOf(options, o.code) : [];
+    return current.filter((c) => {
+      const x = byCode(c);
+      if (x?.exclusive) return false;
+      if (group.includes(c)) return false;
+      if (x?.groupExclusive && groupOf(options, c).includes(o.code)) return false;
+      return true;
+    });
+  };
   const toggle = (o: Option) => {
     if (!multi) return onChange({ v: o.code, o: others });
     let next: number[];
     if (selected.includes(o.code)) next = selected.filter((c) => c !== o.code);
     else if (o.exclusive) next = [o.code];
-    else next = [...selected.filter((c) => !options.find((x) => x.code === c)?.exclusive), o.code];
+    else next = [...cleared(o, selected), o.code];
     onChange(next.length ? { v: next, o: others } : undefined);
   };
   // Ввод текста в «Другое» сам отмечает вариант
-  const setOther = (code: number, text: string) => {
+  const setOther = (o: Option, text: string) => {
     let v = answer?.v;
-    if (text && !selected.includes(code)) {
-      v = multi ? [...selected.filter((c) => !options.find((x) => x.code === c)?.exclusive), code] : code;
-    }
-    onChange({ v: v ?? (multi ? [] : code), o: { ...others, [code]: text } });
+    if (text && !selected.includes(o.code)) v = multi ? [...cleared(o, selected), o.code] : o.code;
+    onChange({ v: v ?? (multi ? [] : o.code), o: { ...others, [o.code]: text } });
   };
 
   const atMax = multi && !!max && selected.length >= max;
+  const q_ = query.trim().toLowerCase();
+  const matches = (o: Option) => !q_ || selected.includes(o.code) || plainText(o.text).includes(q_);
+  const main = options.filter((o) => !o.bottom || o.group);
+  const bottom = options.filter((o) => o.bottom && !o.group);
   // С картинками варианты — карточки в сетке
   const withImages = options.some((o) => o.image);
-  const cols = 'columnCount' in q && q.columnCount && q.columnCount > 1 ? q.columnCount : withImages ? 2 : 0;
+  const cols = cq.columnCount && cq.columnCount > 1 ? cq.columnCount : withImages ? 2 : 0;
+
+  const item = (o: Option) => {
+    const on = selected.includes(o.code);
+    return (
+      <div key={o.code}>
+        <label className={`option${on ? ' selected' : ''}${o.image ? ' with-image' : ''}`} aria-label={o.hideText ? plainText(o.text) : undefined}>
+          {o.image && <img className="opt-img" src={o.image} alt={o.hideText ? plainText(o.text) : ''} loading="lazy" />}
+          <span className="opt-line">
+            <input type={multi ? 'checkbox' : 'radio'} name={q.id} checked={on} disabled={!on && atMax && !o.exclusive}
+              onChange={() => toggle(o)} />
+            {!o.hideText && <span>{rich(o.text)}</span>}
+          </span>
+        </label>
+        {o.other && (on || otherAlways) && <OtherInput opt={o} autoFocus={on && !others[o.code]} value={others[o.code] ?? ''} onChange={(t) => setOther(o, t)} />}
+      </div>
+    );
+  };
+  const grid = (list: Option[], key: string) => (
+    <div key={key} className={`options${cols ? ' cols' : ''}`} style={cols ? { ['--cols' as string]: cols } : undefined}>{list.map(item)}</div>
+  );
+
+  const groups = splitGroups(main);
+  const hasGroups = groups.some((g) => g.head);
   return (
-    <>
+    <div className={cq.hideMarker ? 'no-marker' : undefined}>
     {multi && <div className="q-hint choice-hint">{max ? `Можно выбрать не более ${max}` : 'Можно выбрать несколько вариантов'}</div>}
-    <div className={`options${cols ? ' cols' : ''}`} style={cols ? { ['--cols' as string]: cols } : undefined}>
-      {options.map((o) => {
-        const on = selected.includes(o.code);
-        return (
-          <div key={o.code}>
-            <label className={`option${on ? ' selected' : ''}${o.image ? ' with-image' : ''}`}>
-              {o.image && <img className="opt-img" src={o.image} alt="" loading="lazy" />}
-              <span className="opt-line">
-                <input type={multi ? 'checkbox' : 'radio'} name={q.id} checked={on} disabled={!on && atMax && !o.exclusive}
-                  onChange={() => toggle(o)} />
-                <span>{rich(o.text)}</span>
-              </span>
-            </label>
-            {o.other && (on || otherAlways) && <OtherInput autoFocus={on && !others[o.code]} value={others[o.code] ?? ''} onChange={(t) => setOther(o.code, t)} />}
-          </div>
-        );
-      })}
+    {cq.search && (
+      <input className="input option-search" type="search" placeholder="Поиск по вариантам" value={query} onChange={(e) => setQuery(e.target.value)} />
+    )}
+    {!hasGroups ? grid(main.filter(matches), 'all') : groups.map((g, gi) => {
+      const items = g.items.filter(matches);
+      if (!items.length) return null;
+      if (!g.head || g.head.groupHidden) return grid(items, `g${gi}`);
+      const collapsible = !!cq.collapseGroups && !q_;
+      const open = !collapsible || openGroups.has(g.head.code) || items.some((o) => selected.includes(o.code));
+      const head = g.head;
+      return (
+        <div key={`g${gi}`} className="option-group">
+          {collapsible ? (
+            <button type="button" className="option-group-head toggle" aria-expanded={open}
+              onClick={() => setOpenGroups((s) => { const n = new Set(s); if (n.has(head.code)) n.delete(head.code); else n.add(head.code); return n; })}>
+              <span className="chev">{open ? '▾' : '▸'}</span>{rich(head.text)}
+            </button>
+          ) : <div className="option-group-head">{rich(head.text)}</div>}
+          {open && grid(items, `i${gi}`)}
+        </div>
+      );
+    })}
+    {bottom.length > 0 && grid(bottom.filter(matches), 'bottom')}
+    {q_ && !options.some((o) => !o.group && matches(o)) && <div className="q-hint">Ничего не найдено</div>}
     </div>
-    </>
   );
 }
 
@@ -152,7 +221,7 @@ function Ranking({ q, options, answer, onChange }: { q: RankingQuestion; options
         </ol>
       )}
       <div className="options">
-        {options.filter((o) => !ranked.includes(o.code)).map((o) => (
+        {options.filter((o) => !o.group && !ranked.includes(o.code)).map((o) => (
           <button type="button" key={o.code} className="option rank-option" disabled={ranked.length >= need} onClick={() => toggle(o.code)}>
             <span className="rank-slot">{ranked.length + 1}</span><span>{rich(o.text)}</span>
           </button>
@@ -169,10 +238,12 @@ function Dropdown({ options, answer, onChange }: { options: Option[]; answer?: A
     <div>
       <select className="input" value={value} onChange={(e) => onChange(e.target.value === '' ? undefined : { v: Number(e.target.value), o: answer?.o })}>
         <option value="">— выберите —</option>
-        {options.map((o) => <option key={o.code} value={o.code}>{o.text}</option>)}
+        {splitGroups(options).map((g, gi) => (g.head && !g.head.groupHidden
+          ? <optgroup key={gi} label={g.head.text}>{g.items.map((o) => <option key={o.code} value={o.code}>{o.text}</option>)}</optgroup>
+          : g.items.map((o) => <option key={o.code} value={o.code}>{o.text}</option>)))}
       </select>
       {opt?.other && (
-        <OtherInput autoFocus={!answer?.o?.[opt.code]} value={answer?.o?.[opt.code] ?? ''} onChange={(t) => onChange({ v: opt.code, o: { [opt.code]: t } })} />
+        <OtherInput opt={opt} autoFocus={!answer?.o?.[opt.code]} value={answer?.o?.[opt.code] ?? ''} onChange={(t) => onChange({ v: opt.code, o: { [opt.code]: t } })} />
       )}
     </div>
   );
@@ -274,8 +345,27 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
     onChange({ v: cleanV, o: cleanO });
   };
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Столбцы «общий для всей таблицы» — отдельными вариантами под таблицей
+  const sharedCols = q.columns.filter((c) => c.shared);
+  const columns = sharedCols.length ? q.columns.filter((c) => !c.shared) : q.columns;
+  const plainRows = rows.filter((r) => !r.other);
+  const sharedOn = (c: Option) => plainRows.length > 0 && plainRows.every((r) => {
+    const x = v[String(r.code)];
+    return Array.isArray(x) ? x.includes(c.code) : x === c.code;
+  });
+  const toggleShared = (c: Option) => {
+    if (sharedOn(c)) return emit(Object.fromEntries(Object.entries(v).filter(([k]) => !plainRows.some((r) => String(r.code) === k))), others);
+    const nv: Record<string, number | number[]> = {};
+    for (const r of plainRows) nv[String(r.code)] = q.mode === 'single' ? c.code : [c.code];
+    emit(nv, others);
+  };
   const pick = (row: number, col: number) => {
     const key = String(row);
+    // Выбор в таблице снимает общий вариант во всех строках
+    if (sharedCols.some((c) => sharedOn(c))) {
+      const nv: Record<string, number | number[]> = { [key]: q.mode === 'single' ? col : [col] };
+      return emit(nv, others);
+    }
     if (q.mode === 'single') {
       const firstTime = v[key] === undefined;
       emit({ ...v, [key]: col }, others);
@@ -297,8 +387,20 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
     return x !== undefined && (!Array.isArray(x) || x.length > 0);
   };
   const rowLabel = (r: Option): ReactNode => (r.other
-    ? <OtherInput placeholder={r.text} value={others[r.code] ?? ''} onChange={(t) => emit(v, { ...others, [r.code]: t })} />
+    ? <OtherInput opt={r} placeholder={r.text} value={others[r.code] ?? ''} onChange={(t) => emit(v, { ...others, [r.code]: t })} />
     : r.text);
+  const sharedBlock = sharedCols.length > 0 && (
+    <div className={`options matrix-shared${q.hideMarker ? ' no-marker' : ''}`}>
+      {sharedCols.map((c) => (
+        <label key={c.code} className={`option${sharedOn(c) ? ' selected' : ''}`}>
+          <span className="opt-line">
+            <input type="checkbox" checked={sharedOn(c)} onChange={() => toggleShared(c)} />
+            <span>{rich(c.text)}</span>
+          </span>
+        </label>
+      ))}
+    </div>
+  );
   const cell = (r: Option, c: Option, label: string): ReactNode => (
     <label className={`cell${isOn(r.code, c.code) ? ' selected' : ''}`}>
       <input type={q.mode === 'single' ? 'radio' : 'checkbox'} name={`${q.id}_${r.code}`}
@@ -307,7 +409,15 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
     </label>
   );
 
-  if (q.carousel) return <MatrixCarousel q={q} rows={rows} rowLabel={rowLabel} cell={cell} answered={answered} />;
+  const markerCls = q.hideMarker ? ' no-marker' : '';
+  if (q.carousel) {
+    return (
+      <div className={markerCls.trim() || undefined}>
+        <MatrixCarousel q={q} columns={columns} rows={rows} rowLabel={rowLabel} cell={cell} answered={answered} />
+        {sharedBlock}
+      </div>
+    );
+  }
 
   // Постепенный показ: строки до первой неотвеченной (строки «Другое» не останавливают)
   let shownRows = rows;
@@ -315,17 +425,18 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
     const firstOpen = rows.findIndex((r) => !r.other && !answered(r));
     if (firstOpen >= 0) shownRows = rows.slice(0, firstOpen + 1);
   }
-  const cls = `matrix${q.verticalHeaders ? ' vertical-headers' : ''}`;
+  const cls = `matrix${q.verticalHeaders ? ' vertical-headers' : ''}${markerCls}`;
 
   if (q.transpose) {
     return (
+      <>
       <div className="matrix-wrap">
         <table className={cls}>
           <thead>
             <tr><th />{shownRows.map((r) => <th key={r.code} scope="col"><span>{rowLabel(r)}</span></th>)}</tr>
           </thead>
           <tbody>
-            {q.columns.map((c) => (
+            {columns.map((c) => (
               <tr key={c.code}>
                 <th scope="row">{c.text}</th>
                 {shownRows.map((r) => <td key={r.code}>{cell(r, c, r.other ? others[r.code] || r.text : r.text)}</td>)}
@@ -334,30 +445,36 @@ function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option
           </tbody>
         </table>
       </div>
+      {sharedBlock}
+      </>
     );
   }
 
   return (
+    <>
     <div className="matrix-wrap" ref={wrapRef}>
       <table className={cls}>
         <thead>
-          <tr><th />{q.columns.map((c) => <th key={c.code} scope="col"><span>{c.text}</span></th>)}</tr>
+          <tr><th />{columns.map((c) => <th key={c.code} scope="col"><span>{c.text}</span></th>)}</tr>
         </thead>
         <tbody>
           {shownRows.map((r) => (
             <tr key={r.code} className={`fade-in${answered(r) ? ' answered' : r.other ? '' : ' unanswered'}`} data-row={r.code}>
               <th scope="row">{rowLabel(r)}</th>
-              {q.columns.map((c) => <td key={c.code}>{cell(r, c, c.text)}</td>)}
+              {columns.map((c) => <td key={c.code}>{cell(r, c, c.text)}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+    {sharedBlock}
+    </>
   );
 }
 
-function MatrixCarousel({ q, rows, rowLabel, cell, answered }: {
+function MatrixCarousel({ q, columns, rows, rowLabel, cell, answered }: {
   q: MatrixQuestion;
+  columns: Option[];
   rows: Option[];
   rowLabel: (r: Option) => ReactNode;
   cell: (r: Option, c: Option, label: string) => ReactNode;
@@ -391,7 +508,7 @@ function MatrixCarousel({ q, rows, rowLabel, cell, answered }: {
       </div>
       <div className="carousel-row">{rowLabel(row)}</div>
       <div className="options">
-        {q.columns.map((c) => <div key={c.code} className="carousel-cell">{cell(row, c, c.text)}</div>)}
+        {columns.map((c) => <div key={c.code} className="carousel-cell">{cell(row, c, c.text)}</div>)}
       </div>
     </div>
   );

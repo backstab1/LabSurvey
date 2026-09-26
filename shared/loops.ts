@@ -67,7 +67,7 @@ function sourceItems(spec: LoopSpec, ctx: RespondentContext | null, survey: Surv
     return Array.from({ length: n }, (_, i) => ({ code: i + 1, text: String(i + 1) }));
   }
   if (src.type === 'matrix') {
-    const rows = ctx ? resolveRows(ctx, src) : allRows(survey, src);
+    const rows = (ctx ? resolveRows(ctx, src) : allRows(survey, src)).filter((r) => !r.noLoop);
     if (!ctx) return rows.map((r) => ({ code: r.code, text: r.text }));
     const v = (answer?.v && typeof answer.v === 'object' && !Array.isArray(answer.v) ? answer.v : {}) as Record<string, number | number[]>;
     const hit = (r: Option) => {
@@ -79,7 +79,7 @@ function sourceItems(spec: LoopSpec, ctx: RespondentContext | null, survey: Surv
       .map((r) => ({ code: r.code, text: otherText(r) }));
   }
   if (!hasOptions(src)) return [];
-  const opts = (ctx ? resolveOptions(ctx, src, 0, false) : allOptions(survey, src)).filter((o) => !o.exclusive);
+  const opts = (ctx ? resolveOptions(ctx, src, 0, false) : allOptions(survey, src)).filter((o) => !o.exclusive && !o.group && !o.noLoop);
   if (!ctx) return opts.map((o) => ({ code: o.code, text: o.text }));
   const v = answer?.v;
   const chosen: number[] = Array.isArray(v) ? v : typeof v === 'number' ? [v] : [];

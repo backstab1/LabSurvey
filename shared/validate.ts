@@ -44,8 +44,8 @@ const OPS = new Set([
   'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'notIn',
   'contains', 'notContains', 'containsAny', 'containsAll', 'answered', 'notAnswered',
 ]);
-const BEFORE_ACTIONS = ['hideOptions', 'showOnlyOptions', 'hideOptionsFrom', 'skipIfFewer', 'answer', 'setValue'] as const;
-const AFTER_ACTIONS = ['goTo', 'end', 'screenout', 'setValue', 'error'] as const;
+const BEFORE_ACTIONS = ['skip', 'hideOptions', 'showOnlyOptions', 'hideOptionsFrom', 'skipIfFewer', 'answer', 'setValue'] as const;
+const AFTER_ACTIONS = ['goTo', 'skipQuestion', 'markAnswered', 'end', 'screenout', 'setValue', 'error'] as const;
 const ARRAY_OPS = new Set(['in', 'notIn', 'containsAny', 'containsAll']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -280,6 +280,15 @@ export function validateSurvey(input: unknown): ValidationResult {
             if (a.value === undefined) err(where, 'Укажите value');
             break;
           }
+          case 'skipQuestion':
+          case 'markAnswered': {
+            const t = typeof a.target === 'string' ? qIndex.get(a.target) : undefined;
+            if (!t) err(where, `Нет вопроса «${a.target ?? ''}»`);
+            else if (t.q.type === 'info' || t.q.type === 'hidden') err(where, `«${a.target}» — ${t.q.type === 'info' ? 'информационный блок' : 'скрытая переменная'}, пропускать нечего`);
+            else if (t.pos <= pi) err(where, 'Пропустить можно только вопрос, который идёт дальше');
+            if (a.do === 'markAnswered' && (a.value === undefined || a.value === '')) err(where, 'Укажите value — какой ответ записать');
+            break;
+          }
           case 'goTo': {
             const t = typeof a.target === 'string' ? qIndex.get(a.target)?.pos ?? blockStart.get(a.target) : undefined;
             if (t === undefined) err(where, `Нет вопроса или блока «${a.target}»`);
@@ -445,6 +454,11 @@ function validateSettings(st: Record<string, unknown>, err: (w: string, m: strin
   if (st.allowRetake && st.maxResponses) warn(w('allowRetake'), 'При повторном прохождении один человек может занять несколько мест в лимите ответов');
 }
 
+const OPTION_FLAGS = [
+  'other', 'exclusive', 'fixed', 'hidden', 'otherMultiline', 'otherDecimals', 'otherOptional', 'hideText', 'noExport', 'noExportOther',
+  'group', 'groupHidden', 'groupExclusive', 'alwaysShow', 'noLoop', 'bottom', 'shared',
+];
+
 function validateOptions(list: unknown, where: string, name: string, err: (w: string, m: string) => void, allowEmpty = false) {
   if (!Array.isArray(list)) return err(where, `Нужен массив ${name}`);
   if (list.length === 0 && !allowEmpty) return err(where, `${name}: нужен хотя бы один вариант`);
@@ -455,13 +469,20 @@ function validateOptions(list: unknown, where: string, name: string, err: (w: st
     else if (codes.has(o.code)) err(where, `${name}: код ${o.code} повторяется`);
     else codes.add(o.code);
     if (typeof o.text !== 'string' || !o.text.trim()) err(where, `${name}[${i + 1}]: нужен текст`);
-    for (const k of ['other', 'exclusive', 'fixed', 'hidden']) {
+    for (const k of OPTION_FLAGS) {
       if (o[k] !== undefined && typeof o[k] !== 'boolean') err(where, `${name}[${i + 1}].${k}: true или false`);
     }
+    if (o.otherType !== undefined && !['number', 'date', 'time'].includes(o.otherType as string)) err(where, `${name}[${i + 1}].otherType: number, date или time`);
+    if ((o.otherType !== undefined || o.otherMultiline || o.otherOptional || o.otherDecimals) && !o.other) err(where, `${name}[${i + 1}]: настройки открытого значения без other: true`);
+    if (o.script !== undefined) {
+      if (typeof o.script !== 'string') err(where, `${name}[${i + 1}].script: строка с JS-кодом`);
+      else try { new Function('sl', o.script); } catch (e) { err(where, `${name}[${i + 1}].script: синтаксическая ошибка — ${(e as Error).message}`); }
+    }
+    if (o.group && (o.other || o.exclusive)) err(where, `${name}[${i + 1}]: заголовок группы не может быть «другим» или исключающим`);
     if (o.score !== undefined && (typeof o.score !== 'number' || !isFinite(o.score))) err(where, `${name}[${i + 1}].score: число`);
     if (o.image !== undefined && (typeof o.image !== 'string' || !/^(https?:\/\/|\/)\S+$/i.test(o.image))) err(where, `${name}[${i + 1}].image: адрес картинки https://…`);
   });
-  if (list.length > 0 && list.every((o) => isObj(o) && o.hidden === true) && !allowEmpty) err(where, `${name}: все варианты скрыты`);
+  if (list.length > 0 && list.every((o) => isObj(o) && (o.hidden === true || o.group === true)) && !allowEmpty) err(where, `${name}: все варианты скрыты или это заголовки групп`);
 }
 
 function validateQuestion(
@@ -483,6 +504,10 @@ function validateQuestion(
   }
   if ('columnCount' in q && q.columnCount !== undefined && (!isInt(q.columnCount) || q.columnCount < 1 || q.columnCount > 4)) {
     err(w, 'columnCount: от 1 до 4');
+  }
+  for (const k of ['search', 'collapseGroups', 'hideMarker'] as const) {
+    const v = (q as unknown as Record<string, unknown>)[k];
+    if (v !== undefined && typeof v !== 'boolean') err(w, `${k}: true или false`);
   }
   switch (q.type) {
     case 'single':
@@ -526,6 +551,7 @@ function validateQuestion(
       if (q.rowOrder !== undefined && q.rowOrder !== 'random' && q.rowOrder !== 'rotate') err(w, 'rowOrder: random или rotate');
       if (q.carousel && q.progressiveRows) warn(w, 'carousel и progressiveRows вместе не имеют смысла — будет карусель');
       if (Array.isArray(q.columns) && q.columns.some((c) => c?.other)) err(w, '«Другое» в матрице задаётся в строках, а не в столбцах');
+      if (Array.isArray(q.rows) && q.rows.some((r) => r?.group)) err(w, 'Группы строк в матрице пока не поддерживаются');
       if (q.requiredRows !== undefined && q.requiredRows !== 'all' && q.requiredRows !== 'none'
         && !(isInt(q.requiredRows) && q.requiredRows >= 1)) {
         err(w, 'requiredRows: "all", "none" или целое ≥ 1');

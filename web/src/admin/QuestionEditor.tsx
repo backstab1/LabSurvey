@@ -233,7 +233,8 @@ function TypeBody({ def, q, set }: { def: Survey; q: Question; set: (p: Patch) =
       return (
         <>
           <ListButton title="Список вариантов" options={q.options} from={q.optionsFrom} onClick={() => setList('options')} />
-          {list === 'options' && dialog('Список вариантов', q.options, 'options', { flags: true, image: true }, { carry: carry('optionsFrom', q.optionsFrom) })}
+          {list === 'options' && dialog('Список вариантов', q.options, 'options',
+            { flags: true, image: true, noExport: true, logic: true, hideText: true }, { carry: carry('optionsFrom', q.optionsFrom) })}
         </>
       );
     case 'single':
@@ -243,7 +244,10 @@ function TypeBody({ def, q, set }: { def: Survey; q: Question; set: (p: Patch) =
         <>
           <ListButton title="Список ответов" options={q.options} from={q.optionsFrom} onClick={() => setList('options')} />
           {list === 'options' && dialog('Список ответов', q.options, 'options',
-            { other: true, exclusive: q.type === 'multi', flags: true, scores: true, image: q.type !== 'dropdown', quickAdd: true },
+            {
+              other: true, openTypes: true, exclusive: q.type === 'multi', flags: true, scores: true, image: q.type !== 'dropdown', quickAdd: true,
+              groups: true, noExport: q.type === 'multi', noExportOther: true, logic: true, bottom: true, script: true, hideText: q.type !== 'dropdown',
+            },
             { carry: carry('optionsFrom', q.optionsFrom) })}
         </>
       );
@@ -256,8 +260,10 @@ function TypeBody({ def, q, set }: { def: Survey; q: Question; set: (p: Patch) =
             <ListButton title="Список строк" options={q.rows} from={q.rowsFrom} onClick={() => setList('rows')} />
             <ListButton title="Список столбцов" options={q.columns} onClick={() => setList('columns')} />
           </div>
-          {list === 'rows' && dialog('Список строк', q.rows, 'rows', { other: true, flags: true }, { placeholder: 'Утверждение', carry: carry('rowsFrom', q.rowsFrom) })}
-          {list === 'columns' && dialog('Список столбцов', q.columns, 'columns', { scores: true }, { placeholder: 'Ответ' })}
+          {list === 'rows' && dialog('Список строк', q.rows, 'rows',
+            { other: true, flags: true, noExport: true, noExportOther: true, logic: true, bottom: true, script: true },
+            { placeholder: 'Утверждение', carry: carry('rowsFrom', q.rowsFrom) })}
+          {list === 'columns' && dialog('Список столбцов', q.columns, 'columns', { scores: true, shared: true }, { placeholder: 'Ответ' })}
         </>
       );
     case 'scale':
@@ -511,7 +517,12 @@ function questionSettings(def: Survey, q: Question, set: (p: Patch) => void): { 
       </div>,
     );
   }
-  if (q.type === 'single' || q.type === 'multi') flag('showOtherAlways', 'Не скрывать поле «Другое»', 'Поле видно сразу, ввод текста отмечает вариант');
+  if (q.type === 'single' || q.type === 'multi') flag('showOtherAlways', 'Отключить скрытие полей с открытыми значениями', 'Поле видно сразу, ввод текста отмечает вариант');
+  if (q.type === 'single' || q.type === 'multi') {
+    flag('search', 'Добавить строку поиска', 'Поле поиска над вариантами — для длинных списков');
+    if (q.options.some((o) => o.group) || q.collapseGroups) flag('collapseGroups', 'Показывать группы в свёрнутом виде', 'Респондент раскрывает группу нажатием');
+  }
+  if (q.type === 'single' || q.type === 'multi' || q.type === 'matrix') flag('hideMarker', 'Скрыть маркер выбора', 'Без кружков и квадратиков: выбор подсвечивается');
   if (q.type === 'matrix') {
     flag('transpose', 'Перевернуть таблицу', 'Строки и столбцы меняются местами');
     flag('verticalHeaders', 'Вертикальный текст в заголовках столбцов');

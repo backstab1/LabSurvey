@@ -13,13 +13,15 @@ export interface ScriptEnv {
 /** Общий объект между скриптами в рамках сессии — сюда init кладёт функции */
 const shared: Record<string, unknown> = {};
 
-export function makeSl(env: ScriptEnv, extra: { question?: string; value?: unknown } = {}) {
+export function makeSl(env: ScriptEnv, extra: { question?: string; value?: unknown; option?: number } = {}) {
   const { ctx } = env;
   return {
     /** ID текущего вопроса (для хуков вопроса) */
     question: extra.question ?? null,
     /** Текущее значение ответа (для onChange / validate) */
     value: extra.value,
+    /** Код варианта (для скрипта проверки варианта) */
+    option: extra.option ?? null,
     page: env.pageId,
     params: { ...ctx.params },
     respondentId: ctx.seed,
@@ -41,7 +43,7 @@ export function makeSl(env: ScriptEnv, extra: { question?: string; value?: unkno
 }
 
 /** Выполняет скрипт; ошибки не ломают опрос (в предпросмотре — показываются) */
-export function runScript(code: string | undefined, where: string, env: ScriptEnv, extra: { question?: string; value?: unknown } = {}): unknown {
+export function runScript(code: string | undefined, where: string, env: ScriptEnv, extra: { question?: string; value?: unknown; option?: number } = {}): unknown {
   if (!code?.trim()) return undefined;
   try {
     // eslint-disable-next-line no-new-func

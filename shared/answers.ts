@@ -1,4 +1,4 @@
-import { resolveOptions, resolveRows } from './logic.ts';
+import { groupOf, resolveOptions, resolveRows } from './logic.ts';
 import type { Answer, Option, Question, RespondentContext } from './types.ts';
 
 export function isRequired(q: Question): boolean {
@@ -44,9 +44,29 @@ function safeTest(pattern: string, value: string): boolean {
   try { return new RegExp(`^(?:${pattern})$`, 'u').test(value); } catch { return true; }
 }
 
+/** Проверка открытого значения варианта: обязательность и тип (число, дата, время) */
+export function otherValueError(opt: Option, raw: string | undefined): string | null {
+  const t = raw?.trim() ?? '';
+  if (!t) return opt.otherOptional ? null : `Укажите ваш вариант для «${opt.text}»`;
+  switch (opt.otherType) {
+    case 'number': {
+      const n = Number(t.replace(',', '.'));
+      if (!isFinite(n)) return `«${opt.text}»: введите число`;
+      if (!opt.otherDecimals && !Number.isInteger(n)) return `«${opt.text}»: введите целое число`;
+      return null;
+    }
+    case 'date':
+      return isValidDate(t) ? null : `«${opt.text}»: введите корректную дату`;
+    case 'time':
+      return /^([01]\d|2[0-3]):[0-5]\d$/.test(t) ? null : `«${opt.text}»: введите время в формате ЧЧ:ММ`;
+    default:
+      return null;
+  }
+}
+
 function otherError(opt: Option | undefined, a: Answer): string | null {
-  if (opt?.other && !a.o?.[String(opt.code)]?.trim()) return `Укажите ваш вариант для «${opt.text}»`;
-  return null;
+  if (!opt?.other) return null;
+  return otherValueError(opt, a.o?.[String(opt.code)]);
 }
 
 /**
@@ -72,7 +92,7 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
     case 'single':
     case 'dropdown': {
       if (typeof v !== 'number') return 'Некорректный ответ';
-      const opt = resolveOptions(ctx, q, 0, false).find((o) => o.code === v);
+      const opt = resolveOptions(ctx, q, 0, false).find((o) => o.code === v && !o.group);
       if (!opt) return 'Выберите вариант из списка';
       return otherError(opt, a!);
     }
@@ -80,10 +100,15 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
       if (!Array.isArray(v) || v.some((x) => typeof x !== 'number')) return 'Некорректный ответ';
       if (new Set(v).size !== v.length) return 'Некорректный ответ';
       const opts = resolveOptions(ctx, q, 0, false);
-      const chosen = v.map((c) => opts.find((o) => o.code === c));
+      const chosen = v.map((c) => opts.find((o) => o.code === c && !o.group));
       if (chosen.some((o) => !o)) return 'Выберите варианты из списка';
       if (v.length > 1 && chosen.some((o) => o!.exclusive)) {
         return `Вариант «${chosen.find((o) => o!.exclusive)!.text}» нельзя сочетать с другими`;
+      }
+      for (const o of chosen) {
+        if (!o!.groupExclusive) continue;
+        const group = groupOf(opts, o!.code);
+        if (v.some((c) => c !== o!.code && group.includes(c))) return `Вариант «${o!.text}» нельзя сочетать с другими вариантами группы`;
       }
       const onlyExclusive = chosen.length === 1 && chosen[0]!.exclusive;
       if (!onlyExclusive) {
@@ -165,6 +190,15 @@ function validateMatrix(
 
   for (const key of Object.keys(v)) {
     if (!rows.some((r) => String(r.code) === key)) return 'Некорректный ответ';
+  }
+  // Общий для всей таблицы столбец: отмечен сразу во всех строках и ни с чем не сочетается
+  for (const col of q.columns.filter((c) => c.shared)) {
+    const has = (rv: number | number[] | undefined) => (Array.isArray(rv) ? rv.includes(col.code) : rv === col.code);
+    const marked = rows.filter((r) => has(v[String(r.code)]));
+    if (!marked.length) continue;
+    const plain = rows.filter((r) => !r.other);
+    const alone = (rv: number | number[] | undefined) => (Array.isArray(rv) ? rv.length === 1 : true);
+    if (plain.some((r) => !has(v[String(r.code)]) || !alone(v[String(r.code)]))) return `Вариант «${col.text}» относится ко всей таблице`;
   }
 
   for (const row of rows) {

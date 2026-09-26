@@ -17,6 +17,24 @@ export interface ListFeatures {
   image?: boolean;
   /** Быстрые кнопки «Другое» / «Затрудняюсь» */
   quickAdd?: boolean;
+  /** Открытое значение-число, дата, время, многострочное, пустое */
+  openTypes?: boolean;
+  /** Заголовки групп (и «блокирующий в группе» при exclusive) */
+  groups?: boolean;
+  /** «Исключить поле при выгрузке» — у варианта есть свои переменные */
+  noExport?: boolean;
+  /** «Отключить выгрузку открытого значения» */
+  noExportOther?: boolean;
+  /** «Всегда отображается», «Запрещено использовать в циклах» */
+  logic?: boolean;
+  /** «Расположить в первой колонке внизу» */
+  bottom?: boolean;
+  /** «Проверка ответа скриптами» */
+  script?: boolean;
+  /** «Скрыть текст варианта» */
+  hideText?: boolean;
+  /** «Общий для всей таблицы» (столбцы матрицы) */
+  shared?: boolean;
 }
 
 /** Перенос вариантов из другого вопроса — показывается над списком */
@@ -149,13 +167,20 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
             {options.map((o, i) => {
               const isOpen = open === i;
               return (
-                <div key={i} className={`list-item${isOpen ? ' open' : ''}${o.hidden ? ' is-hidden' : ''}`}>
+                <div key={i} className={`list-item${isOpen ? ' open' : ''}${o.hidden ? ' is-hidden' : ''}${o.group ? ' is-group' : ''}`}>
                   <div className="list-row" role="row" onClick={() => { setOpen(isOpen ? null : i); setTab('main'); }}>
                     <span className={`list-code mono${dupCodes.has(o.code) ? ' dup' : ''}`} title={dupCodes.has(o.code) ? 'Код повторяется' : undefined}>{o.code}</span>
                     <span className="list-text">{o.text || <span className="muted">{placeholder}</span>}</span>
                     <span className="list-marks">
-                      {o.other && <span className="mark">открытое</span>}
+                      {o.group && <span className="mark">группа{o.groupHidden ? ' (скрыт)' : ''}</span>}
+                      {o.other && <span className="mark">открытое{o.otherType === 'number' ? ' число' : o.otherType === 'date' ? ' дата' : o.otherType === 'time' ? ' время' : ''}</span>}
                       {o.exclusive && <span className="mark">искл.</span>}
+                      {o.groupExclusive && <span className="mark">искл. в группе</span>}
+                      {o.alwaysShow && <span className="mark">всегда</span>}
+                      {o.bottom && <span className="mark">внизу</span>}
+                      {o.noExport && <span className="mark" title="Исключить поле при выгрузке">без выгрузки</span>}
+                      {o.script && <span className="mark">JS</span>}
+                      {o.shared && <span className="mark">на всю таблицу</span>}
                       {o.fixed && <span className="mark" title="Не подлежит рандомизации">📌</span>}
                       {o.hidden && <span className="mark">скрыт</span>}
                       {o.image && <span className="mark" title={o.image}>🖼</span>}
@@ -221,13 +246,7 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
                           )}
                         </div>
                       ) : (
-                        <div className="flags list-flags">
-                          {features.other && <Flag label="С открытым значением (текст)" hint="Рядом с вариантом поле «укажите»" checked={!!o.other} onChange={(v) => setAt(i, { other: v || undefined })} />}
-                          {features.exclusive && <Flag label="Блокирующий / исключающий" hint="Выбор снимает остальные варианты" checked={!!o.exclusive} onChange={(v) => setAt(i, { exclusive: v || undefined })} />}
-                          {features.flags && <Flag label="Не подлежит рандомизации / ротации" hint="Остаётся на своём месте" checked={!!o.fixed} onChange={(v) => setAt(i, { fixed: v || undefined })} />}
-                          {features.flags && <Flag label="Скрыть в режиме респондента" hint="Код остаётся в выгрузке и условиях" checked={!!o.hidden} onChange={(v) => setAt(i, { hidden: v || undefined })} />}
-                          {!features.other && !features.exclusive && !features.flags && <p className="muted small" style={{ margin: 0 }}>У вариантов этого списка нет настроек.</p>}
-                        </div>
+                        <OptionSettings o={o} features={features} set={(p) => setAt(i, p)} />
                       )}
                     </div>
                   )}
@@ -239,6 +258,80 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
         </div>
       )}
     </Modal>
+  );
+}
+
+/** Настройки варианта — флажки как в Survey Studio; недоступные в текущем состоянии — серые */
+function OptionSettings({ o, features: f, set }: { o: Option; features: ListFeatures; set: (p: Partial<Option>) => void }) {
+  const [showScript, setShowScript] = useState(!!o.script);
+  const isGroup = !!o.group;
+  const open = !!o.other && !isGroup;
+  const textOpen = open && !o.otherType;
+  const clearOpen = { other: undefined, otherType: undefined, otherMultiline: undefined, otherDecimals: undefined, otherOptional: undefined, noExportOther: undefined };
+  const left = [
+    f.other && f.openTypes && <Flag key="on" label="С открытым значением (число)" disabled={isGroup} checked={open && o.otherType === 'number'}
+      onChange={(v) => set(v ? { other: true, otherType: 'number', otherMultiline: undefined } : clearOpen)} />,
+    f.other && <Flag key="ot" label="С открытым значением (текст)" disabled={isGroup} checked={open && o.otherType !== 'number'}
+      hint={f.openTypes ? undefined : 'Рядом с вариантом поле «укажите»'}
+      onChange={(v) => set(v ? { other: true, otherType: undefined, otherDecimals: undefined } : clearOpen)} />,
+    f.other && f.openTypes && <Flag key="ml" label="Многострочный текст" disabled={!textOpen} checked={textOpen && !!o.otherMultiline}
+      onChange={(v) => set({ otherMultiline: v || undefined })} />,
+    f.exclusive && <Flag key="ex" label="Блокирующий / исключающий" hint="Выбор снимает остальные варианты" disabled={isGroup} checked={!!o.exclusive}
+      onChange={(v) => set({ exclusive: v || undefined, groupExclusive: undefined })} />,
+    f.exclusive && f.groups && <Flag key="gex" label="Блокирующий в группе" hint="Снимает остальные варианты своей группы" disabled={isGroup || !!o.exclusive}
+      checked={!!o.groupExclusive} onChange={(v) => set({ groupExclusive: v || undefined })} />,
+    f.logic && <Flag key="al" label="Всегда отображается" hint="Действия «скрыть варианты» его не скрывают" disabled={isGroup} checked={!!o.alwaysShow}
+      onChange={(v) => set({ alwaysShow: v || undefined })} />,
+    f.flags && <Flag key="fx" label="Не подлежит рандомизации / ротации" hint="Остаётся на своём месте" disabled={isGroup} checked={!!o.fixed}
+      onChange={(v) => set({ fixed: v || undefined })} />,
+    f.logic && <Flag key="nl" label="Запрещено использовать в циклах" hint="Не становится повтором цикла" disabled={isGroup} checked={!!o.noLoop}
+      onChange={(v) => set({ noLoop: v || undefined })} />,
+    f.noExport && <Flag key="ne" label="Исключить поле при выгрузке" disabled={isGroup} checked={!!o.noExport}
+      onChange={(v) => set({ noExport: v || undefined })} />,
+    f.noExportOther && <Flag key="neo" label="Отключить выгрузку открытого значения" disabled={!open} checked={open && !!o.noExportOther}
+      onChange={(v) => set({ noExportOther: v || undefined })} />,
+    f.groups && <Flag key="g" label="Заголовок группы" hint="Не выбирается; объединяет варианты ниже до следующего заголовка" checked={isGroup}
+      onChange={(v) => set(v ? { ...clearOpen, group: true, exclusive: undefined, groupExclusive: undefined, bottom: undefined, script: undefined, score: undefined } : { group: undefined, groupHidden: undefined })} />,
+    f.groups && <Flag key="gh" label="Скрыть заголовок группы" hint="Группа остаётся для перемешивания и блокировки" disabled={!isGroup} checked={isGroup && !!o.groupHidden}
+      onChange={(v) => set({ groupHidden: v || undefined })} />,
+  ].filter(Boolean);
+  const right = [
+    f.flags && <Flag key="h" label="Скрыть в режиме респондента" hint="Код остаётся в выгрузке и условиях" checked={!!o.hidden}
+      onChange={(v) => set({ hidden: v || undefined })} />,
+    f.other && f.openTypes && <Flag key="dec" label="Разрешить ввод дробных чисел" disabled={!(open && o.otherType === 'number')} checked={open && !!o.otherDecimals}
+      onChange={(v) => set({ otherDecimals: v || undefined })} />,
+    f.other && f.openTypes && <Flag key="opt" label="Разрешить пустые открытые значения" disabled={!open} checked={open && !!o.otherOptional}
+      onChange={(v) => set({ otherOptional: v || undefined })} />,
+    f.hideText && <Flag key="ht" label="Скрыть текст варианта" hint="Например, вариант-картинка" disabled={isGroup} checked={!!o.hideText}
+      onChange={(v) => set({ hideText: v || undefined })} />,
+    f.bottom && <Flag key="b" label="Расположить в первой колонке внизу" hint="Всегда последним, под колонками" disabled={isGroup} checked={!!o.bottom}
+      onChange={(v) => set({ bottom: v || undefined })} />,
+    f.script && <Flag key="sc" label="Проверка ответа скриптами" hint="JS при «Далее», если вариант выбран" disabled={isGroup} checked={showScript || !!o.script}
+      onChange={(v) => { setShowScript(v); if (!v) set({ script: undefined }); }} />,
+    f.other && f.openTypes && <Flag key="d" label="Использовать выбор даты" disabled={!open || o.otherType === 'number'} checked={open && o.otherType === 'date'}
+      onChange={(v) => set({ otherType: v ? 'date' : undefined, otherMultiline: undefined })} />,
+    f.other && f.openTypes && <Flag key="t" label="Использовать выбор времени" disabled={!open || o.otherType === 'number'} checked={open && o.otherType === 'time'}
+      onChange={(v) => set({ otherType: v ? 'time' : undefined, otherMultiline: undefined })} />,
+    f.shared && <Flag key="sh" label="Общий для всей таблицы" hint="Один вариант под таблицей, отмечает все строки" checked={!!o.shared}
+      onChange={(v) => set({ shared: v || undefined })} />,
+  ].filter(Boolean);
+  if (!left.length && !right.length) return <p className="muted small" style={{ margin: 0 }}>У вариантов этого списка нет настроек.</p>;
+  let scriptError = '';
+  if (o.script) { try { new Function('sl', o.script); } catch (e) { scriptError = (e as Error).message; } }
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="list-flags">
+        <div className="flags">{left}</div>
+        <div className="flags">{right}</div>
+      </div>
+      {(showScript || o.script) && !isGroup && (
+        <label className="field"><span>Скрипт проверки: вернуть строку — это текст ошибки. <code>sl.value</code> — открытое значение, <code>sl.get("Q1")</code> — ответы</span>
+          <textarea className="input mono" rows={3} spellCheck={false} value={o.script ?? ''} placeholder='if (Number(sl.value) > 100) return "Не больше 100";'
+            onChange={(e) => set({ script: e.target.value || undefined })} />
+          {scriptError && <span className="field-error">Синтаксическая ошибка: {scriptError}</span>}
+        </label>
+      )}
+    </div>
   );
 }
 

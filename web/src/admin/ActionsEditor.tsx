@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ConditionField, describeCondition } from './ConditionEditor.tsx';
 import { formatFormula } from '../../../shared/condFormula.ts';
-import { Segmented } from './common.tsx';
+import { SearchSelect, Segmented } from './common.tsx';
 import { allOptions, allQuestions, allRows } from '../../../shared/logic.ts';
 import { END, OPTION_TYPES, SCREENOUT, type Action, type Option, type Question, type Survey } from '../../../shared/types.ts';
 
@@ -9,6 +9,7 @@ type Phase = 'before' | 'after';
 
 const LABELS: Record<Phase, [Action['do'], string][]> = {
   before: [
+    ['skip', 'Пропустить вопрос'],
     ['hideOptions', 'Скрыть варианты'],
     ['showOnlyOptions', 'Показать только варианты'],
     ['hideOptionsFrom', 'Скрыть варианты по другому вопросу'],
@@ -18,6 +19,8 @@ const LABELS: Record<Phase, [Action['do'], string][]> = {
   ],
   after: [
     ['goTo', 'Перейти к вопросу / блоку'],
+    ['skipQuestion', 'Пропустить вопрос'],
+    ['markAnswered', 'Пометить вопрос как отвеченный'],
     ['end', 'Завершить анкету'],
     ['screenout', 'Отсеять (скринаут)'],
     ['setValue', 'Записать в переменную'],
@@ -48,15 +51,16 @@ export function describeActions(def: Survey, q: Question, list: Action[] | undef
   if (!list?.length) return '';
   return list.map((a) => {
     const cond = a.if ? `если ${describeCondition(def, a.if)} → ` : '';
-    const target = a.do === 'goTo' || a.do === 'setValue' ? ` ${a.target ?? ''}` : '';
+    const target = a.do === 'goTo' || a.do === 'setValue' || a.do === 'skipQuestion' || a.do === 'markAnswered' ? ` ${a.target ?? ''}` : '';
     return `${cond}${actionLabel(a, q)}${target}`;
   }).join('; ');
 }
 
 const GROUPS: Record<Action['do'], string> = {
   hideOptions: 'Варианты ответа', showOnlyOptions: 'Варианты ответа', hideOptionsFrom: 'Варианты ответа', skipIfFewer: 'Варианты ответа',
-  answer: 'Ответ и пропуск', setValue: 'Переменные',
-  goTo: 'Переходы и завершение', end: 'Переходы и завершение', screenout: 'Переходы и завершение', error: 'Проверка ответа',
+  skip: 'Переходы и пропуск', answer: 'Переходы и пропуск', setValue: 'Переменные',
+  goTo: 'Переходы и пропуск', skipQuestion: 'Переходы и пропуск', markAnswered: 'Переходы и пропуск',
+  end: 'Завершение', screenout: 'Завершение', error: 'Проверка ответа',
 };
 
 /**
@@ -123,6 +127,8 @@ export function ActionsEditor({ def, q, phase, value, onChange, onCreateVar }: {
 function paramSummary(a: Action): string {
   switch (a.do) {
     case 'goTo': return a.target ?? '— куда? —';
+    case 'skipQuestion': return a.target ?? '— какой? —';
+    case 'markAnswered': return `${a.target ?? '?'} = ${Array.isArray(a.value) ? a.value.join(', ') : a.value ?? ''}`;
     case 'setValue': return `${a.target ?? '?'} = ${a.value ?? ''}`;
     case 'hideOptions': case 'showOnlyOptions': return a.codes?.length ? a.codes.join(', ') : '— какие? —';
     case 'hideOptionsFrom': return `${a.filter === 'notSelected' ? 'невыбранные' : 'выбранные'} в ${a.question ?? '?'}`;
@@ -164,14 +170,9 @@ function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, to
         </div>
         <div className="action-field"><span className="action-field-label">Действие</span>
           <div className="stack" style={{ gap: 8 }}>
-            <select className="input action-kind" value={a.do}
-              onChange={(e) => onChange({ ...(a.if ? { if: a.if } : {}), do: e.target.value as Action['do'], ...(e.target.value === 'skipIfFewer' ? { n: 2 } : {}) })}>
-              {groups.map((g) => (
-                <optgroup key={g} label={g}>
-                  {kinds.filter(([k]) => GROUPS[k] === g).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                </optgroup>
-              ))}
-            </select>
+            <SearchSelect className="action-kind" value={a.do}
+              groups={groups.map((g) => ({ label: g, items: kinds.filter(([k]) => GROUPS[k] === g).map(([k, label]) => ({ value: k, label })) }))}
+              onChange={(k) => onChange({ ...(a.if ? { if: a.if } : {}), do: k as Action['do'], ...(k === 'skipIfFewer' ? { n: 2 } : {}) })} />
       {/* Параметры действия */}
       {(a.do === 'hideOptions' || a.do === 'showOnlyOptions') && (
         <CodePick options={ownOptions} value={a.codes ?? []} onChange={(codes) => set({ codes })} />
@@ -245,6 +246,24 @@ function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, to
             })}
             {a.target && ![...questions.map((x) => x.id), ...def.blocks.map((b) => b.id), END, SCREENOUT].includes(a.target) && <option value={a.target}>{a.target}</option>}
           </select>
+        </div>
+      )}
+      {(a.do === 'skipQuestion' || a.do === 'markAnswered') && (
+        <div className="action-params">
+          <select className="input" value={a.target ?? ''} onChange={(e) => set({ target: e.target.value || undefined })}>
+            <option value="">— какой вопрос —</option>
+            {questions.slice(selfIdx + 1).filter((x) => x.type !== 'hidden' && x.type !== 'info')
+              .map((x) => <option key={x.id} value={x.id}>{x.id} · {x.text.slice(0, 50)}</option>)}
+            {a.target && !questions.slice(selfIdx + 1).some((x) => x.id === a.target) && <option value={a.target}>{a.target} (не дальше этого вопроса)</option>}
+          </select>
+          {a.do === 'markAnswered' && (
+            <>
+              <span className="muted small">ответ</span>
+              <input className="input" placeholder="код; для нескольких — через запятую; можно {{Q1}}"
+                value={a.value === undefined ? '' : Array.isArray(a.value) ? a.value.join(', ') : String(a.value)}
+                onChange={(e) => set({ value: e.target.value === '' ? undefined : e.target.value })} />
+            </>
+          )}
         </div>
       )}
       {(a.do === 'end' || a.do === 'screenout') && (

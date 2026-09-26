@@ -74,7 +74,7 @@ export function buildReport(survey: Survey, responses: ResponseRecord[], unfinis
       case 'single':
       case 'dropdown':
       case 'multi': {
-        const opts = allOptions(survey, q);
+        const opts = allOptions(survey, q).filter((o) => !o.group);
         rep.rows = opts.map((o) => {
           const count = answered.filter((r) => {
             const v = r.answers[q.id].v;
@@ -87,7 +87,7 @@ export function buildReport(survey: Survey, responses: ResponseRecord[], unfinis
         break;
       }
       case 'ranking': {
-        const opts = allOptions(survey, q);
+        const opts = allOptions(survey, q).filter((o) => !o.group);
         rep.ranks = opts.map((o) => {
           const places = answered.map((r) => (r.answers[q.id].v as number[]).indexOf(o.code)).filter((i) => i >= 0);
           return {

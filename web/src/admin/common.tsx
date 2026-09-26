@@ -91,6 +91,65 @@ export function Menu({ items, label = '⋯', title = 'Ещё', className = 'icon
   );
 }
 
+/** Выпадающий список с группами и поиском (как в Survey Studio) */
+export function SearchSelect({ value, groups, onChange, className = '' }: {
+  value: string;
+  groups: { label: string; items: { value: string; label: string }[] }[];
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = groups.flatMap((g) => g.items).find((i) => i.value === value);
+  const q = query.trim().toLowerCase();
+  const shown = groups
+    .map((g) => ({ ...g, items: g.items.filter((i) => !q || i.label.toLowerCase().includes(q) || g.label.toLowerCase().includes(q)) }))
+    .filter((g) => g.items.length);
+  const flat = shown.flatMap((g) => g.items);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  const pick = (v: string) => { onChange(v); setOpen(false); setQuery(''); };
+  return (
+    <div className={`search-select ${className}`} ref={ref}>
+      <button type="button" className="input search-select-btn" aria-haspopup="listbox" aria-expanded={open}
+        onClick={() => { setOpen(!open); setActive(Math.max(0, flat.findIndex((i) => i.value === value))); }}>
+        <span>{current?.label ?? '— выберите —'}</span><span className="muted">▾</span>
+      </button>
+      {open && (
+        <div className="search-select-list" role="listbox">
+          <input className="input" autoFocus placeholder="Поиск" value={query}
+            onChange={(e) => { setQuery(e.target.value); setActive(0); }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(flat.length - 1, a + 1)); }
+              else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
+              else if (e.key === 'Enter') { e.preventDefault(); if (flat[active]) pick(flat[active].value); }
+              else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false); }
+            }} />
+          <div className="search-select-items">
+            {shown.map((g) => (
+              <div key={g.label}>
+                <div className="menu-group">{g.label}</div>
+                {g.items.map((i) => (
+                  <button key={i.value} type="button" role="option" aria-selected={i.value === value}
+                    className={`${flat[active]?.value === i.value ? 'active' : ''}${i.value === value ? ' current' : ''}`}
+                    onMouseEnter={() => setActive(flat.indexOf(i))} onClick={() => pick(i.value)}>{i.label}</button>
+                ))}
+              </div>
+            ))}
+            {!flat.length && <div className="muted small" style={{ padding: '8px 10px' }}>Ничего не найдено</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Сворачиваемая строка настроек: заголовок + краткое описание текущего значения */
 export function Section({ title, summary, active, children, defaultOpen }: {
   title: string; summary: ReactNode; active?: boolean; children: ReactNode; defaultOpen?: boolean;
@@ -109,10 +168,10 @@ export function Section({ title, summary, active, children, defaultOpen }: {
 }
 
 /** Переключатель-флажок в стиле «галочка + подпись + пояснение» */
-export function Flag({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
+export function Flag({ label, hint, checked, onChange, disabled }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <label className="flag-row" title={hint}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <label className={`flag-row${disabled ? ' disabled' : ''}`} title={hint}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}{hint && <small>{hint}</small>}</span>
     </label>
   );

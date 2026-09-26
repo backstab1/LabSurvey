@@ -70,12 +70,56 @@ export function seededShuffle<T>(items: T[], seed: string): T[] {
   return arr;
 }
 
+/** Вариант можно выбрать (не заголовок группы) */
+export const isChoice = (o: Option) => !o.group;
+
 /**
- * Перемешивает или сдвигает варианты. «Другое» и эксклюзивные варианты остаются в конце,
- * закреплённые (fixed) — на своих местах.
+ * Порядок вариантов у респондента. С группами перемешивание идёт внутри каждой группы, группы остаются на местах.
+ * Варианты «внизу» (bottom) — всегда последними.
  */
 function orderOptions(options: Option[], seed: string, order: 'random' | 'rotate' | undefined): Option[] {
-  if (!order) return options;
+  const isBottom = (o: Option) => !!o.bottom && !o.group;
+  const bottom = options.filter(isBottom);
+  let rest = bottom.length ? options.filter((o) => !isBottom(o)) : options;
+  if (order) {
+    if (!rest.some((o) => o.group)) rest = orderPlain(rest, seed, order);
+    else {
+      const segments: Option[][] = [[]];
+      for (const o of rest) {
+        if (o.group) segments.push([o]);
+        else segments[segments.length - 1].push(o);
+      }
+      rest = segments.flatMap((seg, i) => {
+        const head = seg[0]?.group ? [seg[0]] : [];
+        return [...head, ...orderPlain(seg.slice(head.length), `${seed}:g${i}`, order)];
+      });
+    }
+  }
+  return bottom.length ? [...rest, ...bottom] : rest;
+}
+
+/** Убирает заголовки групп, в которых не осталось вариантов */
+function dropEmptyGroups(options: Option[]): Option[] {
+  if (!options.some((o) => o.group)) return options;
+  return options.filter((o, i) => {
+    if (!o.group) return true;
+    const next = options[i + 1];
+    return !!next && !next.group && !next.bottom;
+  });
+}
+
+/** Коды вариантов той же группы, что и code (без заголовков и вариантов «внизу») */
+export function groupOf(options: Option[], code: number): number[] {
+  let group: number[] = [];
+  for (const o of options) {
+    if (o.group) { if (group.includes(code)) break; group = []; continue; }
+    if (!o.bottom) group.push(o.code);
+  }
+  return group.includes(code) ? group : [];
+}
+
+/** Перемешивание или сдвиг: «Другое» и эксклюзивные — в конце, закреплённые (fixed) — на своих местах */
+function orderPlain(options: Option[], seed: string, order: 'random' | 'rotate'): Option[] {
   const tail = options.filter((o) => o.other || o.exclusive);
   const body = options.filter((o) => !o.other && !o.exclusive);
   const free = body.filter((o) => !o.fixed);
@@ -151,7 +195,7 @@ export function allRows(survey: Survey, q: MatrixQuestion, depth = 0): Option[] 
 function sourceOptions(survey: Survey, src: Question, depth: number): Option[] {
   if (src.type === 'matrix') return allRows(survey, src, depth);
   // При переносе «Другое» становится обычным вариантом с текстом респондента
-  return allOptions(survey, src, depth).filter((o) => !o.exclusive).map((o) => ({ code: o.code, text: o.text }));
+  return allOptions(survey, src, depth).filter((o) => !o.exclusive && !o.group).map((o) => ({ code: o.code, text: o.text }));
 }
 
 /** Перенесённые варианты + собственные варианты вопроса (собственные — в конце, коды не дублируются) */
@@ -178,7 +222,7 @@ function applyFrom(ctx: RespondentContext, from: { question: string; filter: str
   const ans = ctx.answers[src.id];
   const sel = selectedCodes(ans);
   const filtered = srcOpts
-    .filter((o) => !o.exclusive)
+    .filter((o) => !o.exclusive && !o.group)
     .filter((o) => from.filter === 'all' || (from.filter === 'selected' ? sel.has(o.code) : !sel.has(o.code)))
     .map((o) => {
       const otherText = o.other ? ans?.o?.[String(o.code)] : undefined;
@@ -192,11 +236,13 @@ function filterByActions(ctx: RespondentContext, q: Question, opts: Option[], de
   for (const a of q.actions?.before ?? []) {
     if (depth > 10 || !evalCondition(a.if, ctx)) continue;
     const codes = new Set(a.codes ?? []);
-    if (a.do === 'hideOptions') opts = opts.filter((o) => !codes.has(o.code));
-    else if (a.do === 'showOnlyOptions') opts = opts.filter((o) => codes.has(o.code));
+    // Заголовки групп и варианты «показывать всегда» действия не скрывают
+    const keep = (o: Option) => !!o.group || !!o.alwaysShow;
+    if (a.do === 'hideOptions') opts = opts.filter((o) => keep(o) || !codes.has(o.code));
+    else if (a.do === 'showOnlyOptions') opts = opts.filter((o) => keep(o) || codes.has(o.code));
     else if (a.do === 'hideOptionsFrom' && a.question) {
       const sel = selectedCodes(ctx.answers[a.question]);
-      opts = opts.filter((o) => (a.filter === 'notSelected' ? sel.has(o.code) : !sel.has(o.code)));
+      opts = opts.filter((o) => keep(o) || (a.filter === 'notSelected' ? sel.has(o.code) : !sel.has(o.code)));
     }
   }
   return opts;
@@ -208,7 +254,7 @@ export function resolveOptions(ctx: RespondentContext, q: Question, depth = 0, s
   let opts = q.optionsFrom && depth < 10 ? applyFrom(ctx, q.optionsFrom, shown(q.options), depth) : shown(q.options);
   opts = filterByActions(ctx, q, opts, depth);
   if (shuffle) opts = orderOptions(opts, ctx.seed + ':' + q.id, q.order ?? (q.randomize ? 'random' : undefined));
-  return opts;
+  return dropEmptyGroups(opts);
 }
 
 export function resolveRows(ctx: RespondentContext, q: MatrixQuestion, depth = 0): Option[] {
@@ -281,7 +327,7 @@ export function evalCondition(c: Condition | undefined, ctx: RespondentContext):
 
 /** Сколько вариантов (строк матрицы) видит респондент; null — у вопроса нет вариантов */
 function visibleCount(ctx: RespondentContext, q: Question): number | null {
-  if (hasOptions(q)) return resolveOptions(ctx, q, 0, false).length;
+  if (hasOptions(q)) return resolveOptions(ctx, q, 0, false).filter(isChoice).length;
   if (q.type === 'matrix') return resolveRows(ctx, q).length;
   return null;
 }
@@ -298,10 +344,10 @@ export function paramAnswer(ctx: RespondentContext, q: Question): AnswerValue | 
   switch (q.type) {
     case 'single':
     case 'dropdown':
-      return resolveOptions(ctx, q, 0, false).some((o) => o.code === num && !o.other) ? num : undefined;
+      return resolveOptions(ctx, q, 0, false).some((o) => o.code === num && !o.other && !o.group) ? num : undefined;
     case 'multi': {
       const codes = raw.split(',').map((x) => Number(x.trim()));
-      const allowed = new Set(resolveOptions(ctx, q, 0, false).filter((o) => !o.other).map((o) => o.code));
+      const allowed = new Set(resolveOptions(ctx, q, 0, false).filter((o) => !o.other && !o.group).map((o) => o.code));
       return codes.length && codes.every((c) => allowed.has(c)) ? [...new Set(codes)] : undefined;
     }
     case 'scale':
@@ -329,14 +375,70 @@ export function autoAnswerValue(ctx: RespondentContext, q: Question): AnswerValu
     if (a.value !== undefined && a.value !== '') return a.value as AnswerValue;
     // Без значения — единственный оставшийся вариант
     if (!hasOptions(q)) continue;
-    const opts = resolveOptions(ctx, q, 0, false);
+    const opts = resolveOptions(ctx, q, 0, false).filter(isChoice);
     if (opts.length === 1) return q.type === 'multi' ? [opts[0].code] : opts[0].code;
   }
   return undefined;
 }
 
+/** Действия «после ответа» других вопросов, нацеленные на вопрос: ID цели → [вопрос-источник, действие] */
+const skipIndexCache = new WeakMap<Survey, Map<string, [Question, Action][]>>();
+function skipIndex(survey: Survey): Map<string, [Question, Action][]> {
+  let idx = skipIndexCache.get(survey);
+  if (!idx) {
+    idx = new Map();
+    for (const src of allQuestions(survey)) {
+      for (const a of src.actions?.after ?? []) {
+        if ((a.do === 'skipQuestion' || a.do === 'markAnswered') && a.target) {
+          if (!idx.has(a.target)) idx.set(a.target, []);
+          idx.get(a.target)!.push([src, a]);
+        }
+      }
+    }
+    skipIndexCache.set(survey, idx);
+  }
+  return idx;
+}
+
+/** Вопрос пропущен действием «Пропустить вопрос» / «Пометить как отвеченный» уже отвеченного вопроса */
+function skippedByOther(ctx: RespondentContext, q: Question): boolean {
+  const list = skipIndex(ctx.survey).get(q.id);
+  return !!list?.some(([src, a]) => ctx.answers[src.id] !== undefined && evalCondition(a.if, ctx));
+}
+
+/** Значение для «Пометить как отвеченный»: коды — числами, для multi и ранжирования — массивом */
+export function markValue(ctx: RespondentContext, a: Action): AnswerValue | undefined {
+  const target = a.target ? findQuestion(ctx.survey, a.target) : undefined;
+  if (!target || a.value === undefined || a.value === '') return undefined;
+  const raw = typeof a.value === 'string' ? pipe(a.value, ctx) : a.value;
+  const num = (x: unknown) => (typeof x === 'number' ? x : Number(String(x).trim().replace(',', '.')));
+  switch (target.type) {
+    case 'multi':
+    case 'ranking': {
+      const list = Array.isArray(raw) ? raw : String(raw).split(',').filter((x) => x.trim());
+      const codes = list.map(num).filter((x) => isFinite(x));
+      return codes.length ? codes : undefined;
+    }
+    case 'single':
+    case 'dropdown':
+    case 'scale':
+    case 'number': {
+      const n = num(Array.isArray(raw) ? raw[0] : raw);
+      return isFinite(n) ? n : undefined;
+    }
+    case 'text':
+    case 'phone':
+    case 'date':
+      return Array.isArray(raw) ? raw.join(',') : String(raw);
+    default:
+      return undefined;
+  }
+}
+
 export function isQuestionVisible(ctx: RespondentContext, q: Question): boolean {
   if (!evalCondition(q.showIf, ctx)) return false;
+  if (q.actions?.before?.some((a) => a.do === 'skip' && evalCondition(a.if, ctx))) return false;
+  if (skippedByOther(ctx, q)) return false;
   const count = visibleCount(ctx, q);
   // Все варианты скрыты (перенос или действия) — вопрос не показываем
   if (count === 0) return false;
@@ -532,6 +634,9 @@ export function cleanAnswers(ctx: RespondentContext, pagesVisited: string[]): An
       for (const a of q.actions?.after ?? []) {
         if (a.do === 'setValue' && evalCondition(a.if, c)) {
           const v = actionValue(c, a);
+          if (v !== undefined) kept[a.target!] = { v };
+        } else if (a.do === 'markAnswered' && evalCondition(a.if, c)) {
+          const v = markValue(c, a);
           if (v !== undefined) kept[a.target!] = { v };
         }
       }
