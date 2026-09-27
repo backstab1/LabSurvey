@@ -10,9 +10,8 @@ import { baseUrl, bearerUser } from './oauth.ts';
 import { oauth, surveys } from './db.ts';
 import { auditAi } from './audit.ts';
 import type { SessionUser } from './auth.ts';
-import { draftShapeOk } from './routes/admin.ts';
 import { migrateSurvey } from '../shared/migrate.ts';
-import { validateSurvey, type ValidationResult } from '../shared/validate.ts';
+import { draftShapeOk, validateSurvey, type ValidationResult } from '../shared/validate.ts';
 import type { Survey } from '../shared/types.ts';
 
 const FORMAT_DOC = readFileSync(resolve('docs/survey-format.md'), 'utf8');

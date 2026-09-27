@@ -55,6 +55,13 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 const isInt = (x: unknown): x is number => typeof x === 'number' && Number.isInteger(x);
 
+/** Черновик можно сохранить с ошибками логики, но не с поломанной структурой */
+export function draftShapeOk(def: unknown): boolean {
+  const d = def as Survey;
+  return !!d && typeof d === 'object' && typeof d.title === 'string' && Array.isArray(d.blocks) && d.blocks.length > 0
+    && d.blocks.every((b) => b && typeof b === 'object' && Array.isArray(b.questions));
+}
+
 export function validateSurvey(input: unknown): ValidationResult {
   const errors: Issue[] = [];
   const warnings: Issue[] = [];

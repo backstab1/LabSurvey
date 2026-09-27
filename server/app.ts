@@ -4,11 +4,12 @@ import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { config } from './config.ts';
-import { adminRoutes } from './routes/admin.ts';
+import { adminRoutes } from './routes/admin/index.ts';
 import { respondentRoutes } from './routes/respondent.ts';
 import { oauthRoutes } from './oauth.ts';
 import { mcpRoutes } from './mcp.ts';
 import { mediaRoutes } from './media.ts';
+import { installErrorHandler } from './http.ts';
 
 export async function buildApp() {
   const app = Fastify({
@@ -18,6 +19,7 @@ export async function buildApp() {
   });
 
   await app.register(cookie, { secret: config.sessionSecret });
+  installErrorHandler(app);
   await app.register(adminRoutes);
   await app.register(respondentRoutes);
   await app.register(mediaRoutes);

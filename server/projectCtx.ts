@@ -1,6 +1,7 @@
 // Проект вместе с его анкетой: опубликованная версия и черновик с настройками сбора и квотами проекта
 import { projects, surveys, type ProjectRow, type SurveyRow } from './db.ts';
 import { effectiveSurvey, type Survey } from '../shared/types.ts';
+import { found } from './http.ts';
 
 export interface Loaded {
   project: ProjectRow;
@@ -25,3 +26,9 @@ export async function loadProject(id: string): Promise<Loaded | null> {
 
 /** Анкета для ответа: тестовые — по черновику, настоящие — по опубликованной версии */
 export const defFor = (l: Loaded, isTest: boolean): Survey => (isTest ? l.draft : l.live ?? l.draft);
+
+/** Проект или 404 */
+export const projectOf = async (id: string): Promise<ProjectRow> => found(await projects.get(id), 'Проект не найден');
+
+/** Проект с анкетой или 404 */
+export const loadedOf = async (id: string): Promise<Loaded> => found(await loadProject(id), 'Проект не найден');
