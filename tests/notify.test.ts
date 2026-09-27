@@ -75,11 +75,14 @@ test('database backups: create, list, download', async () => {
   const lr = await app.inject({ method: 'POST', url: '/api/admin/login', payload: { login: 'admin', password: 'secret' } });
   cookie = String(lr.headers['set-cookie']).split(';')[0];
   const made = (await call('POST', '/api/admin/backups')).json;
-  assert.match(made.name, /^surveylab-.*\.db$/);
+  const pg = !!process.env.DATABASE_URL;
+  // SQLite — файл базы, PostgreSQL — выгрузка всех таблиц .json.gz
+  assert.match(made.name, pg ? /^surveylab-.*\.json\.gz$/ : /^surveylab-.*\.db$/);
   assert.ok(made.size > 0);
   const list = (await call('GET', '/api/admin/backups')).json.list;
   assert.equal(list[0].name, made.name);
   const file = await app.inject({ method: 'GET', url: `/api/admin/backups/${made.name}`, headers: { cookie } });
-  assert.equal(file.rawPayload.subarray(0, 15).toString(), 'SQLite format 3');
+  if (pg) assert.deepEqual([...file.rawPayload.subarray(0, 2)], [0x1f, 0x8b]);
+  else assert.equal(file.rawPayload.subarray(0, 15).toString(), 'SQLite format 3');
   assert.equal((await app.inject({ method: 'GET', url: '/api/admin/backups/..%2F.session-secret', headers: { cookie } })).statusCode, 404);
 });

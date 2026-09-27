@@ -20,6 +20,8 @@ export const config = {
   host: process.env.HOST ?? '0.0.0.0',
   dataDir,
   dbFile: resolve(dataDir, 'surveylab.db'),
+  /** PostgreSQL: postgres://user:pass@host:5432/surveylab. Пусто — SQLite в dbFile */
+  databaseUrl: process.env.DATABASE_URL ?? '',
   adminLogin: process.env.ADMIN_LOGIN ?? 'admin',
   adminPassword: process.env.ADMIN_PASSWORD ?? '',
   sessionSecret: sessionSecret(),

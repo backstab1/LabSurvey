@@ -3,7 +3,7 @@ import {
   authenticate, checkUserPassword, clearSession, currentUser, hashPassword, isBuiltInLogin, loginBlocked, loginFailed,
   requireAdminRole, requireUser, setSession, testToken,
 } from '../auth.ts';
-import { audit, invitees, isEmail, mailings, oauth, projects, responses, surveys, users, type NotifyConfig, type TableSet, type Role, type SheetsConfig } from '../db.ts';
+import { audit, invitees, isEmail, mailings, oauth, sql, projects, responses, surveys, users, type NotifyConfig, type TableSet, type Role, type SheetsConfig } from '../db.ts';
 import { defFor, loadProject } from '../projectCtx.ts';
 import { buildTable, cellToText } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
@@ -175,7 +175,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       // Резервные копии базы: там все данные — только администратору
-      adm.get('/api/admin/backups', async () => ({ list: listBackups(), everyHours: config.backupHours, keep: config.backupKeep }));
+      adm.get('/api/admin/backups', async () => ({ list: listBackups(), everyHours: config.backupHours, keep: config.backupKeep, database: sql.kind }));
       adm.post('/api/admin/backups', async () => makeBackup());
       adm.get<{ Params: { name: string } }>('/api/admin/backups/:name', async (req, reply) => {
         const file = backupPath(req.params.name);

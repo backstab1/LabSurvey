@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 // База «до проектов»: анкета со статусом, настройками сбора, квотой и ответом
+// Переход старых баз — только SQLite (PostgreSQL создаётся сразу в текущей схеме)
+delete process.env.DATABASE_URL;
 const dir = mkdtempSync(join(tmpdir(), 'surveylab-migrate-'));
 process.env.DATA_DIR = dir;
 process.env.ADMIN_PASSWORD = 'secret';

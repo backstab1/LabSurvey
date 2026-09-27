@@ -11,7 +11,9 @@
     "start": "tsx server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:e2e": "vite build && node --import tsx --test tests/e2e/*.test.ts"
+    "test:e2e": "vite build && node --import tsx --test tests/e2e/*.test.ts",
+    "test:pg": "node scripts/test-pg.mjs",
+    "db:copy": "tsx server/tools/db-copy.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
@@ -21,14 +23,18 @@
     "fastify": "^5.12.5",
     "google-auth-library": "^11.1.0",
     "nodemailer": "^10.0.11",
+    "pg": "^8.23.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tsx": "^4.23.15",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@types/node": "^26.6.2",
     "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",

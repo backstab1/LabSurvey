@@ -5,3 +5,4 @@ data/
 *.log
 google-key*.json
 .claude/
+pgdata/

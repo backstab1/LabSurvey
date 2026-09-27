@@ -168,7 +168,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-interface Backups { list: { name: string; size: number; createdAt: string }[]; everyHours: number; keep: number }
+interface Backups { list: { name: string; size: number; createdAt: string }[]; everyHours: number; keep: number; database?: 'sqlite' | 'postgres' }
 
 /** Копии базы: делаются по расписанию на сервере, здесь — список, скачать, сделать сейчас */
 function BackupsModal({ onClose }: { onClose: () => void }) {
@@ -185,7 +185,9 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
             {data.everyHours > 0
               ? `Копия делается автоматически каждые ${data.everyHours} ч, хранятся последние ${data.keep}.`
               : 'Автоматические копии выключены (BACKUP_HOURS=0 в .env).'}
-            {' '}Копия — полный файл базы SQLite: все анкеты и ответы. Для восстановления остановите сервис и замените им data/surveylab.db.
+            {data.database === 'postgres'
+              ? <>{' '}Копия — выгрузка всех таблиц PostgreSQL (.json.gz): анкеты, проекты, ответы, пользователи. Восстановление — в пустую базу: <code>npm run db:copy -- --from копия.json.gz --to postgres://…</code></>
+              : ' Копия — полный файл базы SQLite: все анкеты и ответы. Для восстановления остановите сервис и замените им data/surveylab.db.'}
           </p>
         )}
         {!data ? <p className="muted">Загрузка…</p> : data.list.length === 0 ? <p className="muted">Копий пока нет.</p> : (

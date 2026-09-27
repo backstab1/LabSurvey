@@ -1,0 +1,23 @@
+# SurveyLAB на PostgreSQL:
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+# В .env задайте POSTGRES_PASSWORD. Перенос данных из SQLite — см. README, раздел «PostgreSQL».
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: surveylab
+      POSTGRES_USER: surveylab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U surveylab -d surveylab"]
+      interval: 5s
+      retries: 10
+  surveylab:
+    environment:
+      DATABASE_URL: postgres://surveylab:${POSTGRES_PASSWORD}@db:5432/surveylab
+    depends_on:
+      db:
+        condition: service_healthy
