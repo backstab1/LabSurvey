@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { ConditionField, describeCondition } from './ConditionEditor.tsx';
-import { formatFormula } from '../../../shared/condFormula.ts';
-import { SearchSelect, Segmented } from './common.tsx';
-import { allOptions, allQuestions, allRows } from '../../../shared/logic.ts';
-import { END, OPTION_TYPES, SCREENOUT, type Action, type Option, type Question, type Survey } from '../../../shared/types.ts';
+import { formatFormula } from '../../../../shared/condFormula.ts';
+import { SearchSelect, Segmented } from '../common.tsx';
+import { allOptions, allQuestions, allRows } from '../../../../shared/logic.ts';
+import { END, OPTION_TYPES, SCREENOUT, type Action, type Option, type Question, type Survey } from '../../../../shared/types.ts';
 
 type Phase = 'before' | 'after';
 

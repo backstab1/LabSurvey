@@ -39,6 +39,12 @@ export function confirmLeave(): boolean {
 let toastSetter: ((s: string) => void) | null = null;
 export function toast(msg: string) { toastSetter?.(msg); }
 
+/** Скопировать текст в буфер обмена и сказать об этом */
+export function copyText(text: string, message = 'Ссылка скопирована') {
+  navigator.clipboard.writeText(text);
+  toast(message);
+}
+
 export function Toaster() {
   const [msg, setMsg] = useState('');
   useEffect(() => {

@@ -1,13 +1,13 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { api } from '../api.ts';
-import { SearchSelect, toast } from './common.tsx';
-import { ConditionEditor, defaultCondition, describeCondition } from './ConditionEditor.tsx';
-import { allRows } from '../../../shared/logic.ts';
-import { expandAllLoops } from '../../../shared/loops.ts';
-import { crosstabCandidates, type CrosstabResult, type CrosstabSpec, type CrossTable, type VarRef } from '../../../shared/crosstab.ts';
-import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
-import type { Condition, Survey } from '../../../shared/types.ts';
-import type { ProjectInfo } from '../../../shared/api.ts';
+import { api } from '../../api.ts';
+import { SearchSelect, toast } from '../common.tsx';
+import { ConditionEditor, defaultCondition, describeCondition } from '../survey/ConditionEditor.tsx';
+import { allRows } from '../../../../shared/logic.ts';
+import { expandAllLoops } from '../../../../shared/loops.ts';
+import { crosstabCandidates, type CrosstabResult, type CrosstabSpec, type CrossTable, type VarRef } from '../../../../shared/crosstab.ts';
+import { STATUS_LABELS, type ResponseStatus } from '../../../../shared/variables.ts';
+import type { Condition, Survey } from '../../../../shared/types.ts';
+import type { ProjectInfo } from '../../../../shared/api.ts';
 
 type Measure = 'colPct' | 'count' | 'rowPct';
 const MEASURES: [Measure, string][] = [['colPct', '% по столбцу'], ['count', 'Количество'], ['rowPct', '% по строке']];

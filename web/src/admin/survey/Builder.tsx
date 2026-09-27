@@ -2,13 +2,13 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { QuestionDialog } from './QuestionEditor.tsx';
 import { describeCondition } from './ConditionEditor.tsx';
 import { describeActions } from './ActionsEditor.tsx';
-import { plain, rich } from '../runner/rich.tsx';
-import { Menu, toast } from './common.tsx';
-import { QUESTION_TYPE_LABELS, type Block, type LoopSpec, type Question, type QuestionType, type Survey } from '../../../shared/types.ts';
+import { plain, rich } from '../../runner/rich.tsx';
+import { Menu, toast, copyText } from '../common.tsx';
+import { QUESTION_TYPE_LABELS, type Block, type LoopSpec, type Question, type QuestionType, type Survey } from '../../../../shared/types.ts';
 import { LoopDialog, describeLoop, shownTitle } from './LoopEditor.tsx';
-import { loopChain, loopDepth } from '../../../shared/loops.ts';
-import { allIds, nextId, renameId } from '../../../shared/refactor.ts';
-import type { ValidationResult } from '../../../shared/validate.ts';
+import { loopChain, loopDepth } from '../../../../shared/loops.ts';
+import { allIds, nextId, renameId } from '../../../../shared/refactor.ts';
+import type { ValidationResult } from '../../../../shared/validate.ts';
 
 export const TYPE_ICONS: Record<QuestionType, string> = {
   single: '◉', multi: '☑', dropdown: '▾', ranking: '⇅', text: '✎', number: '#', scale: '⋯',
@@ -381,7 +381,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                     })}
                     onDelete={() => { if (window.confirm(`Удалить ${q.id}?`)) mutate((d) => { d.blocks[bi].questions.splice(qi, 1); }); }}
                     onPreview={() => onPreview(q.id)}
-                    onCopy={() => { navigator.clipboard.writeText(JSON.stringify(q, null, 2)); toast(`${q.id} скопирован — вставьте через «+» в любой анкете`); }} />
+                    onCopy={() => copyText(JSON.stringify(q, null, 2), `${q.id} скопирован — вставьте через «+» в любой анкете`)} />
                 </div>
               );
             })}

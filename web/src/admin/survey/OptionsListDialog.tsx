@@ -1,8 +1,8 @@
-import { ImageField } from './ImageField.tsx';
+import { ImageField } from '../ImageField.tsx';
 import { useEffect, useRef, useState } from 'react';
-import { Flag, Modal, Segmented, compact } from './common.tsx';
-import { allQuestions } from '../../../shared/logic.ts';
-import { OPTION_TYPES, type Option, type OptionsFrom, type Survey } from '../../../shared/types.ts';
+import { Flag, Modal, Segmented, compact } from '../common.tsx';
+import { allQuestions } from '../../../../shared/logic.ts';
+import { OPTION_TYPES, type Option, type OptionsFrom, type Survey } from '../../../../shared/types.ts';
 
 /** Что можно настраивать у вариантов этого списка */
 export interface ListFeatures {

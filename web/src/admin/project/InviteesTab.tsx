@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, ApiError } from '../api.ts';
-import { Modal, toast } from './common.tsx';
-import { type ResponseStatus } from '../../../shared/variables.ts';
-import { INVITE_PARAM } from '../../../shared/types.ts';
-import { paramName, parseTable } from '../../../shared/tableImport.ts';
+import { api, ApiError } from '../../api.ts';
+import { Modal, toast, copyText } from '../common.tsx';
+import { type ResponseStatus } from '../../../../shared/variables.ts';
+import { INVITE_PARAM } from '../../../../shared/types.ts';
+import { paramName, parseTable } from '../../../../shared/tableImport.ts';
 import { MailDialog, MailingsHistory, MailMark } from './MailDialog.tsx';
-import type { Invitee, MailStatus, ProjectInfo } from '../../../shared/api.ts';
+import type { Invitee, MailStatus, ProjectInfo } from '../../../../shared/api.ts';
 
 type State = 'none' | 'started' | ResponseStatus;
 const stateOf = (p: Invitee): State => (!p.responseId ? 'none' : p.status === 'in_progress' || !p.status ? 'started' : p.status);
@@ -210,7 +210,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
                       <td className="wide-only muted small">{fmt(p.completedAt ?? p.openedAt)}</td>
                       {hasMail && <td><MailMark p={p} /></td>}
                       <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                        <button className="btn-link small" onClick={() => { navigator.clipboard.writeText(linkOf(p)); toast('Ссылка скопирована'); }}>ссылка</button>
+                        <button className="btn-link small" onClick={() => copyText(linkOf(p))}>ссылка</button>
                         {!readOnly && (
                           <>
                             <button className="btn-link small" title="Старая ссылка перестанет работать" onClick={async () => {

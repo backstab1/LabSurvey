@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Modal, Segmented, compact } from './common.tsx';
+import { Modal, Segmented, compact } from '../common.tsx';
 import { OptionsEditor } from './OptionsEditor.tsx';
-import { allQuestions, allRows } from '../../../shared/logic.ts';
-import { loopChain, possibleItems } from '../../../shared/loops.ts';
-import type { Block, LoopSpec, Question, Survey } from '../../../shared/types.ts';
+import { allQuestions, allRows } from '../../../../shared/logic.ts';
+import { loopChain, possibleItems } from '../../../../shared/loops.ts';
+import type { Block, LoopSpec, Question, Survey } from '../../../../shared/types.ts';
 
 const SOURCE_TYPES = new Set(['single', 'multi', 'dropdown', 'ranking', 'matrix', 'number']);
 

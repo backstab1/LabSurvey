@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.ts';
+import { api, useApi } from '../api.ts';
 import { Modal, toast } from './common.tsx';
 import type { Role, UserRow } from '../../../shared/api.ts';
 
@@ -61,15 +61,12 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU',
 
 /** Управление доступом команды (только для администратора) */
 export function UsersPage({ me }: { me: string }) {
-  const [list, setList] = useState<UserRow[] | null>(null);
+  const { data: list, error, reload: load } = useApi<UserRow[]>('/api/admin/users');
+  useEffect(() => { if (error) toast(error); }, [error]);
   const [adding, setAdding] = useState(false);
   const [projectsOf, setProjectsOf] = useState<UserRow | null>(null);
-  const [allProjects, setAllProjects] = useState<ProjectOption[] | null>(null);
-  const load = () => api<UserRow[]>('GET', '/api/admin/users').then(setList).catch((e) => toast((e as Error).message));
-  useEffect(() => {
-    load();
-    api<ProjectOption[]>('GET', '/api/admin/projects').then(setAllProjects).catch(() => setAllProjects([]));
-  }, []);
+  const projects = useApi<ProjectOption[]>('/api/admin/projects');
+  const allProjects = projects.error ? [] : projects.data;
   const titleOf = (id: string) => allProjects?.find((p) => p.id === id)?.title ?? id;
 
   const update = async (login: string, patch: Partial<{ role: Role; disabled: boolean; password: string; projects: string[] }>) => {

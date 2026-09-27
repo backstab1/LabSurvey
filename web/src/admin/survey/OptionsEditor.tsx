@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Menu, compact } from './common.tsx';
-import type { Option } from '../../../shared/types.ts';
+import { Menu, compact } from '../common.tsx';
+import type { Option } from '../../../../shared/types.ts';
 
 /**
  * Список вариантов. Быстрый ввод: Enter — новый вариант, Backspace в пустом — удалить,

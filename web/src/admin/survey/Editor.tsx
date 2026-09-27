@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError } from '../api.ts';
+import { api, ApiError, useApi } from '../../api.ts';
 import { Builder } from './Builder.tsx';
 import { JsonTab } from './JsonTab.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
 import { LogicTab } from './LogicTab.tsx';
-import { IssuesList, Menu, Modal, toast } from './common.tsx';
-import { canEdit, navigate, useMe } from './AdminApp.tsx';
-import { NewProjectModal } from './ProjectPage.tsx';
-import { validateSurvey } from '../../../shared/validate.ts';
-import { imageLibrary } from '../../../shared/images.ts';
-import { ImageLibraryContext } from './ImageField.tsx';
+import { IssuesList, Menu, Modal, toast } from '../common.tsx';
+import { canEdit, navigate, useMe } from '../AdminApp.tsx';
+import { NewProjectModal } from '../project/ProjectList.tsx';
+import { validateSurvey } from '../../../../shared/validate.ts';
+import { imageLibrary } from '../../../../shared/images.ts';
+import { ImageLibraryContext } from '../ImageField.tsx';
 import { ImagesTab } from './ImagesTab.tsx';
-import { analyzeFlow } from '../../../shared/flow.ts';
-import { type Survey } from '../../../shared/types.ts';
-import type { SurveyInfo, SurveyVersion } from '../../../shared/api.ts';
+import { analyzeFlow } from '../../../../shared/flow.ts';
+import { type Survey } from '../../../../shared/types.ts';
+import type { SurveyInfo, SurveyVersion } from '../../../../shared/api.ts';
 
 type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'images';
 type SaveState = 'saved' | 'pending' | 'saving' | 'error';
@@ -274,8 +274,7 @@ export function Editor({ id }: { id: string }) {
 function VersionsModal({ id, current, onClose, onRestore }: {
   id: string; current: number; onClose: () => void; onRestore: (v: number, def: Survey) => void;
 }) {
-  const [rows, setRows] = useState<SurveyVersion[] | null>(null);
-  useEffect(() => { api<SurveyVersion[]>('GET', `/api/admin/surveys/${id}/versions`).then(setRows); }, [id]);
+  const { data: rows } = useApi<SurveyVersion[]>(`/api/admin/surveys/${id}/versions`);
   return (
     <Modal onClose={onClose} title="История версий">
       {!rows ? <p className="muted">Загрузка…</p> : rows.length === 0 ? <p className="muted">Опубликованных версий пока нет.</p> : (

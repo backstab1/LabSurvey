@@ -1,10 +1,10 @@
 // Настройки новых типов вопросов в конструкторе: слайдер, загрузка файла, клик по картинке, MaxDiff, конджойнт
 import { useRef, useState } from 'react';
-import { Modal, NumField, Segmented, compact } from './common.tsx';
+import { Modal, NumField, Segmented, compact } from '../common.tsx';
 import { OptionsListDialog } from './OptionsListDialog.tsx';
-import { ImageField } from './ImageField.tsx';
-import { conjointDesignCheck, conjointShape, maxdiffShape, type DesignCheck } from '../../../shared/choiceDesign.ts';
-import type { ConjointAttribute, ConjointQuestion, FileQuestion, HotspotQuestion, MaxDiffQuestion, Option, SliderQuestion } from '../../../shared/types.ts';
+import { ImageField } from '../ImageField.tsx';
+import { conjointDesignCheck, conjointShape, maxdiffShape, type DesignCheck } from '../../../../shared/choiceDesign.ts';
+import type { ConjointAttribute, ConjointQuestion, FileQuestion, HotspotQuestion, MaxDiffQuestion, Option, SliderQuestion } from '../../../../shared/types.ts';
 
 type Patch = Record<string, unknown>;
 

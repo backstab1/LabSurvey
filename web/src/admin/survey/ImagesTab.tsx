@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-import { toast } from './common.tsx';
-import { uploadImage } from './ImageField.tsx';
-import { imageLibrary } from '../../../shared/images.ts';
-import type { Survey, SurveyImage } from '../../../shared/types.ts';
+import { toast, copyText } from '../common.tsx';
+import { uploadImage } from '../ImageField.tsx';
+import { imageLibrary } from '../../../../shared/images.ts';
+import type { Survey, SurveyImage } from '../../../../shared/types.ts';
 
 const baseName = (name: string) => name.replace(/\.[^.]+$/, '').slice(0, 80);
 
@@ -71,7 +71,7 @@ export function ImagesTab({ def, onChange, readOnly }: { def: Survey; onChange: 
                 {im.where.length ? `используется: ${im.where.join(', ')}` : 'пока не используется'}
               </div>
               <div className="row" style={{ gap: 8 }}>
-                <button className="btn-link small" onClick={() => { navigator.clipboard.writeText(im.url); toast('Адрес скопирован'); }}>адрес</button>
+                <button className="btn-link small" onClick={() => copyText(im.url, 'Адрес скопирован')}>адрес</button>
                 {!readOnly && im.saved && (
                   <button className="btn-link small" style={{ color: 'var(--danger)' }} onClick={() => {
                     if (im.where.length && !window.confirm(`Картинка используется (${im.where.join(', ')}). Убрать её из библиотеки? В вопросах она останется.`)) return;

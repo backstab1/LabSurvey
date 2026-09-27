@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { toast } from './common.tsx';
-import formatDoc from '../../../docs/survey-format.md?raw';
-import type { Survey } from '../../../shared/types.ts';
+import { copyText } from '../common.tsx';
+import formatDoc from '../../../../docs/survey-format.md?raw';
+import type { Survey } from '../../../../shared/types.ts';
 
 /**
  * JSON-представление анкеты. Двусторонняя связь с конструктором:
@@ -59,7 +59,7 @@ export function JsonTab({ def, onChange }: { def: Survey; onChange: (d: Survey) 
           a.click();
         }}>Скачать JSON</button>
         <button className="btn btn-secondary btn-sm" title="Документация формата + задание — вставьте в любой ИИ вместе с текстом анкеты"
-          onClick={() => { navigator.clipboard.writeText(aiPrompt); toast('Инструкция для ИИ скопирована'); }}>
+          onClick={() => copyText(aiPrompt, 'Инструкция для ИИ скопирована')}>
           Скопировать инструкцию для ИИ
         </button>
         <span className="grow" />

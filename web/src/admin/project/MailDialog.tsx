@@ -1,10 +1,10 @@
 // Рассылка приглашений по e-mail: окно письма и история рассылок (вкладка «Список» проекта).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError } from '../api.ts';
-import { Modal, toast } from './common.tsx';
-import { fillMailTemplate, hasLinkPlaceholder, isEmail } from '../../../shared/mailTemplate.ts';
-import { INVITE_PARAM } from '../../../shared/types.ts';
-import type { Invitee, MailAudience, Mailing, MailStatus } from '../../../shared/api.ts';
+import { api, ApiError } from '../../api.ts';
+import { Modal, toast } from '../common.tsx';
+import { fillMailTemplate, hasLinkPlaceholder, isEmail } from '../../../../shared/mailTemplate.ts';
+import { INVITE_PARAM } from '../../../../shared/types.ts';
+import type { Invitee, MailAudience, Mailing, MailStatus } from '../../../../shared/api.ts';
 
 /** Кому отправить из диалога (выбранным — из таблицы людей) */
 type Audience = Exclude<MailAudience, 'ids'>;

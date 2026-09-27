@@ -1,12 +1,12 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Segmented } from './common.tsx';
-import { plain } from '../runner/rich.tsx';
+import { Segmented } from '../common.tsx';
+import { plain } from '../../runner/rich.tsx';
 import { describeCondition } from './ConditionEditor.tsx';
 import { TYPE_ICONS } from './Builder.tsx';
-import { analyzeFlow, type FlowEdge, type FlowNode } from '../../../shared/flow.ts';
+import { analyzeFlow, type FlowEdge, type FlowNode } from '../../../../shared/flow.ts';
 import { describeLoop, shownTitle } from './LoopEditor.tsx';
-import { loopDepth } from '../../../shared/loops.ts';
-import type { Survey } from '../../../shared/types.ts';
+import { loopDepth } from '../../../../shared/loops.ts';
+import type { Survey } from '../../../../shared/types.ts';
 
 const LANE = 14;
 const MAX_LANES = 10;

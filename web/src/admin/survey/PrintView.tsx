@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { api } from '../api.ts';
+import { api } from '../../api.ts';
 import { describeCondition } from './ConditionEditor.tsx';
 import { describeActions } from './ActionsEditor.tsx';
 import { describeLoop } from './LoopEditor.tsx';
-import { QUESTION_TYPE_LABELS, settingsOf, type Option, type Question, type Survey } from '../../../shared/types.ts';
+import { QUESTION_TYPE_LABELS, settingsOf, type Option, type Question, type Survey } from '../../../../shared/types.ts';
 
 /**
  * Печатная версия анкеты — для согласования с заказчиком и проверки глазами:

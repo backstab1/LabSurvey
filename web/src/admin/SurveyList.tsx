@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { api, ApiError } from '../api.ts';
+import { useState } from 'react';
+import { api, ApiError, useApi } from '../api.ts';
 import { canEdit, navigate, useMe } from './AdminApp.tsx';
 import { TEMPLATES, type Template } from './templates.ts';
 import { IssuesList, Menu, Modal, toast } from './common.tsx';
-import { NewProjectModal } from './ProjectPage.tsx';
+import { NewProjectModal } from './project/ProjectList.tsx';
 import type { Issue } from '../../../shared/validate.ts';
 import type { BackupsInfo, SurveyListItem } from '../../../shared/api.ts';
 
@@ -14,7 +14,7 @@ export function publishState(r: { version: number; unpublished: boolean }): { te
 }
 
 export function SurveyList() {
-  const [rows, setRows] = useState<SurveyListItem[] | null>(null);
+  const { data: rows, reload: load } = useApi<SurveyListItem[]>('/api/admin/surveys');
   const [importOpen, setImportOpen] = useState(false);
   const [backupsOpen, setBackupsOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
@@ -23,9 +23,6 @@ export function SurveyList() {
   const editable = canEdit(me);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | 'archived'>('all');
-
-  const load = () => api<SurveyListItem[]>('GET', '/api/admin/surveys').then(setRows);
-  useEffect(() => { load(); }, []);
 
   const shown = (rows ?? []).filter((r) => (status === 'archived' ? r.archived : !r.archived)
     && r.title.toLowerCase().includes(query.trim().toLowerCase()));
@@ -159,10 +156,8 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 
 /** Копии базы: делаются по расписанию на сервере, здесь — список, скачать, сделать сейчас */
 function BackupsModal({ onClose }: { onClose: () => void }) {
-  const [data, setData] = useState<BackupsInfo | null>(null);
+  const { data, reload: load } = useApi<BackupsInfo>('/api/admin/backups');
   const [busy, setBusy] = useState(false);
-  const load = () => api<BackupsInfo>('GET', '/api/admin/backups').then(setData);
-  useEffect(() => { load(); }, []);
   const size = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} МБ` : `${Math.ceil(b / 1024)} КБ`);
   return (
     <Modal onClose={onClose} title="Резервные копии базы">

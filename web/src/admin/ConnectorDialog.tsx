@@ -1,17 +1,16 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api.ts';
-import { Modal, toast } from './common.tsx';
+import { useEffect } from 'react';
+import { api, useApi } from '../api.ts';
+import { Modal, toast, copyText } from './common.tsx';
 import type { Connection } from '../../../shared/api.ts';
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
 /** Подключение Claude / ChatGPT к SurveyLAB (MCP-коннектор) и отзыв доступа */
 export function ConnectorDialog({ onClose }: { onClose: () => void }) {
-  const [list, setList] = useState<Connection[] | null>(null);
+  const { data: list, error, reload: load } = useApi<Connection[]>('/api/admin/me/connections');
+  useEffect(() => { if (error) toast(error); }, [error]);
   const url = `${window.location.origin}/mcp`;
   const local = /^(localhost|127\.|\[::1\])/.test(window.location.hostname) || window.location.protocol !== 'https:';
-  const load = () => api<Connection[]>('GET', '/api/admin/me/connections').then(setList).catch((e) => toast((e as Error).message));
-  useEffect(() => { load(); }, []);
 
   return (
     <Modal onClose={onClose} title="ИИ-коннектор" actions={<button className="btn btn-primary" onClick={onClose}>Готово</button>}>
@@ -24,7 +23,7 @@ export function ConnectorDialog({ onClose }: { onClose: () => void }) {
           <span>Адрес коннектора</span>
           <div className="row" style={{ gap: 8 }}>
             <input className="input mono grow" readOnly value={url} onFocus={(e) => e.target.select()} />
-            <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(url); toast('Адрес скопирован'); }}>Копировать</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => copyText(url, 'Адрес скопирован')}>Копировать</button>
           </div>
           {local && (
             <span className="field-help" style={{ color: 'var(--warn, #9a6700)' }}>

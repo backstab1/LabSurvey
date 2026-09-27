@@ -3,17 +3,17 @@ import { ConjointBody, FileBody, HotspotBody, MaxDiffBody, SliderBody } from './
 import { ConditionField } from './ConditionEditor.tsx';
 import { ActionsEditor } from './ActionsEditor.tsx';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
-import { RichText, pipeTargets } from './RichText.tsx';
+import { RichText, pipeTargets } from '../RichText.tsx';
 import { OptionsListDialog, listSummary, type CarryProps, type ListFeatures } from './OptionsListDialog.tsx';
-import { blockOf } from '../../../shared/logic.ts';
-import { CALC_FUNCTIONS, parseCalc } from '../../../shared/calc.ts';
-import { allIds } from '../../../shared/refactor.ts';
-import { ID_RE, RESERVED_IDS } from '../../../shared/validate.ts';
-import { Flag, Menu, Modal, NumField, Segmented, compact, toast } from './common.tsx';
+import { blockOf } from '../../../../shared/logic.ts';
+import { CALC_FUNCTIONS, parseCalc } from '../../../../shared/calc.ts';
+import { allIds } from '../../../../shared/refactor.ts';
+import { ID_RE, RESERVED_IDS } from '../../../../shared/validate.ts';
+import { Flag, Menu, Modal, NumField, Segmented, compact, copyText } from '../common.tsx';
 import { newQuestion, TYPE_ICONS } from './Builder.tsx';
 import {
   CHOICE_TYPES, QUESTION_TYPE_LABELS, settingsOf, type Action, type MatrixQuestion, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
-} from '../../../shared/types.ts';
+} from '../../../../shared/types.ts';
 /** Смена типа с сохранением всего, что можно перенести */
 function convert(q: Question, type: QuestionType): Question {
   const fresh = newQuestion(type, q.id) as any;
@@ -101,7 +101,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
         <Menu items={[
           { label: 'Предпросмотр с этого вопроса', onClick: onPreview },
           { label: 'Дублировать', onClick: onDuplicate },
-          { label: 'Копировать (JSON)', onClick: () => { navigator.clipboard.writeText(JSON.stringify(q, null, 2)); toast(`${q.id} скопирован — вставьте через «+» в любой анкете`); } },
+          { label: 'Копировать (JSON)', onClick: () => copyText(JSON.stringify(q, null, 2), `${q.id} скопирован — вставьте через «+» в любой анкете`) },
           { label: 'Удалить вопрос', onClick: onDelete, danger: true },
         ]} />
         <button className="btn btn-primary btn-sm" onClick={onClose}>Готово</button>

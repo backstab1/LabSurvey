@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { FORMULA_HELP, FormulaError, formatFormula, parseFormula, referencedIds } from '../../../shared/condFormula.ts';
-import { allOptions, allQuestions, allRows, findQuestion } from '../../../shared/logic.ts';
-import { LOOP_REF, loopLevelsOf, withInstances } from '../../../shared/loops.ts';
-import type { Condition, ConditionOp, Option, Question, SimpleCondition, Survey } from '../../../shared/types.ts';
+import { FORMULA_HELP, FormulaError, formatFormula, parseFormula, referencedIds } from '../../../../shared/condFormula.ts';
+import { allOptions, allQuestions, allRows, findQuestion } from '../../../../shared/logic.ts';
+import { LOOP_REF, loopLevelsOf, withInstances } from '../../../../shared/loops.ts';
+import type { Condition, ConditionOp, Option, Question, SimpleCondition, Survey } from '../../../../shared/types.ts';
 
 const OP_LABELS: Record<ConditionOp, string> = {
   eq: '=', neq: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤',

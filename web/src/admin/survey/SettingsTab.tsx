@@ -1,9 +1,9 @@
-import { ImageField } from './ImageField.tsx';
+import { ImageField } from '../ImageField.tsx';
 import type { ReactNode } from 'react';
 import { ScriptsEditor } from './ScriptsEditor.tsx';
-import { compact } from './common.tsx';
-import { RichText, pipeTargets } from './RichText.tsx';
-import { DEFAULT_SETTINGS, settingsOf, type Survey, type SurveySettings } from '../../../shared/types.ts';
+import { compact } from '../common.tsx';
+import { RichText, pipeTargets } from '../RichText.tsx';
+import { DEFAULT_SETTINGS, settingsOf, type Survey, type SurveySettings } from '../../../../shared/types.ts';
 
 type Key = keyof SurveySettings;
 
