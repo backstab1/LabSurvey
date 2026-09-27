@@ -1,22 +1,8 @@
 // Пользователи админки и их роли
 import type { Row } from '../sql.ts';
 import { ci, enc, now, parseJson, sql, updateRow } from './connection.ts';
-
-/**
- * admin — всё, включая пользователей и копии базы; editor — анкеты и данные; viewer — только просмотр и выгрузки;
- * client — заказчик: только свои проекты (сводка, отчёт, данные), без анкет и настроек
- */
-export type Role = 'admin' | 'editor' | 'viewer' | 'client';
-
-export interface UserRow {
-  login: string;
-  role: Role;
-  disabled: boolean;
-  createdAt: string;
-  lastLoginAt: string | null;
-  /** Для заказчика: проекты, которые он видит */
-  projects: string[];
-}
+import type { Role, UserRow } from '../../shared/api.ts';
+export type { Role, UserRow };
 
 const toUser = (r: Row): UserRow => ({
   login: r.login as string, role: r.role as Role, disabled: r.disabled === 1,

@@ -7,6 +7,7 @@ import { backupPath, listBackups, makeBackup } from '../../backup.ts';
 import { config } from '../../config.ts';
 import { fail, found, isoDay, nextDayIso, sendDownload } from '../../http.ts';
 import { MIN_PASSWORD } from './account.ts';
+import type { BackupsInfo } from '../../../shared/api.ts';
 
 const ROLES: Role[] = ['admin', 'editor', 'viewer', 'client'];
 const ROLE_ERROR = 'Роль: admin, editor, viewer или client';
@@ -81,7 +82,7 @@ export async function usersRoutes(app: FastifyInstance) {
   });
 
   // Резервные копии базы: там все данные — только администратору
-  app.get('/api/admin/backups', async () => ({ list: listBackups(), everyHours: config.backupHours, keep: config.backupKeep, database: sql.kind }));
+  app.get('/api/admin/backups', async (): Promise<BackupsInfo> => ({ list: listBackups(), everyHours: config.backupHours, keep: config.backupKeep, database: sql.kind }));
   app.post('/api/admin/backups', async () => makeBackup());
   app.get<{ Params: { name: string } }>('/api/admin/backups/:name', async (req, reply) => {
     const file = found(backupPath(req.params.name), 'Копия не найдена');

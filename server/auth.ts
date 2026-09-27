@@ -1,16 +1,9 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { config } from './config.ts';
-import { users, type Role } from './db.ts';
-
-export interface SessionUser {
-  login: string;
-  role: Role;
-  /** Главный администратор из .env (ADMIN_LOGIN / ADMIN_PASSWORD) */
-  builtIn: boolean;
-  /** Для заказчика: доступные проекты */
-  projects?: string[];
-}
+import { users } from './db.ts';
+import type { SessionUser } from '../shared/api.ts';
+export type { SessionUser };
 
 declare module 'fastify' {
   interface FastifyRequest { user?: SessionUser }

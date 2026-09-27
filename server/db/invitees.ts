@@ -5,28 +5,8 @@ import { isEmail } from '../../shared/mailTemplate.ts';
 
 export { isEmail };
 import type { ResponseStatus } from '../../shared/variables.ts';
-
-export interface Invitee {
-  id: number;
-  projectId: string;
-  token: string;
-  /** ID из списка (табельный номер, ID клиента) */
-  extId: string | null;
-  /** Остальные столбцы списка: имя, e-mail, отдел… — становятся параметрами ответа */
-  fields: Record<string, string>;
-  responseId: string | null;
-  openedAt: string | null;
-  createdAt: string;
-  /** Статус анкеты по ссылке (из ответа) */
-  status: ResponseStatus | null;
-  rejected: boolean;
-  completedAt: string | null;
-  /** Письмо ждёт отправки (в очереди рассылки) */
-  mailPending: boolean;
-  mailSentAt: string | null;
-  mailCount: number;
-  mailError: string | null;
-}
+import type { Invitee, MailAudience, Mailing } from '../../shared/api.ts';
+export type { Invitee, MailAudience, Mailing };
 
 const toInvitee = (r: Row): Invitee => ({
   id: r.id as number, projectId: r.project_id as string, token: r.token as string, extId: (r.ext_id as string) ?? null,
@@ -88,30 +68,6 @@ export const invitees = {
 };
 
 // ---- Рассылки ----
-
-/** Кому: ещё не получали письмо / не завершили (напоминание) / все / выбранные */
-export type MailAudience = 'not_sent' | 'not_completed' | 'all' | 'ids';
-
-export interface Mailing {
-  id: number;
-  projectId: string;
-  audience: MailAudience;
-  subject: string;
-  body: string;
-  /** Столбец списка с адресом */
-  emailField: string;
-  /** Адрес сервиса для ссылок в письмах */
-  baseUrl: string;
-  createdBy: string | null;
-  createdAt: string;
-  total: number;
-  sent: number;
-  failed: number;
-  /** Сколько ещё в очереди */
-  pending: number;
-  finishedAt: string | null;
-  cancelled: boolean;
-}
 
 const toMailing = (r: Row): Mailing => ({
   id: r.id as number, projectId: r.project_id as string, audience: r.audience as MailAudience, subject: r.subject as string,

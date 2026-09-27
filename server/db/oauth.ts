@@ -1,6 +1,7 @@
 // OAuth для ИИ-коннекторов (Claude, ChatGPT)
 import type { Row } from '../sql.ts';
 import { ci, newId, now, sql } from './connection.ts';
+import type { Connection } from '../../shared/api.ts';
 
 export interface OAuthClient { id: string; name: string; secretHash: string | null; redirectUris: string[]; createdAt: string }
 export interface OAuthGrant { clientId: string; login: string; scope: string | null; expiresAt: string }
@@ -56,7 +57,7 @@ export const oauth = {
     await sql.run('DELETE FROM oauth_tokens WHERE token_hash = ?', [tokenHash]);
   },
   /** Подключённые приложения пользователя: по клиенту — когда выдан доступ и когда им пользовались */
-  async connections(login: string): Promise<{ clientId: string; name: string; since: string; lastUsedAt: string | null }[]> {
+  async connections(login: string): Promise<Connection[]> {
     const rows = await sql.all(`SELECT t.client_id, c.name, MIN(t.created_at) AS since, MAX(t.last_used_at) AS last_used
       FROM oauth_tokens t JOIN oauth_clients c ON c.id = t.client_id WHERE ${ci('t.login')} AND t.expires_at >= ?
       GROUP BY t.client_id, c.name ORDER BY since`, [login, now()]);

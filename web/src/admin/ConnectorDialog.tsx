@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { Modal, toast } from './common.tsx';
-
-interface Connection { clientId: string; name: string; since: string; lastUsedAt: string | null }
+import type { Connection } from '../../../shared/api.ts';
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 

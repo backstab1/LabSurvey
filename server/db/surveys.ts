@@ -4,6 +4,8 @@ import type { Row } from '../sql.ts';
 import { flag, newId, now, sql } from './connection.ts';
 import { migrateSurvey } from '../../shared/migrate.ts';
 import type { Survey } from '../../shared/types.ts';
+import type { SurveyListItem, SurveyVersion } from '../../shared/api.ts';
+export type { SurveyVersion };
 
 export interface SurveyRow {
   id: string;
@@ -15,13 +17,6 @@ export interface SurveyRow {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface SurveyVersion {
-  version: number;
-  publishedAt: string;
-  publishedBy: string | null;
-  questions: number;
 }
 
 /** Анкеты старого формата переводятся в текущий при чтении */
@@ -41,7 +36,7 @@ function toSurvey(r: Row): SurveyRow {
 }
 
 export const surveys = {
-  async list(): Promise<{ id: string; title: string; version: number; archived: boolean; createdAt: string; updatedAt: string; projects: number; unpublished: boolean }[]> {
+  async list(): Promise<SurveyListItem[]> {
     const rows = await sql.all(`SELECT s.id, s.title, s.version, s.archived, s.created_at, s.updated_at,
       ${flag('s.published IS NULL OR s.published <> s.draft')} AS unpublished,
       (SELECT COUNT(*) FROM projects p WHERE p.survey_id = s.id) AS projects FROM surveys s ORDER BY s.updated_at DESC`);

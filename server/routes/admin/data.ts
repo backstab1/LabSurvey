@@ -11,6 +11,7 @@ import { writeCrosstabXlsx, type Measure } from '../../export/crosstabXlsx.ts';
 import {
   XLSX_TYPE, fail, found, isoDay, nextDayIso, parseStatuses, pickStatuses, sendDownload, sendUpload, toCsv,
 } from '../../http.ts';
+import type { ResponseListItem } from '../../../shared/api.ts';
 import { designTable } from '../../../shared/designExport.ts';
 import { evalCondition, findQuestion } from '../../../shared/logic.ts';
 import { buildCrosstabs, type CrosstabSpec } from '../../../shared/crosstab.ts';
@@ -58,10 +59,10 @@ async function crosstab(id: string, rawSpec: string | undefined) {
 }
 
 export async function dataRoutes(app: FastifyInstance) {
-  app.get<{ Params: Params }>('/api/admin/projects/:id/responses', async (req) => {
+  app.get<{ Params: Params }>('/api/admin/projects/:id/responses', async (req): Promise<ResponseListItem[]> => {
     const list = await responses.list(req.params.id, { includeTest: true, includeRejected: true });
     return list.slice(-200).reverse().map((r) => ({
-      id: r.id, status: r.status, isTest: r.isTest, rejected: r.rejected, startedAt: r.startedAt, completedAt: r.completedAt,
+      id: r.id, status: r.status, isTest: r.isTest, rejected: !!r.rejected, startedAt: r.startedAt, completedAt: r.completedAt,
       durationSec: r.durationSec, answered: Object.keys(r.answers).length, params: r.params, flags: r.flags ?? [],
     }));
   });

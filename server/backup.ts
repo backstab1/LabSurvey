@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { config } from './config.ts';
 import { backupTo, sql } from './db.ts';
 import { dumpAll, writeDumpFile } from './dump.ts';
+import type { BackupFile } from '../shared/api.ts';
 
 const NAME_RE = /^surveylab-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}(-\d+)?\.(db|json\.gz)$/;
 
-export interface BackupFile { name: string; size: number; createdAt: string }
 
 export function listBackups(): BackupFile[] {
   if (!existsSync(config.backupDir)) return [];

@@ -2,34 +2,8 @@
 import type { Row } from '../sql.ts';
 import { enc, newId, now, parseJson, sql, updateRow } from './connection.ts';
 import type { Panel, ProjectSettings, ProjectStatus, Quota } from '../../shared/types.ts';
-import type { ResponseStatus } from '../../shared/variables.ts';
-import type { CrosstabSpec } from '../../shared/crosstab.ts';
-
-export interface SheetsConfig {
-  spreadsheetId: string;
-  sheetName: string;
-  auto: boolean;
-  /** Какие статусы выгружать */
-  statuses: ResponseStatus[];
-  values: 'labels' | 'codes';
-  lastSyncAt?: string;
-  lastError?: string | null;
-}
-
-/** Уведомления о ходе сбора: вебхук и/или Telegram */
-export interface NotifyConfig {
-  webhookUrl?: string;
-  telegramChatId?: string;
-  /** Сообщать о каждой N-й завершённой анкете (1 — о каждой); 0 или пусто — нет */
-  everyN?: number;
-  quotaFull?: boolean;
-  limitReached?: boolean;
-  lastError?: string | null;
-  lastSentAt?: string;
-}
-
-/** Набор таблиц: строки, шапка, фильтры — сохраняется в проекте */
-export interface TableSet { name: string; spec: CrosstabSpec }
+import type { SheetsConfig, NotifyConfig, TableSet } from '../../shared/api.ts';
+export type { SheetsConfig, NotifyConfig, TableSet };
 
 export interface ProjectRow {
   id: string;

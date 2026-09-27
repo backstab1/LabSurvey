@@ -3,9 +3,9 @@ import { api } from '../api.ts';
 import { QUESTION_TYPE_LABELS } from '../../../shared/types.ts';
 import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
 import type { QuestionReport, Report, ReportRow } from '../../../shared/report.ts';
-import type { ProjectInfo } from './ProjectPage.tsx';
 import { ConditionEditor, defaultCondition, describeCondition } from './ConditionEditor.tsx';
 import type { Condition } from '../../../shared/types.ts';
+import type { ProjectInfo } from '../../../shared/api.ts';
 
 const STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
 

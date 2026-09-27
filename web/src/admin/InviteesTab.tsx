@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { Modal, toast } from './common.tsx';
-import type { ProjectInfo } from './ProjectPage.tsx';
-import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
+import { type ResponseStatus } from '../../../shared/variables.ts';
 import { INVITE_PARAM } from '../../../shared/types.ts';
 import { paramName, parseTable } from '../../../shared/tableImport.ts';
-import { MailDialog, MailingsHistory, MailMark, type MailStatus } from './MailDialog.tsx';
-
-interface Invitee {
-  id: number; token: string; extId: string | null; fields: Record<string, string>;
-  responseId: string | null; openedAt: string | null; status: ResponseStatus | null; rejected: boolean; completedAt: string | null;
-  mailPending: boolean; mailSentAt: string | null; mailCount: number; mailError: string | null;
-}
+import { MailDialog, MailingsHistory, MailMark } from './MailDialog.tsx';
+import type { Invitee, MailStatus, ProjectInfo } from '../../../shared/api.ts';
 
 type State = 'none' | 'started' | ResponseStatus;
 const stateOf = (p: Invitee): State => (!p.responseId ? 'none' : p.status === 'in_progress' || !p.status ? 'started' : p.status);

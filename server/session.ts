@@ -14,25 +14,8 @@ import { isEmptyAnswer, normalizeAnswer, validateAnswer } from '../shared/answer
 import { expandAllLoops, withLoops } from '../shared/loops.ts';
 import { PANEL_PARAM, RESERVED_PARAMS as RESERVED, settingsOf, type Answer, type Panel, type Answers, type RespondentContext, type Survey } from '../shared/types.ts';
 import type { ResponseStatus } from '../shared/variables.ts';
-
-export interface RunnerState {
-  rid: string;
-  status: ResponseStatus;
-  preview: boolean;
-  survey: Survey;
-  params: Record<string, string>;
-  answers: Answers;
-  page: string | null;
-  canBack: boolean;
-  progress: number;
-  /** Порядковый номер вопроса у респондента (для «Вопрос N») */
-  step: number;
-  message?: string;
-  /** Куда перенаправить после завершения */
-  redirect?: string;
-  /** До какого момента нужно закончить (ограничение времени), ISO */
-  deadline?: string;
-}
+import type { RunnerState } from '../shared/api.ts';
+export type { RunnerState };
 
 /** Команда (не заказчик) может открыть предпросмотр черновика */
 export const isTeam = async (req: Parameters<typeof currentUser>[0]) => {

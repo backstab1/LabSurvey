@@ -4,48 +4,13 @@ import { canEdit, isClient, navigate, useMe } from './AdminApp.tsx';
 import { DataTab } from './DataTab.tsx';
 import { ReportTab } from './ReportTab.tsx';
 import { InviteesTab } from './InviteesTab.tsx';
-import { TablesTab, type TableSet } from './TablesTab.tsx';
+import { TablesTab } from './TablesTab.tsx';
 import { ConditionField } from './ConditionEditor.tsx';
 import { Menu, Modal, compact, confirmLeave, toast, useUnsaved } from './common.tsx';
 import { nextId } from '../../../shared/refactor.ts';
 import { allQuestions } from '../../../shared/logic.ts';
-import {
-  PANEL_PARAM, PROJECT_STATUS_LABELS, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey,
-} from '../../../shared/types.ts';
-
-export interface ProjectInfo {
-  id: string;
-  title: string;
-  status: ProjectStatus;
-  settings: ProjectSettings;
-  quotaDefs: Quota[];
-  panels: Panel[];
-  /** Сохранённые наборы таблиц */
-  tableSets: TableSet[];
-  /** Счётчики настоящих анкет по панелям; panel = null — прямая ссылка */
-  panelCounts: PanelCounts[];
-  /** Прогресс квот по опубликованной версии */
-  quotas: { id: string; title?: string; limit: number; count: number }[];
-  survey: { id: string; title: string; version: number; published: boolean; unpublished: boolean };
-  /** Анкета с настройками проекта */
-  draft: Survey;
-  published: Survey | null;
-  sheets: any;
-  notify: {
-    webhookUrl?: string; telegramChatId?: string; everyN?: number; quotaFull?: boolean; limitReached?: boolean;
-    lastError?: string | null; lastSentAt?: string;
-  } | null;
-  counts: { real: Record<string, number>; test: number; rejected: number; suspect: number };
-  sheetsAccount: { configured: boolean; email: string | null };
-  testToken: string;
-  telegramConfigured: boolean;
-  /** Динамика по дням (последние 60 дней с первой анкеты) */
-  daily: DayStat[];
-  /** Сколько человек в списке персональных ссылок */
-  invitees: number;
-}
-
-export interface DayStat { day: string; started: number; completed: number; screenedOut: number; overquota: number }
+import { PANEL_PARAM, PROJECT_STATUS_LABELS, type Panel, type ProjectSettings, type ProjectStatus, type Quota } from '../../../shared/types.ts';
+import type { DayStat, PanelCounts, ProjectInfo, ProjectListItem, SurveyListItem } from '../../../shared/api.ts';
 
 /** Копия проекта для новой волны: спрашивает название и открывает копию */
 async function copyProject(id: string, title: string) {
@@ -57,8 +22,6 @@ async function copyProject(id: string, title: string) {
     toast('Проект скопирован');
   } catch (e) { toast((e as Error).message); }
 }
-
-export interface PanelCounts { panel: string | null; statuses: Record<string, number>; rejected: number; medianSec: number | null }
 
 /** Что значит статус проекта для респондентов */
 export const STATUS_HINTS: Record<ProjectStatus, string> = {
@@ -72,19 +35,14 @@ const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('ru
 
 // ======================= Список проектов =======================
 
-interface ProjectRow {
-  id: string; title: string; status: ProjectStatus; surveyId: string; surveyTitle: string; counts: Record<string, number>;
-  maxResponses: number | null; openFrom: string | null; closeAt: string | null; quotas: number; quotasFull: number; updatedAt: string;
-}
-
 export function ProjectList() {
-  const [rows, setRows] = useState<ProjectRow[] | null>(null);
+  const [rows, setRows] = useState<ProjectListItem[] | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'active' | ProjectStatus>('active');
   const editable = canEdit(useMe());
 
-  const load = () => api<ProjectRow[]>('GET', '/api/admin/projects').then(setRows);
+  const load = () => api<ProjectListItem[]>('GET', '/api/admin/projects').then(setRows);
   useEffect(() => { load(); }, []);
 
   const shown = (rows ?? []).filter((r) => (status === 'active' ? r.status !== 'archive' : r.status === status)
@@ -148,13 +106,11 @@ export function ProjectList() {
   );
 }
 
-interface SurveyOption { id: string; title: string; version: number; archived: boolean; unpublished: boolean }
-
 export function NewProjectModal({ onClose, surveyId }: { onClose: () => void; surveyId?: string }) {
-  const [list, setList] = useState<SurveyOption[] | null>(null);
+  const [list, setList] = useState<SurveyListItem[] | null>(null);
   const [form, setForm] = useState({ title: '', surveyId: surveyId ?? '' });
   const [error, setError] = useState('');
-  useEffect(() => { api<SurveyOption[]>('GET', '/api/admin/surveys').then((l) => setList(l.filter((s) => !s.archived))); }, []);
+  useEffect(() => { api<SurveyListItem[]>('GET', '/api/admin/surveys').then((l) => setList(l.filter((s) => !s.archived))); }, []);
   const picked = list?.find((s) => s.id === form.surveyId);
   return (
     <Modal onClose={onClose} title="Новый проект">
@@ -309,7 +265,7 @@ export function ProjectPage({ id }: { id: string }) {
 function Overview({ info, readOnly, client, setStatus, reload, onTab }: {
   info: ProjectInfo; readOnly: boolean; client: boolean; setStatus: (s: ProjectStatus) => void; reload: () => Promise<unknown>; onTab: (t: Tab) => void;
 }) {
-  const [surveys, setSurveys] = useState<SurveyOption[] | null>(null);
+  const [surveys, setSurveys] = useState<SurveyListItem[] | null>(null);
   const st = info.settings;
   const done = info.counts.real.completed ?? 0;
   const started = Object.values(info.counts.real).reduce((a, b) => a + b, 0);
@@ -414,7 +370,7 @@ function Overview({ info, readOnly, client, setStatus, reload, onTab }: {
           info.status === 'collecting'
             ? <p className="muted small" style={{ margin: 0 }}>Во время сбора анкету проекта менять нельзя. Новые версии анкеты подхватываются после публикации.</p>
             : surveys === null
-              ? <button className="btn-link" style={{ alignSelf: 'flex-start', padding: 0 }} onClick={() => api<SurveyOption[]>('GET', '/api/admin/surveys').then((l) => setSurveys(l.filter((s) => !s.archived || s.id === info.survey.id)))}>Выбрать другую анкету</button>
+              ? <button className="btn-link" style={{ alignSelf: 'flex-start', padding: 0 }} onClick={() => api<SurveyListItem[]>('GET', '/api/admin/surveys').then((l) => setSurveys(l.filter((s) => !s.archived || s.id === info.survey.id)))}>Выбрать другую анкету</button>
               : (
                 <label className="field"><span>Анкета проекта</span>
                   <select className="input" value={info.survey.id} onChange={async (e) => {

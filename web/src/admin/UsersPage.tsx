@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { Modal, toast } from './common.tsx';
-
-export type Role = 'admin' | 'editor' | 'viewer' | 'client';
+import type { Role, UserRow } from '../../../shared/api.ts';
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Администратор',
@@ -18,7 +17,6 @@ const ROLE_HINTS: Record<Role, string> = {
   client: 'видит только выбранные проекты: сводку, отчёт и данные',
 };
 
-interface UserRow { login: string; role: Role; disabled: boolean; createdAt: string; lastLoginAt: string | null; projects: string[] }
 interface ProjectOption { id: string; title: string; status: string }
 
 /** Выбор проектов заказчика — списком с галочками */

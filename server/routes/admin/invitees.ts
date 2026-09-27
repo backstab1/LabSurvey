@@ -6,6 +6,7 @@ import { kickMailer, mailConfigured, mailServerError, sendTest } from '../../mai
 import { baseUrl } from '../../oauth.ts';
 import { config } from '../../config.ts';
 import { fail } from '../../http.ts';
+import type { MailStatus } from '../../../shared/api.ts';
 import { hasLinkPlaceholder } from '../../../shared/mailTemplate.ts';
 import { RESERVED_PARAMS } from '../../../shared/types.ts';
 
@@ -70,7 +71,7 @@ export async function inviteesRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.get<{ Params: { id: string } }>('/api/admin/projects/:id/mailings', async (req) => {
+  app.get<{ Params: { id: string } }>('/api/admin/projects/:id/mailings', async (req): Promise<MailStatus> => {
     await projectOf(req.params.id);
     return {
       configured: mailConfigured(), from: config.smtp.from || null, perMinute: config.smtp.perMinute,

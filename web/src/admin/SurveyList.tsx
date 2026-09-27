@@ -5,18 +5,7 @@ import { TEMPLATES, type Template } from './templates.ts';
 import { IssuesList, Menu, Modal, toast } from './common.tsx';
 import { NewProjectModal } from './ProjectPage.tsx';
 import type { Issue } from '../../../shared/validate.ts';
-
-interface Row {
-  id: string;
-  title: string;
-  version: number;
-  archived: boolean;
-  updatedAt: string;
-  /** Сколько проектов запускают эту анкету */
-  projects: number;
-  /** Черновик отличается от опубликованной версии */
-  unpublished: boolean;
-}
+import type { BackupsInfo, SurveyListItem } from '../../../shared/api.ts';
 
 /** Состояние публикации анкеты */
 export function publishState(r: { version: number; unpublished: boolean }): { text: string; cls: string } {
@@ -25,7 +14,7 @@ export function publishState(r: { version: number; unpublished: boolean }): { te
 }
 
 export function SurveyList() {
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const [rows, setRows] = useState<SurveyListItem[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [backupsOpen, setBackupsOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
@@ -35,7 +24,7 @@ export function SurveyList() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | 'archived'>('all');
 
-  const load = () => api<Row[]>('GET', '/api/admin/surveys').then(setRows);
+  const load = () => api<SurveyListItem[]>('GET', '/api/admin/surveys').then(setRows);
   useEffect(() => { load(); }, []);
 
   const shown = (rows ?? []).filter((r) => (status === 'archived' ? r.archived : !r.archived)
@@ -168,13 +157,11 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-interface Backups { list: { name: string; size: number; createdAt: string }[]; everyHours: number; keep: number; database?: 'sqlite' | 'postgres' }
-
 /** Копии базы: делаются по расписанию на сервере, здесь — список, скачать, сделать сейчас */
 function BackupsModal({ onClose }: { onClose: () => void }) {
-  const [data, setData] = useState<Backups | null>(null);
+  const [data, setData] = useState<BackupsInfo | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = () => api<Backups>('GET', '/api/admin/backups').then(setData);
+  const load = () => api<BackupsInfo>('GET', '/api/admin/backups').then(setData);
   useEffect(() => { load(); }, []);
   const size = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} МБ` : `${Math.ceil(b / 1024)} КБ`);
   return (

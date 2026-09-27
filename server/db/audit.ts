@@ -1,20 +1,8 @@
 // Журнал действий команды
 import type { Param } from '../sql.ts';
 import { LIKE, ci, isSame, now, sql } from './connection.ts';
-
-export interface AuditEntry {
-  id: number;
-  at: string;
-  login: string | null;
-  /** ui — интерфейс, ai — ИИ-коннектор (details.app — приложение) */
-  via: 'ui' | 'ai';
-  action: string;
-  targetType: string | null;
-  targetId: string | null;
-  targetTitle: string | null;
-  details: Record<string, unknown> | null;
-  ip: string | null;
-}
+import type { AuditEntry } from '../../shared/api.ts';
+export type { AuditEntry };
 
 /** Сколько дней хранить журнал */
 const AUDIT_KEEP_DAYS = 365;

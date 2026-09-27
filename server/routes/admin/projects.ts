@@ -10,6 +10,7 @@ import { dailyStats } from '../../daily.ts';
 import { simulate } from '../../simulate.ts';
 import { removeUploads } from '../../uploads.ts';
 import { fail } from '../../http.ts';
+import type { ProjectInfo, ProjectListItem } from '../../../shared/api.ts';
 import { validatePanels, validateSurvey } from '../../../shared/validate.ts';
 import {
   PROJECT_SETTING_KEYS, effectiveSurvey, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey,
@@ -34,7 +35,7 @@ async function fullQuotas(p: ProjectRow): Promise<number> {
 }
 
 /** Всё о проекте для страницы проекта */
-async function projectInfo(l: Loaded) {
+async function projectInfo(l: Loaded): Promise<ProjectInfo> {
   const { project: p, survey: s } = l;
   const counts = l.live && p.quotas.length ? await quotaCounts(p.id, l.live, false) : null;
   return {
@@ -56,7 +57,7 @@ async function projectInfo(l: Loaded) {
 }
 
 /** Заказчику — без служебного: тестовой ссылки, интеграций, пароля и адресов возврата панелей */
-function forClient(info: Awaited<ReturnType<typeof projectInfo>>) {
+function forClient(info: ProjectInfo): ProjectInfo {
   const { password: _pw, ...settings } = info.settings;
   return {
     ...info, settings, testToken: '', sheets: null, notify: null, sheetsAccount: { configured: false, email: null }, telegramConfigured: false,
@@ -68,7 +69,7 @@ const tablesOk = (list: unknown): list is TableSet[] => Array.isArray(list) && l
   && list.every((t) => t && typeof t.name === 'string' && t.name.trim() && t.spec && Array.isArray(t.spec.rows) && Array.isArray(t.spec.cols));
 
 export async function projectsRoutes(app: FastifyInstance) {
-  app.get('/api/admin/projects', async (req) => {
+  app.get('/api/admin/projects', async (req): Promise<ProjectListItem[]> => {
     const u = req.user!;
     const list = (await projects.list()).filter((p) => u.role !== 'client' || (u.projects ?? []).includes(p.id));
     return Promise.all(list.map(async (p) => ({

@@ -3,6 +3,8 @@ import type { Param, Row } from '../sql.ts';
 import { enc, flag, jsonGet, jsonKey, marks, median, newId, now, parseJson, sql, updateRow } from './connection.ts';
 import { PANEL_PARAM, type Answers } from '../../shared/types.ts';
 import type { ResponseRecord, ResponseStatus } from '../../shared/variables.ts';
+import type { PanelCounts, ResponseCounts } from '../../shared/api.ts';
+export type { PanelCounts };
 
 export interface StoredResponse extends ResponseRecord {
   /** Проект; null — предпросмотр анкеты из конструктора (вне проекта) */
@@ -21,15 +23,6 @@ export interface ResponsePatch {
   completedAt?: string | null; durationSec?: number | null; version?: number;
   ending?: { message?: string; redirect?: string } | null;
   timings?: Record<string, number>; rejected?: boolean; flags?: string[];
-}
-
-/** Счётчики одного источника: panel = null — прямая ссылка без панели */
-export interface PanelCounts {
-  panel: string | null;
-  statuses: Record<string, number>;
-  rejected: number;
-  /** Медиана длительности завершённых анкет, сек */
-  medianSec: number | null;
 }
 
 const toResponse = (r: Row): StoredResponse => ({
@@ -160,7 +153,7 @@ export const responses = {
   },
 
   /** Счётчики по статусам; бракованные анкеты считаются отдельно (rejected) и в статусы не входят */
-  async counts(projectId: string): Promise<{ real: Record<string, number>; test: number; rejected: number; suspect: number }> {
+  async counts(projectId: string): Promise<ResponseCounts> {
     const rows = await sql.all(`SELECT is_test, status, rejected, ${flag('flags IS NOT NULL')} AS flagged, COUNT(*) AS n FROM responses
       WHERE project_id = ? GROUP BY is_test, status, rejected, 4`, [projectId]);
     const real: Record<string, number> = {};

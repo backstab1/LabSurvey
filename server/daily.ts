@@ -1,15 +1,8 @@
 // Динамика сбора по дням (в часовом поясе выгрузок): сколько начали и чем закончили
 import { config } from './config.ts';
 import type { ResponseStatus } from '../shared/variables.ts';
-
-export interface DayStat {
-  /** YYYY-MM-DD */
-  day: string;
-  started: number;
-  completed: number;
-  screenedOut: number;
-  overquota: number;
-}
+import type { DayStat } from '../shared/api.ts';
+export type { DayStat };
 
 /** Не больше стольких последних дней */
 const MAX_DAYS = 60;

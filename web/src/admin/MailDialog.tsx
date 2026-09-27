@@ -4,24 +4,10 @@ import { api, ApiError } from '../api.ts';
 import { Modal, toast } from './common.tsx';
 import { fillMailTemplate, hasLinkPlaceholder, isEmail } from '../../../shared/mailTemplate.ts';
 import { INVITE_PARAM } from '../../../shared/types.ts';
-import type { ResponseStatus } from '../../../shared/variables.ts';
+import type { Invitee, MailAudience, Mailing, MailStatus } from '../../../shared/api.ts';
 
-export interface MailInvitee {
-  id: number; token: string; extId: string | null; fields: Record<string, string>;
-  responseId: string | null; status: ResponseStatus | null;
-  mailPending: boolean; mailSentAt: string | null; mailCount: number; mailError: string | null;
-}
-
-export type MailAudience = 'not_sent' | 'not_completed' | 'all';
-
-export interface Mailing {
-  id: number; audience: MailAudience | 'ids'; subject: string; body: string; emailField: string; createdBy: string | null; createdAt: string;
-  total: number; sent: number; failed: number; pending: number; finishedAt: string | null; cancelled: boolean;
-}
-
-export interface MailStatus {
-  configured: boolean; from: string | null; perMinute: number; serverError: { message: string; at: string } | null; list: Mailing[];
-}
+/** Кому отправить из диалога (выбранным — из таблицы людей) */
+type Audience = Exclude<MailAudience, 'ids'>;
 
 export const AUDIENCE_LABELS: Record<Mailing['audience'], string> = {
   not_sent: 'кому ещё не отправляли', not_completed: 'напоминание: не завершили', all: 'всем', ids: 'выбранным',
@@ -31,7 +17,7 @@ const EMAIL_HEADERS = /^(e-?mail|email|mail|pochta|elektronnaya-pochta|адре�
 const NAME_HEADERS = /^(name|imya|fio|first_?name)$/i;
 
 /** Столбец с адресами: по названию, иначе где больше всего адресов */
-export function guessEmailField(people: MailInvitee[]): string {
+export function guessEmailField(people: Invitee[]): string {
   const cols = [...new Set(people.flatMap((p) => Object.keys(p.fields)))];
   const byName = cols.find((c) => EMAIL_HEADERS.test(c));
   if (byName) return byName;
@@ -44,15 +30,15 @@ export function guessEmailField(people: MailInvitee[]): string {
   return best;
 }
 
-const done = (p: MailInvitee) => !!p.status && p.status !== 'in_progress';
+const done = (p: Invitee) => !!p.status && p.status !== 'in_progress';
 
 /** Кто попадёт в рассылку (как на сервере) */
-export function audienceOf(people: MailInvitee[], audience: MailAudience, emailField: string): MailInvitee[] {
+export function audienceOf(people: Invitee[], audience: Audience, emailField: string): Invitee[] {
   return people.filter((p) => !p.mailPending && isEmail(p.fields[emailField])
     && (audience === 'all' || (audience === 'not_sent' ? !p.mailSentAt : !done(p))));
 }
 
-function defaultTemplate(people: MailInvitee[], title: string): { subject: string; body: string } {
+function defaultTemplate(people: Invitee[], title: string): { subject: string; body: string } {
   const nameCol = [...new Set(people.flatMap((p) => Object.keys(p.fields)))].find((c) => NAME_HEADERS.test(c));
   return {
     subject: `Приглашение на опрос: ${title}`,
@@ -63,13 +49,13 @@ function defaultTemplate(people: MailInvitee[], title: string): { subject: strin
 }
 
 export function MailDialog({ projectId, projectTitle, people, status, onClose, onSent }: {
-  projectId: string; projectTitle: string; people: MailInvitee[]; status: MailStatus; onClose: () => void; onSent: () => void;
+  projectId: string; projectTitle: string; people: Invitee[]; status: MailStatus; onClose: () => void; onSent: () => void;
 }) {
   const last = status.list[0];
   const initial = last ? { subject: last.subject, body: last.body } : defaultTemplate(people, projectTitle);
   const columns = useMemo(() => [...new Set(people.flatMap((p) => Object.keys(p.fields)))], [people]);
   const [emailField, setEmailField] = useState(() => (last && columns.includes(last.emailField) ? last.emailField : guessEmailField(people)));
-  const [audience, setAudience] = useState<MailAudience>(() => (people.some((p) => p.mailSentAt) ? 'not_completed' : 'not_sent'));
+  const [audience, setAudience] = useState<Audience>(() => (people.some((p) => p.mailSentAt) ? 'not_completed' : 'not_sent'));
   const [subject, setSubject] = useState(initial.subject);
   const [body, setBody] = useState(initial.body);
   const [testTo, setTestTo] = useState(() => { try { return localStorage.getItem('sl-mail-test') ?? ''; } catch { return ''; } });
@@ -147,7 +133,7 @@ export function MailDialog({ projectId, projectTitle, people, status, onClose, o
             <span className="field-help">Адрес есть у {withEmail} из {people.length}{withEmail < people.length ? ' — остальным письмо не уйдёт' : ''}</span>
           </label>
           <div className="field"><span>Кому</span>
-            {(['not_sent', 'not_completed', 'all'] as MailAudience[]).map((a) => (
+            {(['not_sent', 'not_completed', 'all'] as Audience[]).map((a) => (
               <label key={a} className="check">
                 <input type="radio" name="aud" checked={audience === a} onChange={() => setAudience(a)} />
                 <span>{a === 'not_sent' ? 'Кому ещё не отправляли' : a === 'not_completed' ? 'Напоминание: кто не завершил' : 'Всем в списке'}
@@ -257,7 +243,7 @@ export function MailingsHistory({ projectId, status, readOnly, onChange }: { pro
 }
 
 /** Отметка о письме в строке человека */
-export function MailMark({ p }: { p: MailInvitee }) {
+export function MailMark({ p }: { p: Invitee }) {
   if (p.mailPending) return <span className="badge test">в очереди</span>;
   if (p.mailError) return <span className="badge closed" title={p.mailError}>ошибка</span>;
   if (p.mailSentAt) return <span className="muted small" title={`Писем: ${p.mailCount}`}>{fmt(p.mailSentAt)}{p.mailCount > 1 ? ` (×${p.mailCount})` : ''}</span>;

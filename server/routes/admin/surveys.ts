@@ -6,6 +6,7 @@ import { fail, failWith, found, sendDownload } from '../../http.ts';
 import { draftShapeOk, validateSurvey } from '../../../shared/validate.ts';
 import { migrateSurvey } from '../../../shared/migrate.ts';
 import type { Survey } from '../../../shared/types.ts';
+import type { SurveyInfo } from '../../../shared/api.ts';
 
 export function blankSurvey(title = 'Новая анкета'): Survey {
   return {
@@ -35,7 +36,7 @@ export async function surveysRoutes(app: FastifyInstance) {
     return { id: s.id, errors: v.errors, warnings: v.warnings };
   });
 
-  app.get<{ Params: { id: string } }>('/api/admin/surveys/:id', async (req) => {
+  app.get<{ Params: { id: string } }>('/api/admin/surveys/:id', async (req): Promise<SurveyInfo> => {
     const s = await surveyOf(req.params.id);
     const used = (await projects.bySurvey(s.id)).map((p) => ({ id: p.id, title: p.title, status: p.status }));
     return { ...s, testToken: testToken(s.id), projects: used };

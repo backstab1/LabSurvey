@@ -12,19 +12,8 @@ import { imageLibrary } from '../../../shared/images.ts';
 import { ImageLibraryContext } from './ImageField.tsx';
 import { ImagesTab } from './ImagesTab.tsx';
 import { analyzeFlow } from '../../../shared/flow.ts';
-import { type ProjectStatus, type Survey } from '../../../shared/types.ts';
-
-export interface SurveyInfo {
-  id: string;
-  title: string;
-  draft: Survey;
-  published: Survey | null;
-  version: number;
-  archived: boolean;
-  testToken: string;
-  /** Проекты, в которых запускается анкета */
-  projects: { id: string; title: string; status: ProjectStatus }[];
-}
+import { type Survey } from '../../../shared/types.ts';
+import type { SurveyInfo, SurveyVersion } from '../../../shared/api.ts';
 
 type Tab = 'builder' | 'logic' | 'json' | 'settings' | 'images';
 type SaveState = 'saved' | 'pending' | 'saving' | 'error';
@@ -281,14 +270,12 @@ export function Editor({ id }: { id: string }) {
   );
 }
 
-interface VersionRow { version: number; publishedAt: string; publishedBy: string | null; questions: number }
-
 /** Опубликованные версии: скачать или вернуть в черновик (возврат можно отменить через Ctrl+Z) */
 function VersionsModal({ id, current, onClose, onRestore }: {
   id: string; current: number; onClose: () => void; onRestore: (v: number, def: Survey) => void;
 }) {
-  const [rows, setRows] = useState<VersionRow[] | null>(null);
-  useEffect(() => { api<VersionRow[]>('GET', `/api/admin/surveys/${id}/versions`).then(setRows); }, [id]);
+  const [rows, setRows] = useState<SurveyVersion[] | null>(null);
+  useEffect(() => { api<SurveyVersion[]>('GET', `/api/admin/surveys/${id}/versions`).then(setRows); }, [id]);
   return (
     <Modal onClose={onClose} title="История версий">
       {!rows ? <p className="muted">Загрузка…</p> : rows.length === 0 ? <p className="muted">Опубликованных версий пока нет.</p> : (

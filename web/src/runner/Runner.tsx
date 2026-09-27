@@ -4,28 +4,13 @@ import { api, ApiError } from '../api.ts';
 import { QuestionView } from './QuestionView.tsx';
 import { runScript, type ScriptEnv } from './scripts.ts';
 import { rich } from './rich.tsx';
-import { actionError, allQuestions, answerText, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions, resolveRows, answerRows } from '../../../shared/logic.ts';
+import { actionError, allQuestions, answerText, blockOf, findPage, findQuestion, isQuestionVisible, nextPage, pipe, resolveOptions, answerRows } from '../../../shared/logic.ts';
 import { validateAnswer } from '../../../shared/answers.ts';
 import { expandLoops, withLoops } from '../../../shared/loops.ts';
 import {
   DEFAULT_SETTINGS, END, OPTION_TYPES, settingsOf, type Answer, type AnswerValue, type Answers, type Page, type Question, type RespondentContext, type Survey,
 } from '../../../shared/types.ts';
-
-interface RunnerState {
-  rid: string;
-  status: string;
-  preview: boolean;
-  survey: Survey;
-  params: Record<string, string>;
-  answers: Answers;
-  page: string | null;
-  canBack: boolean;
-  progress: number;
-  step: number;
-  message?: string;
-  redirect?: string;
-  deadline?: string;
-}
+import type { RunnerState } from '../../../shared/api.ts';
 
 type Loaded =
   | { kind: 'state'; state: RunnerState }

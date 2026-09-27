@@ -6,21 +6,16 @@ import { rich } from '../runner/rich.tsx';
 import { allQuestions, answerText, pipe } from '../../../shared/logic.ts';
 import { expandAllLoops } from '../../../shared/loops.ts';
 import type { Answers, Survey } from '../../../shared/types.ts';
-import type { ProjectInfo } from './ProjectPage.tsx';
 import { STATUS_LABELS, flagLabel, type ResponseStatus } from '../../../shared/variables.ts';
+import type { ProjectInfo, ResponseListItem, SheetsConfig } from '../../../shared/api.ts';
 
 const EXPORT_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
-
-interface RespRow {
-  id: string; status: ResponseStatus; isTest: boolean; rejected: boolean; startedAt: string; completedAt: string | null;
-  durationSec: number | null; answered: number; params: Record<string, string>; flags?: string[];
-}
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
 export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Promise<unknown> }) {
   const [statuses, setStatuses] = useState<ResponseStatus[]>(['completed']);
-  const [recent, setRecent] = useState<RespRow[] | null>(null);
+  const [recent, setRecent] = useState<ResponseListItem[] | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const me = useMe();
   const editable = canEdit(me);
@@ -29,7 +24,7 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
   const [simCount, setSimCount] = useState(20);
   const [simBusy, setSimBusy] = useState(false);
   const refresh = async () => {
-    setRecent(await api<RespRow[]>('GET', `/api/admin/projects/${info.id}/responses`));
+    setRecent(await api<ResponseListItem[]>('GET', `/api/admin/projects/${info.id}/responses`));
     await reload();
   };
   const total = Object.values(info.counts.real).reduce((a, b) => a + b, 0);
@@ -38,13 +33,13 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
   // При открытии вкладки — свежие счётчики (редактор мог быть открыт давно)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { reload(); }, []);
-  useEffect(() => { api<RespRow[]>('GET', `/api/admin/projects/${info.id}/responses`).then(setRecent); }, [info.id, info.counts]);
+  useEffect(() => { api<ResponseListItem[]>('GET', `/api/admin/projects/${info.id}/responses`).then(setRecent); }, [info.id, info.counts]);
 
   const [opts, setOpts] = useState({ from: '', to: '', timings: false, rejected: false, panel: '' });
   /** Панели для фильтра: из проекта и те, что встречаются в ответах */
   const panelCodes = [...new Set([...info.panels.map((p) => p.id), ...info.panelCounts.map((c) => c.panel).filter((x): x is string => !!x)])];
   const panelTitle = (code: string) => info.panels.find((p) => p.id === code)?.title || code;
-  const matchPanel = (r: RespRow) => !opts.panel || (opts.panel === '-' ? !r.params.panel : r.params.panel === opts.panel);
+  const matchPanel = (r: ResponseListItem) => !opts.panel || (opts.panel === '-' ? !r.params.panel : r.params.panel === opts.panel);
   const shownRecent = (recent ?? []).filter((r) => (showTest || !r.isTest) && matchPanel(r));
   const exportUrl = (format: string, test = false) => {
     const q = new URLSearchParams({ statuses: statuses.join(',') });
@@ -231,7 +226,7 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
 function ResponseModal({ editable, surveyId, rid, onClose, onDeleted, onChanged }: {
   editable: boolean; surveyId: string; rid: string; onClose: () => void; onDeleted: () => void; onChanged: () => void;
 }) {
-  const [data, setData] = useState<{ response: RespRow & { answers: Answers; history: string[]; timings?: Record<string, number> }; survey: Survey } | null>(null);
+  const [data, setData] = useState<{ response: ResponseListItem & { answers: Answers; history: string[]; timings?: Record<string, number> }; survey: Survey } | null>(null);
   const load = () => api('GET', `/api/admin/projects/${surveyId}/responses/${rid}`).then(setData);
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [surveyId, rid]);
   if (!data) return <Modal onClose={onClose} title="Ответ">Загрузка…</Modal>;
@@ -343,7 +338,7 @@ function SheetsCard({ info, reload }: { info: ProjectInfo; reload: () => Promise
       </div>
       <div className="row">
         <label className="check"><input type="checkbox" checked={form.auto} onChange={(e) => setForm({ ...form, auto: e.target.checked })} />Дописывать каждого нового респондента</label>
-        <select className="input" style={{ width: 'auto' }} value={form.values} onChange={(e) => setForm({ ...form, values: e.target.value })}>
+        <select className="input" style={{ width: 'auto' }} value={form.values} onChange={(e) => setForm({ ...form, values: e.target.value as SheetsConfig['values'] })}>
           <option value="labels">Тексты ответов</option>
           <option value="codes">Коды ответов</option>
         </select>

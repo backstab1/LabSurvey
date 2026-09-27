@@ -2,11 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { navigate } from './AdminApp.tsx';
 import { toast } from './common.tsx';
-
-interface Entry {
-  id: number; at: string; login: string | null; via: 'ui' | 'ai'; action: string;
-  targetType: string | null; targetId: string | null; targetTitle: string | null; details: Record<string, unknown> | null; ip: string | null;
-}
+import type { AuditEntry } from '../../../shared/api.ts';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'medium' });
 const TYPE_LABELS: Record<string, string> = { survey: 'Анкета', project: 'Проект', user: 'Пользователь' };
@@ -29,14 +25,14 @@ export function AuditPage() {
     login: init.get('login') ?? '', via: init.get('via') ?? '', q: init.get('q') ?? '', from: '', to: '',
     targetType: init.get('targetType') ?? '', targetId: init.get('targetId') ?? '',
   });
-  const [entries, setEntries] = useState<Entry[] | null>(null);
+  const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [logins, setLogins] = useState<string[]>([]);
   const [more, setMore] = useState(false);
 
   const query = (before?: number) => {
     const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]);
     if (before) q.set('before', String(before));
-    return api<{ entries: Entry[]; logins: string[] }>('GET', `/api/admin/audit?${q}`);
+    return api<{ entries: AuditEntry[]; logins: string[] }>('GET', `/api/admin/audit?${q}`);
   };
   useEffect(() => {
     const t = setTimeout(() => {
@@ -47,7 +43,7 @@ export function AuditPage() {
   }, [JSON.stringify(f)]);
 
   const set = (patch: Partial<typeof f>) => setF({ ...f, ...patch });
-  const open = (e: Entry) => {
+  const open = (e: AuditEntry) => {
     if (e.targetType === 'project' && e.targetId) navigate(`/admin/p/${e.targetId}`);
     else if (e.targetType === 'survey' && e.targetId) navigate(`/admin/s/${e.targetId}`);
   };

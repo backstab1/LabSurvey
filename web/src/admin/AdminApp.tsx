@@ -1,7 +1,7 @@
 import './admin.css';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { api } from '../api.ts';
-import { ChangePassword, ROLE_LABELS, UsersPage, type Role } from './UsersPage.tsx';
+import { ChangePassword, ROLE_LABELS, UsersPage } from './UsersPage.tsx';
 import { Menu, Toaster, confirmLeave } from './common.tsx';
 import { SurveyList } from './SurveyList.tsx';
 import { ProjectList, ProjectPage } from './ProjectPage.tsx';
@@ -10,8 +10,10 @@ import { PrintView } from './PrintView.tsx';
 import { ConnectorDialog } from './ConnectorDialog.tsx';
 import { AuditPage } from './AuditPage.tsx';
 import { ErrorBoundary } from '../ErrorBoundary.tsx';
+import type { SessionUser } from '../../../shared/api.ts';
 
-export interface Me { login: string; role: Role; builtIn: boolean }
+/** Текущий пользователь админки */
+export type Me = SessionUser;
 
 const MeContext = createContext<Me>({ login: '', role: 'viewer', builtIn: false });
 /** Текущий пользователь админки */
