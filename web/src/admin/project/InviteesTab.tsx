@@ -6,6 +6,7 @@ import { INVITE_PARAM } from '../../../../shared/types.ts';
 import { paramName, parseTable } from '../../../../shared/tableImport.ts';
 import { MailDialog, MailingsHistory, MailMark } from './MailDialog.tsx';
 import type { Invitee, MailStatus, ProjectInfo } from '../../../../shared/api.ts';
+import { fmtDate } from './format.ts';
 
 type State = 'none' | 'started' | ResponseStatus;
 const stateOf = (p: Invitee): State => (!p.responseId ? 'none' : p.status === 'in_progress' || !p.status ? 'started' : p.status);
@@ -13,7 +14,6 @@ const STATE_LABELS: Record<State, string> = {
   none: 'Не открывал', started: 'Начал', in_progress: 'Начал', completed: 'Завершил', screened_out: 'Отсеян', terminated: 'Вышел досрочно', overquota: 'Сверх квоты',
 };
 
-const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
 const ID_HEADERS = /^(id|ид|код|номер|таб\.?\s*номер|табельный.*|external_?id|user_?id|uid|pid)$/i;
 
@@ -207,7 +207,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
                       <td className="mono small">{p.extId ?? <span className="muted">—</span>}</td>
                       {columns.slice(0, 3).map((c) => <td key={c}>{p.fields[c] ?? ''}</td>)}
                       <td><span className={`badge inv-${st}`}>{STATE_LABELS[st]}</span>{p.rejected && <span className="badge closed">брак</span>}</td>
-                      <td className="wide-only muted small">{fmt(p.completedAt ?? p.openedAt)}</td>
+                      <td className="wide-only muted small">{fmtDate(p.completedAt ?? p.openedAt)}</td>
                       {hasMail && <td><MailMark p={p} /></td>}
                       <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                         <button className="btn-link small" onClick={() => copyText(linkOf(p))}>ссылка</button>

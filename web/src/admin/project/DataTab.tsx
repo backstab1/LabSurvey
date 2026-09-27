@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../../api.ts';
-import { Modal, toast } from '../common.tsx';
+import { toast } from '../common.tsx';
 import { canEdit, isClient, useMe } from '../AdminApp.tsx';
-import { rich } from '../../runner/rich.tsx';
-import { allQuestions, answerText, pipe } from '../../../../shared/logic.ts';
-import { expandAllLoops } from '../../../../shared/loops.ts';
-import type { Answers, Survey } from '../../../../shared/types.ts';
+import { allQuestions } from '../../../../shared/logic.ts';
 import { STATUS_LABELS, flagLabel, type ResponseStatus } from '../../../../shared/variables.ts';
-import type { ProjectInfo, ResponseListItem, SheetsConfig } from '../../../../shared/api.ts';
+import type { ProjectInfo, ResponseListItem } from '../../../../shared/api.ts';
+import { ResponseModal } from './ResponseModal.tsx';
+import { SheetsCard, NotifyCard } from './Integrations.tsx';
+import { EXPORT_STATUSES, fmtDate } from './format.ts';
 
-const EXPORT_STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
 
-const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
 export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Promise<unknown> }) {
   const [statuses, setStatuses] = useState<ResponseStatus[]>(['completed']);
@@ -140,7 +138,6 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
         </p>
       </div>
 
-
       <div className="card" style={{ overflowX: 'auto' }}>
         <div className="row" style={{ marginBottom: 8 }}>
           <h2 className="grow" style={{ margin: 0 }}>Последние ответы</h2>
@@ -159,8 +156,8 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
                     {STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}{r.rejected && <span className="badge closed">брак</span>}
                     {!!r.flags?.length && <span className="badge suspect" title={r.flags.map(flagLabel).join('\n')}>подозрительная</span>}
                   </td>
-                  <td>{fmt(r.startedAt)}</td>
-                  <td>{fmt(r.completedAt)}</td>
+                  <td>{fmtDate(r.startedAt, '—')}</td>
+                  <td>{fmtDate(r.completedAt, '—')}</td>
                   <td>
                     {r.durationSec !== null ? `${Math.floor(r.durationSec / 60)}:${String(r.durationSec % 60).padStart(2, '0')}` : '—'}
                     {minDur && r.status === 'completed' && r.durationSec !== null && r.durationSec < minDur
@@ -221,227 +218,3 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
   );
 }
 
-/** Просмотр одного ответа: вопросы, которые видел респондент, и его ответы */
-function ResponseModal({ editable, surveyId, rid, onClose, onDeleted, onChanged }: {
-  editable: boolean; surveyId: string; rid: string; onClose: () => void; onDeleted: () => void; onChanged: () => void;
-}) {
-  const { data, reload: load } = useApi<{ response: ResponseListItem & { answers: Answers; history: string[]; timings?: Record<string, number> }; survey: Survey }>(
-    `/api/admin/projects/${surveyId}/responses/${rid}`,
-  );
-  if (!data) return <Modal onClose={onClose} title="Ответ">Загрузка…</Modal>;
-  const { response: r, survey } = data;
-  const ctx = { survey: expandAllLoops(survey), answers: r.answers, params: r.params, seed: r.id };
-  const qs = allQuestions(expandAllLoops(survey)).filter((q) => q.type !== 'info' && r.answers[q.id] !== undefined);
-  return (
-    <Modal onClose={onClose} title={<>Ответ <span className="mono muted" style={{ fontWeight: 400, fontSize: 14 }}>{r.id}</span></>}
-      actions={<>
-        {editable && <><button className="btn btn-secondary btn-sm" title="Бракованная анкета не считается в квотах, лимите, отчёте и выгрузке (выгрузить можно отдельно)"
-          onClick={async () => {
-            await api('POST', `/api/admin/projects/${surveyId}/responses/${rid}/reject`, { rejected: !r.rejected });
-            await load();
-            onChanged();
-            toast(r.rejected ? 'Брак снят' : 'Анкета помечена как брак');
-          }}>{r.rejected ? 'Снять брак' : 'Забраковать'}</button>
-        <button className="btn btn-danger btn-sm" onClick={async () => {
-          if (!window.confirm('Удалить этот ответ? Это нельзя отменить.')) return;
-          await api('DELETE', `/api/admin/projects/${surveyId}/responses/${rid}`);
-          onDeleted();
-        }}>Удалить</button></>}
-        <button className="btn btn-primary btn-sm" onClick={onClose}>Закрыть</button>
-      </>}>
-      <div className="stack">
-        <div className="row small muted">
-          <span>{STATUS_LABELS[r.status]}{r.isTest ? ' · тест' : ''}</span>
-          <span>Начало: {fmt(r.startedAt)}</span>
-          <span>Окончание: {fmt(r.completedAt)}</span>
-          {r.durationSec !== null && <span>Время: {Math.floor(r.durationSec / 60)} мин {r.durationSec % 60} с</span>}
-          {Object.entries(r.params).map(([k, v]) => <span key={k} className="mono">{k}={v}</span>)}
-        </div>
-        {!!r.flags?.length && <div className="warn-box small">Подозрительная анкета: {r.flags.map(flagLabel).join('; ')}</div>}
-        {qs.length === 0 ? <p className="muted">Ответов нет</p> : (
-          <table className="table answers-table">
-            <tbody>
-              {qs.map((q) => (
-                <tr key={q.id}>
-                  <td className="mono" style={{ width: 70, verticalAlign: 'top' }}>{q.id}</td>
-                  <td style={{ verticalAlign: 'top' }}>
-                    <div className="muted small">{rich(pipe(q.text, ctx))}</div>
-                    <div>{answerText(ctx, q) || '—'}</div>
-                    {q.type === 'file' && typeof r.answers[q.id]?.v === 'string' && (
-                      <div className="report-files">
-                        {String(r.answers[q.id].v).split(',').map((id) => {
-                          const url = `/api/admin/projects/${surveyId}/files/${r.id}/${id}`;
-                          return /\.(jpg|png|gif|webp)$/.test(id)
-                            ? <a key={id} href={url} target="_blank" rel="noreferrer"><img src={url} alt={r.answers[q.id].o?.[id] ?? id} /></a>
-                            : <a key={id} href={url} className="report-file">📄 {r.answers[q.id].o?.[id] ?? id}</a>;
-                        })}
-                      </div>
-                    )}
-                  </td>
-                  <td className="muted small" style={{ width: 60, textAlign: 'right', verticalAlign: 'top' }} title="Время на вопросе">
-                    {r.timings?.[q.id] !== undefined ? `${r.timings[q.id]} с` : ''}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-function SheetsCard({ info, reload }: { info: ProjectInfo; reload: () => Promise<unknown> }) {
-  const cfg = info.sheets;
-  const [form, setForm] = useState({
-    spreadsheetId: cfg?.spreadsheetId ?? '',
-    sheetName: cfg?.sheetName ?? 'Ответы',
-    auto: cfg?.auto ?? true,
-    values: cfg?.values ?? 'labels',
-    statuses: (cfg?.statuses ?? ['completed']) as ResponseStatus[],
-  });
-  const [busy, setBusy] = useState(false);
-
-  if (!info.sheetsAccount.configured) {
-    return (
-      <div className="card stack">
-        <h2>Google Sheets</h2>
-        <div className="warn-box">
-          Не настроен сервисный аккаунт Google. Укажите путь к JSON-ключу в <code>GOOGLE_APPLICATION_CREDENTIALS</code> (файл .env) и перезапустите сервер.
-          Инструкция — в README.
-        </div>
-      </div>
-    );
-  }
-
-  const save = async () => {
-    await api('PUT', `/api/admin/projects/${info.id}/sheets`, form);
-    await reload();
-    toast('Настройки Google Sheets сохранены');
-  };
-
-  return (
-    <div className="card stack">
-      <h2>Google Sheets</h2>
-      <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-        Откройте таблицу на редактирование для <code>{info.sheetsAccount.email}</code>, затем вставьте ссылку на неё.
-      </p>
-      <div className="grid2">
-        <label className="field"><span>Ссылка на таблицу или её ID</span>
-          <input className="input" value={form.spreadsheetId} placeholder="https://docs.google.com/spreadsheets/d/…"
-            onChange={(e) => setForm({ ...form, spreadsheetId: e.target.value })} />
-        </label>
-        <label className="field"><span>Лист</span>
-          <input className="input" value={form.sheetName} onChange={(e) => setForm({ ...form, sheetName: e.target.value })} />
-        </label>
-      </div>
-      <div className="row">
-        <label className="check"><input type="checkbox" checked={form.auto} onChange={(e) => setForm({ ...form, auto: e.target.checked })} />Дописывать каждого нового респондента</label>
-        <select className="input" style={{ width: 'auto' }} value={form.values} onChange={(e) => setForm({ ...form, values: e.target.value as SheetsConfig['values'] })}>
-          <option value="labels">Тексты ответов</option>
-          <option value="codes">Коды ответов</option>
-        </select>
-      </div>
-      <div className="row">
-        {EXPORT_STATUSES.filter((s) => s !== 'in_progress').map((s) => (
-          <label key={s} className="check">
-            <input type="checkbox" checked={form.statuses.includes(s)}
-              onChange={(e) => setForm({ ...form, statuses: e.target.checked ? [...form.statuses, s] : form.statuses.filter((x) => x !== s) })} />
-            {STATUS_LABELS[s]}
-          </label>
-        ))}
-      </div>
-      {cfg?.lastError && <div className="error-box">Последняя ошибка: {cfg.lastError}</div>}
-      {cfg?.lastSyncAt && !cfg.lastError && <div className="ok-box">Последняя синхронизация: {fmt(cfg.lastSyncAt)}</div>}
-      <div className="row">
-        <button className="btn btn-secondary" onClick={save}>Сохранить</button>
-        <button className="btn btn-primary" disabled={!cfg?.spreadsheetId || busy} onClick={async () => {
-          setBusy(true);
-          try {
-            const r = await api('POST', `/api/admin/projects/${info.id}/sheets/sync`);
-            toast(`Выгружено строк: ${r.rows}`);
-          } catch (e) {
-            toast((e as Error).message);
-          } finally {
-            setBusy(false);
-            await reload();
-          }
-        }}>{busy ? 'Выгрузка…' : 'Полная синхронизация'}</button>
-      </div>
-    </div>
-  );
-}
-
-/** Уведомления: вебхук (JSON) и Telegram — о завершённых анкетах, набранных квотах и лимите */
-function NotifyCard({ info, reload }: { info: ProjectInfo; reload: () => Promise<unknown> }) {
-  const cfg = info.notify;
-  const [form, setForm] = useState({
-    webhookUrl: cfg?.webhookUrl ?? '', telegramChatId: cfg?.telegramChatId ?? '',
-    everyN: cfg?.everyN ?? 0, quotaFull: cfg?.quotaFull ?? true, limitReached: cfg?.limitReached ?? true,
-  });
-  const [busy, setBusy] = useState(false);
-  const save = async () => {
-    try {
-      await api('PUT', `/api/admin/projects/${info.id}/notify`, form);
-      await reload();
-      toast('Уведомления сохранены');
-      return true;
-    } catch (e) {
-      toast((e as Error).message);
-      return false;
-    }
-  };
-  return (
-    <div className="card stack">
-      <h2>Уведомления</h2>
-      <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-        Сообщения о ходе сбора. Вебхук получает JSON (для завершённых анкет — с ответами); в Telegram приходит короткий текст.
-      </p>
-      <div className="grid2">
-        <label className="field"><span>Вебхук (POST JSON)</span>
-          <input className="input mono" placeholder="https://…" value={form.webhookUrl} onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })} />
-        </label>
-        <label className="field"><span>Чат Telegram</span>
-          <input className="input mono" placeholder="-1001234567890 или @channel" value={form.telegramChatId}
-            disabled={!info.telegramConfigured} onChange={(e) => setForm({ ...form, telegramChatId: e.target.value })} />
-          <span className="field-help">
-            {info.telegramConfigured
-              ? 'Добавьте бота в чат или канал; ID чата покажет, например, @userinfobot'
-              : 'Чтобы включить, задайте TELEGRAM_BOT_TOKEN в .env и перезапустите сервер'}
-          </span>
-        </label>
-      </div>
-      <div className="row" style={{ flexWrap: 'wrap' }}>
-        <label className="check">
-          <input type="checkbox" checked={form.everyN > 0} onChange={(e) => setForm({ ...form, everyN: e.target.checked ? 1 : 0 })} />
-          Завершённые анкеты: каждая
-        </label>
-        {form.everyN > 0 && (
-          <label className="row" style={{ gap: 6 }}><span className="muted small">или каждая N-я:</span>
-            <input className="input mini" type="number" min={1} value={form.everyN} onChange={(e) => setForm({ ...form, everyN: Math.max(1, Number(e.target.value) || 1) })} />
-          </label>
-        )}
-        <label className="check"><input type="checkbox" checked={form.quotaFull} onChange={(e) => setForm({ ...form, quotaFull: e.target.checked })} />Квота набрана</label>
-        <label className="check"><input type="checkbox" checked={form.limitReached} onChange={(e) => setForm({ ...form, limitReached: e.target.checked })} />Лимит анкет набран</label>
-      </div>
-      {cfg?.lastError && <div className="error-box">Последняя ошибка: {cfg.lastError}</div>}
-      <div className="row">
-        <button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>Сохранить</button>
-        <button className="btn btn-secondary btn-sm" disabled={busy || (!form.webhookUrl && !form.telegramChatId)} onClick={async () => {
-          setBusy(true);
-          try {
-            if (!(await save())) return;
-            await api('POST', `/api/admin/projects/${info.id}/notify/test`);
-            toast('Тестовое уведомление отправлено');
-          } catch (e) {
-            toast((e as Error).message);
-          } finally {
-            setBusy(false);
-            await reload();
-          }
-        }}>Отправить тест</button>
-        {cfg?.lastSentAt && <span className="muted small">последнее: {fmt(cfg.lastSentAt)}</span>}
-      </div>
-    </div>
-  );
-}

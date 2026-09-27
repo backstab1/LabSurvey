@@ -6,7 +6,8 @@ import { ImageField } from '../ImageField.tsx';
 import { conjointDesignCheck, conjointShape, maxdiffShape, type DesignCheck } from '../../../../shared/choiceDesign.ts';
 import type { ConjointAttribute, ConjointQuestion, FileQuestion, HotspotQuestion, MaxDiffQuestion, Option, SliderQuestion } from '../../../../shared/types.ts';
 
-type Patch = Record<string, unknown>;
+/** Частичная правка вопроса */
+export type Patch = Record<string, unknown>;
 
 export function SliderBody({ q, set }: { q: SliderQuestion; set: (p: Patch) => void }) {
   return (

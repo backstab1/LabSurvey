@@ -5,6 +5,7 @@ import { Modal, toast } from '../common.tsx';
 import { fillMailTemplate, hasLinkPlaceholder, isEmail } from '../../../../shared/mailTemplate.ts';
 import { INVITE_PARAM } from '../../../../shared/types.ts';
 import type { Invitee, MailAudience, Mailing, MailStatus } from '../../../../shared/api.ts';
+import { fmtDate } from './format.ts';
 
 /** Кому отправить из диалога (выбранным — из таблицы людей) */
 type Audience = Exclude<MailAudience, 'ids'>;
@@ -194,7 +195,6 @@ function renderPreview(text: string, link: string) {
 const plural = (n: number, one: string, few: string, many: string) =>
   n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
 
-const fmt = (iso: string) => new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 
 /** История рассылок проекта с прогрессом; пока что-то отправляется — обновляется сама */
 export function MailingsHistory({ projectId, status, readOnly, onChange }: { projectId: string; status: MailStatus; readOnly: boolean; onChange: () => void }) {
@@ -215,7 +215,7 @@ export function MailingsHistory({ projectId, status, readOnly, onChange }: { pro
           <tbody>
             {status.list.map((m) => (
               <tr key={m.id}>
-                <td className="small" style={{ whiteSpace: 'nowrap' }}>{fmt(m.createdAt)}<div className="muted">{m.createdBy}</div></td>
+                <td className="small" style={{ whiteSpace: 'nowrap' }}>{fmtDate(m.createdAt)}<div className="muted">{m.createdBy}</div></td>
                 <td>{m.subject}</td>
                 <td className="small">{AUDIENCE_LABELS[m.audience]}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
@@ -246,6 +246,6 @@ export function MailingsHistory({ projectId, status, readOnly, onChange }: { pro
 export function MailMark({ p }: { p: Invitee }) {
   if (p.mailPending) return <span className="badge test">в очереди</span>;
   if (p.mailError) return <span className="badge closed" title={p.mailError}>ошибка</span>;
-  if (p.mailSentAt) return <span className="muted small" title={`Писем: ${p.mailCount}`}>{fmt(p.mailSentAt)}{p.mailCount > 1 ? ` (×${p.mailCount})` : ''}</span>;
+  if (p.mailSentAt) return <span className="muted small" title={`Писем: ${p.mailCount}`}>{fmtDate(p.mailSentAt)}{p.mailCount > 1 ? ` (×${p.mailCount})` : ''}</span>;
   return <span className="muted small">—</span>;
 }
