@@ -67,3 +67,11 @@ test('image library: saved images plus everything used in the survey', () => {
   ]);
   assert.match(validateSurvey({ ...def, images: [{ url: 'javascript:alert(1)', name: 'x' }] }).errors[0].message, /url/);
 });
+
+test('image library: open question with a field height (rows: 3) does not break it', () => {
+  const def: Survey = {
+    formatVersion: 2, title: 't',
+    blocks: [{ id: 'B1', questions: [{ id: 'Q1', type: 'text', text: 'Почему?', multiline: true, rows: 3 }] }],
+  };
+  assert.deepEqual(imageLibrary(def), []);
+});

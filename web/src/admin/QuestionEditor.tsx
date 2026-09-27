@@ -23,7 +23,8 @@ function convert(q: Question, type: QuestionType): Question {
     hideBack: q.hideBack, hideFinish: q.hideFinish, requiredMessage: q.requiredMessage, note: q.note, fixed: q.fixed,
     prefillParam: q.prefillParam, prefillSkip: q.prefillSkip,
   };
-  const opts: Option[] | undefined = old.options ?? old.rows;
+  // rows у открытого вопроса — высота поля (число), а не строки матрицы
+  const opts: Option[] | undefined = Array.isArray(old.options) ? old.options : Array.isArray(old.rows) ? old.rows : undefined;
   if (CHOICE_TYPES.includes(type) && opts?.length) {
     return compact({
       ...fresh, ...keep, order: old.order ?? old.rowOrder, optionsFrom: old.optionsFrom ?? old.rowsFrom,

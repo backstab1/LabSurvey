@@ -2,7 +2,7 @@
 // Запуск: npm run test:e2e (сначала собирается фронтенд). Если браузера нет — тесты пропускаются.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -250,4 +250,134 @@ test('client sees only results of assigned projects; admin sees panels, sources 
   await cp.goto(`${base}/admin/p/${other}`);
   await cp.locator('.error-box').waitFor();
   await cctx.close();
+});
+
+/** Ошибки страницы: необработанные исключения и console.error (в т. ч. от предохранителя интерфейса) */
+function trackErrors(page: Page, where: () => string): string[] {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(`${where()}: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(`${where()}: ${m.text()}`); });
+  return errors;
+}
+
+/** Дождаться элемента; если вместо экрана показан предохранитель или были ошибки — упасть сразу с их текстом */
+async function ready(page: Page, selector: string, errors: string[]) {
+  await Promise.race([
+    page.locator(selector).first().waitFor(),
+    page.locator('.crash').waitFor().then(() => { throw new Error(`Экран упал: ${errors.join(' | ')}`); }),
+  ]);
+  assert.deepEqual(errors, []);
+}
+
+// Картинка 1×1 — подменяет адреса картинок из примера, чтобы не ходить в интернет
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+
+test('full-feature survey: every admin screen, question dialog and respondent screen opens without errors', async (t) => {
+  if (!needBrowser(t)) return;
+  const { ctx, page } = await adminContext();
+  let where = 'вход';
+  const errors = trackErrors(page, () => where);
+  const media = await (await ctx.request.post(`${base}/api/admin/media`, { data: PIXEL, headers: { 'content-type': 'application/octet-stream' } })).json();
+  const text = readFileSync(new URL('../../examples/full-demo.json', import.meta.url), 'utf8').replace(/https:\/\/example\.com\/surveylab\/\w+\.png/g, media.url);
+  const def = JSON.parse(text);
+  const projectId = await publishVia(ctx, def);
+  const surveyId = (await (await ctx.request.get(`${base}/api/admin/projects/${projectId}`)).json()).survey.id;
+  await ctx.request.post(`${base}/api/admin/projects/${projectId}/simulate`, { data: { count: 40 } });
+
+  // ---- Редактор анкеты: все вкладки ----
+  where = 'редактор';
+  await page.goto(`${base}/admin/s/${surveyId}`);
+  await ready(page, '.qcard', errors);
+  for (const tab of ['Логика', 'JSON', 'Настройки анкеты', 'Изображения', 'Конструктор']) {
+    where = `редактор → ${tab}`;
+    await page.locator('.tabs .tab', { hasText: tab }).click();
+    await page.waitForTimeout(100);
+  }
+
+  // ---- Окно каждого вопроса: все вкладки и списки вариантов ----
+  const cards = page.locator('.qcard');
+  const n = await cards.count();
+  assert.ok(n >= 40, `карточек ${n}`);
+  for (let i = 0; i < n; i++) {
+    const card = cards.nth(i);
+    const qid = (await card.locator('.qid').innerText()).trim();
+    where = `вопрос ${qid}`;
+    await card.locator('.qtype').click();
+    const dialog = page.locator('.qdialog');
+    await ready(page, '.qdialog', errors);
+    for (const tab of await dialog.locator('.qtabs .tab').all()) {
+      where = `вопрос ${qid} → ${await tab.innerText()}`;
+      await tab.click();
+      if ((await tab.innerText()).startsWith('Основное')) {
+        for (const list of await dialog.locator('.list-btn').all()) {
+          where = `вопрос ${qid} → ${await list.innerText()}`;
+          await list.click();
+          await page.locator('.list-modal').waitFor();
+          await page.keyboard.press('Escape');
+          await page.locator('.list-modal').waitFor({ state: 'detached' });
+        }
+      }
+    }
+    await page.locator('.modal-head').getByRole('button', { name: 'Готово', exact: true }).click();
+    await dialog.waitFor({ state: 'detached' });
+  }
+  // Настройки циклов
+  for (const chip of await page.locator('.loop-chip').all()) {
+    where = `цикл ${await chip.innerText()}`;
+    await chip.click();
+    await page.locator('.modal').waitFor();
+    await page.keyboard.press('Escape');
+    await page.locator('.modal').waitFor({ state: 'detached' });
+  }
+  // Просмотр ничего не должен менять в анкете
+  await page.locator('.save-state', { hasText: 'Черновик сохранён' }).waitFor();
+  const info = await (await ctx.request.get(`${base}/api/admin/surveys/${surveyId}`)).json();
+  assert.deepEqual(info.draft, info.published, 'открытие окон изменило черновик анкеты');
+
+  where = 'печатная версия';
+  await page.goto(`${base}/admin/s/${surveyId}/print`);
+  await page.waitForTimeout(500);
+
+  // ---- Проект: все вкладки ----
+  await page.goto(`${base}/admin/p/${projectId}`);
+  await ready(page, '.tabs .tab', errors);
+  for (const tab of ['Панели', 'Список', 'Квоты', 'Данные', 'Отчёт', 'Таблицы', 'Настройки сбора', 'Сводка']) {
+    where = `проект → ${tab}`;
+    await page.locator('.tabs .tab', { hasText: tab }).click();
+    if (tab === 'Данные') {
+      await page.getByRole('checkbox', { name: 'показывать тестовые' }).check();
+      await page.locator('tr.clickable').first().click();
+      await page.locator('.modal').waitFor();
+      await page.getByRole('button', { name: 'Закрыть' }).click();
+    }
+    if (tab === 'Отчёт') {
+      await page.getByRole('checkbox', { name: 'Тестовые ответы' }).check();
+      await page.locator('.report-q').first().waitFor();
+    }
+    if (tab === 'Таблицы') {
+      await page.getByRole('checkbox', { name: 'Тестовые ответы' }).check();
+      await page.getByRole('button', { name: 'все вопросы' }).click();
+      await page.locator('.xtab').first().waitFor();
+    }
+    await page.waitForTimeout(150);
+  }
+
+  // ---- Респондент: каждый вопрос вне циклов — на телефоне, в предпросмотре с этого вопроса ----
+  const mobile = await browser!.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, locale: 'ru-RU', storageState: await ctx.storageState() });
+  const r = await mobile.newPage();
+  const rErrors = trackErrors(r, () => where);
+  for (const b of def.blocks) {
+    if (b.loop || b.parent) continue;
+    for (const q of b.questions) {
+      if (q.type === 'hidden') continue;
+      where = `опрос → ${q.id}`;
+      await r.goto(`${base}/s/${surveyId}?preview=1&survey=1&new=1&start=${q.id}`);
+      await ready(r, '.runner-card .nav', rErrors);
+      const overflow = await r.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      assert.ok(overflow <= 0, `${q.id}: горизонтальная прокрутка ${overflow}px`);
+    }
+  }
+  assert.deepEqual([...errors, ...rErrors], []);
+  await mobile.close();
+  await ctx.close();
 });

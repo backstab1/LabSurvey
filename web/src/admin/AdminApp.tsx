@@ -9,6 +9,7 @@ import { Editor } from './Editor.tsx';
 import { PrintView } from './PrintView.tsx';
 import { ConnectorDialog } from './ConnectorDialog.tsx';
 import { AuditPage } from './AuditPage.tsx';
+import { ErrorBoundary } from '../ErrorBoundary.tsx';
 
 export interface Me { login: string; role: Role; builtIn: boolean }
 
@@ -72,6 +73,8 @@ export function AdminApp() {
             { label: 'Выйти', onClick: async () => { await api('POST', '/api/admin/logout'); setMe(null); } },
           ]} />
         </header>
+        {/* Ошибка в одном экране не ломает шапку: можно уйти в другой раздел; смена адреса сбрасывает предохранитель */}
+        <ErrorBoundary key={path}>
         {path.startsWith('/admin/users') && me.role === 'admin'
           ? <UsersPage me={me.login} />
           : path.startsWith('/admin/audit') && me.role === 'admin' ? <AuditPage key={window.location.search} />
@@ -79,6 +82,7 @@ export function AdminApp() {
           : editorMatch ? <Editor key={editorMatch[1]} id={editorMatch[1]} />
             : projectMatch ? <ProjectPage key={projectMatch[1]} id={projectMatch[1]} />
               : path.startsWith('/admin/surveys') ? <SurveyList /> : <ProjectList />}
+        </ErrorBoundary>
         {pwOpen && <ChangePassword onClose={() => setPwOpen(false)} />}
         {aiOpen && <ConnectorDialog onClose={() => setAiOpen(false)} />}
         <Toaster />

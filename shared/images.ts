@@ -16,7 +16,8 @@ export function usedImages(def: Survey): ImageUse[] {
   const texts = (text: string | undefined, where: string) => {
     for (const m of (text ?? '').matchAll(MD_IMAGE)) note(m[1], where);
   };
-  const opts = (list: Option[] | undefined, where: string) => list?.forEach((o) => { note(o.image, where); texts(o.text, where); });
+  // Не массив — не список вариантов: у открытого вопроса `rows` — высота поля в строках
+  const opts = (list: unknown, where: string) => { if (Array.isArray(list)) (list as Option[]).forEach((o) => { note(o.image, where); texts(o.text, where); }); };
   note(def.settings?.logoUrl, 'логотип');
   texts(def.settings?.footerText, 'подвал');
   for (const b of def.blocks) {
@@ -24,10 +25,10 @@ export function usedImages(def: Survey): ImageUse[] {
       texts(q.text, q.id);
       texts(q.hint, q.id);
       const a = q as unknown as Record<string, unknown>;
-      opts(a.options as Option[] | undefined, q.id);
-      opts(a.rows as Option[] | undefined, q.id);
-      opts(a.columns as Option[] | undefined, q.id);
-      opts(a.extraOptions as Option[] | undefined, q.id);
+      opts(a.options, q.id);
+      opts(a.rows, q.id);
+      opts(a.columns, q.id);
+      opts(a.extraOptions, q.id);
       if (q.type === 'hotspot') note(q.image, q.id);
       if (q.type === 'conjoint') q.attributes.forEach((at) => opts(at.levels, q.id));
     }

@@ -1,6 +1,7 @@
 import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Runner } from './runner/Runner.tsx';
+import { ErrorBoundary } from './ErrorBoundary.tsx';
 import './styles.css';
 
 // Админка грузится отдельным файлом — респонденты скачивают только код опроса
@@ -13,6 +14,8 @@ if (!survey && !path.startsWith('/admin')) window.history.replaceState(null, '',
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {survey ? <Runner surveyId={survey[1]} /> : <Suspense fallback={null}><AdminApp /></Suspense>}
+    {survey
+      ? <ErrorBoundary title="Не удалось показать опрос"><Runner surveyId={survey[1]} /></ErrorBoundary>
+      : <ErrorBoundary><Suspense fallback={null}><AdminApp /></Suspense></ErrorBoundary>}
   </StrictMode>,
 );

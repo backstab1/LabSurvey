@@ -1,0 +1,1363 @@
+{
+  "formatVersion": 2,
+  "title": "Доставка еды: привычки и выбор сервиса",
+  "description": "Демо-анкета SurveyLAB: все типы вопросов, логика, перенос вариантов, циклы (в т. ч. вложенный и по числу), квоты, контрольные вопросы.",
+  "settings": {
+    "showProgress": true,
+    "allowBack": true,
+    "allowEarlyFinish": true,
+    "accentColor": "#0f766e",
+    "logoUrl": "https://example.com/surveylab/logo.png",
+    "footerText": "ДоставкаLAB · исследование проводится анонимно · [Политика конфиденциальности](https://example.com/privacy)",
+    "completeMessage": "**Спасибо!** Ваши ответы сохранены.\nЧаще всего вы заказываете в сервисе «{{Q3}}» — мы передадим ваши пожелания командам сервисов.",
+    "screenoutMessage": "Спасибо! К сожалению, сейчас мы ищем респондентов с другим профилем.",
+    "overquotaMessage": "Спасибо! Группа респондентов с таким профилем уже набрана.",
+    "earlyFinishMessage": "Вы завершили опрос досрочно. Спасибо за уделённое время!",
+    "closedMessage": "Опрос закрыт. Спасибо за интерес!",
+    "nextLabel": "Далее",
+    "submitLabel": "Отправить ответы"
+  },
+  "scripts": {
+    "init": "sl.shared.junk = (s) => /(.)\\1{5,}/.test(s || \"\");"
+  },
+  "images": [
+    {
+      "url": "https://example.com/surveylab/logo.png",
+      "name": "Логотип исследования"
+    },
+    {
+      "url": "https://example.com/surveylab/1.png",
+      "name": "Быстроед"
+    },
+    {
+      "url": "https://example.com/surveylab/2.png",
+      "name": "Тарелка"
+    },
+    {
+      "url": "https://example.com/surveylab/3.png",
+      "name": "ГорячоДома"
+    },
+    {
+      "url": "https://example.com/surveylab/4.png",
+      "name": "Лавка 24"
+    },
+    {
+      "url": "https://example.com/surveylab/5.png",
+      "name": "Ням-Ням"
+    },
+    {
+      "url": "https://example.com/surveylab/app.png",
+      "name": "Экран приложения"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "B_intro",
+      "questions": [
+        {
+          "id": "INTRO",
+          "type": "info",
+          "text": "**Здравствуйте!**\nМы изучаем, как люди заказывают доставку еды. Опрос займёт 7–10 минут, все ответы анонимны.\n\nНажмите «Далее», чтобы начать."
+        },
+        {
+          "id": "H_src",
+          "type": "hidden",
+          "text": "Источник трафика (utm_source)",
+          "fromParam": "utm_source",
+          "valueType": "string"
+        },
+        {
+          "id": "H_uid",
+          "type": "hidden",
+          "text": "ID панелиста",
+          "fromParam": "uid",
+          "valueType": "string"
+        }
+      ]
+    },
+    {
+      "id": "B_screen",
+      "title": "Немного о вас",
+      "questions": [
+        {
+          "id": "S1",
+          "type": "number",
+          "text": "Сколько вам полных лет?",
+          "min": 14,
+          "max": 99,
+          "suffix": "лет",
+          "hideBack": true,
+          "prefillParam": "age",
+          "prefillSkip": true,
+          "note": "Панель может передать возраст в ?age= — тогда вопрос не задаётся",
+          "actions": {
+            "after": [
+              {
+                "if": {
+                  "q": "S1",
+                  "op": "lt",
+                  "value": 18
+                },
+                "do": "screenout",
+                "message": "Спасибо! Этот опрос — только для участников старше 18 лет."
+              },
+              {
+                "if": {
+                  "q": "S1",
+                  "op": "gt",
+                  "value": 65
+                },
+                "do": "screenout"
+              }
+            ]
+          }
+        },
+        {
+          "id": "S2",
+          "type": "single",
+          "text": "Ваш пол",
+          "autoNext": true,
+          "requiredMessage": "Пожалуйста, выберите вариант",
+          "options": [
+            {
+              "code": 1,
+              "text": "Мужской"
+            },
+            {
+              "code": 2,
+              "text": "Женский"
+            }
+          ]
+        },
+        {
+          "id": "S3",
+          "type": "single",
+          "text": "В каком городе вы живёте?",
+          "search": true,
+          "options": [
+            {
+              "code": 900,
+              "text": "Столицы",
+              "group": true
+            },
+            {
+              "code": 1,
+              "text": "Москва"
+            },
+            {
+              "code": 2,
+              "text": "Санкт-Петербург"
+            },
+            {
+              "code": 901,
+              "text": "Города-миллионники",
+              "group": true
+            },
+            {
+              "code": 3,
+              "text": "Новосибирск"
+            },
+            {
+              "code": 4,
+              "text": "Екатеринбург"
+            },
+            {
+              "code": 5,
+              "text": "Казань"
+            },
+            {
+              "code": 6,
+              "text": "Нижний Новгород"
+            },
+            {
+              "code": 97,
+              "text": "Другой город",
+              "other": true,
+              "bottom": true
+            }
+          ]
+        },
+        {
+          "id": "S4",
+          "type": "single",
+          "text": "Как часто вы заказываете доставку готовой еды или продуктов?",
+          "options": [
+            {
+              "code": 1,
+              "text": "Несколько раз в неделю"
+            },
+            {
+              "code": 2,
+              "text": "Примерно раз в неделю"
+            },
+            {
+              "code": 3,
+              "text": "2–3 раза в месяц"
+            },
+            {
+              "code": 4,
+              "text": "Примерно раз в месяц"
+            },
+            {
+              "code": 5,
+              "text": "Реже раза в месяц"
+            },
+            {
+              "code": 6,
+              "text": "Никогда не заказываю"
+            }
+          ],
+          "actions": {
+            "after": [
+              {
+                "if": {
+                  "q": "S4",
+                  "op": "eq",
+                  "value": 6
+                },
+                "do": "screenout",
+                "message": "Спасибо! Опрос для тех, кто пользуется доставкой."
+              }
+            ]
+          }
+        },
+        {
+          "id": "H_seg",
+          "type": "hidden",
+          "text": "Сегмент: 1 — активные, 2 — средние, 3 — редкие",
+          "calc": "if(S4 <= 2, 1, if(S4 <= 4, 2, 3))"
+        },
+        {
+          "id": "H_age",
+          "type": "hidden",
+          "text": "Возрастная группа: 1 — 18–24, 2 — 25–34, 3 — 35–44, 4 — 45+",
+          "calc": "if(S1 < 25, 1, if(S1 < 35, 2, if(S1 < 45, 3, 4)))"
+        }
+      ]
+    },
+    {
+      "id": "B_brands",
+      "title": "Сервисы доставки",
+      "questions": [
+        {
+          "id": "Q1",
+          "type": "multi",
+          "text": "Какие из этих сервисов доставки вы знаете, хотя бы по названию?",
+          "order": "random",
+          "options": [
+            {
+              "code": 1,
+              "text": "Быстроед",
+              "image": "https://example.com/surveylab/1.png"
+            },
+            {
+              "code": 2,
+              "text": "Тарелка",
+              "image": "https://example.com/surveylab/2.png"
+            },
+            {
+              "code": 3,
+              "text": "ГорячоДома",
+              "image": "https://example.com/surveylab/3.png"
+            },
+            {
+              "code": 4,
+              "text": "Лавка 24",
+              "image": "https://example.com/surveylab/4.png"
+            },
+            {
+              "code": 5,
+              "text": "Ням-Ням",
+              "image": "https://example.com/surveylab/5.png"
+            },
+            {
+              "code": 99,
+              "text": "Не знаю ни одного",
+              "exclusive": true
+            }
+          ],
+          "actions": {
+            "after": [
+              {
+                "if": {
+                  "q": "Q1",
+                  "op": "contains",
+                  "value": 99
+                },
+                "do": "screenout"
+              }
+            ]
+          }
+        },
+        {
+          "id": "Q2",
+          "type": "multi",
+          "text": "Какими из них вы пользовались за последние 3 месяца?",
+          "hint": "Показаны сервисы, которые вы знаете",
+          "optionsFrom": {
+            "question": "Q1",
+            "filter": "selected"
+          },
+          "options": [
+            {
+              "code": 98,
+              "text": "Ни одним",
+              "exclusive": true
+            }
+          ],
+          "actions": {
+            "after": [
+              {
+                "if": {
+                  "q": "Q2",
+                  "op": "contains",
+                  "value": 98
+                },
+                "do": "goTo",
+                "target": "B_attitudes"
+              }
+            ]
+          }
+        },
+        {
+          "id": "Q3",
+          "type": "single",
+          "text": "Каким сервисом вы пользуетесь **чаще всего**?",
+          "hideMarker": true,
+          "optionsFrom": {
+            "question": "Q2",
+            "filter": "selected"
+          },
+          "options": [],
+          "note": "Если в Q2 один сервис — ответ ставится автоматически (действие «Отметить ответ»)",
+          "actions": {
+            "before": [
+              {
+                "do": "answer"
+              }
+            ],
+            "after": [
+              {
+                "do": "setValue",
+                "target": "H_main",
+                "value": "{{Q3}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "H_main",
+          "type": "hidden",
+          "text": "Основной сервис (текст)",
+          "valueType": "string"
+        },
+        {
+          "id": "Q3a",
+          "type": "text",
+          "text": "Почему чаще всего именно «{{Q3}}»?",
+          "multiline": true,
+          "rows": 3,
+          "minLength": 3,
+          "maxLength": 500,
+          "placeholder": "Например: быстро привозят, удобное приложение…",
+          "scripts": {
+            "validate": "if (sl.shared.junk && sl.shared.junk(sl.value)) return \"Похоже на случайный набор символов — напишите, пожалуйста, своими словами\";"
+          }
+        },
+        {
+          "id": "Q4",
+          "type": "ranking",
+          "text": "Что для вас важнее всего при выборе сервиса? Выберите **три** главных фактора по порядку",
+          "rankCount": 3,
+          "order": "random",
+          "options": [
+            {
+              "code": 1,
+              "text": "Скорость доставки"
+            },
+            {
+              "code": 2,
+              "text": "Стоимость доставки"
+            },
+            {
+              "code": 3,
+              "text": "Выбор ресторанов"
+            },
+            {
+              "code": 4,
+              "text": "Скидки и акции"
+            },
+            {
+              "code": 5,
+              "text": "Удобство приложения"
+            },
+            {
+              "code": 6,
+              "text": "Вежливость курьеров"
+            }
+          ]
+        },
+        {
+          "id": "Q5",
+          "type": "single",
+          "text": "Каким сервисом вы хотели бы попробовать воспользоваться?",
+          "hint": "Показаны сервисы, которыми вы ещё не пользовались",
+          "options": [
+            {
+              "code": 1,
+              "text": "Быстроед"
+            },
+            {
+              "code": 2,
+              "text": "Тарелка"
+            },
+            {
+              "code": 3,
+              "text": "ГорячоДома"
+            },
+            {
+              "code": 4,
+              "text": "Лавка 24"
+            },
+            {
+              "code": 5,
+              "text": "Ням-Ням"
+            },
+            {
+              "code": 99,
+              "text": "Никаким",
+              "alwaysShow": true
+            }
+          ],
+          "actions": {
+            "before": [
+              {
+                "do": "hideOptionsFrom",
+                "question": "Q2",
+                "filter": "selected"
+              },
+              {
+                "do": "skipIfFewer",
+                "n": 2
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "B_loop_srv",
+      "title": "Сервис «{{loop}}»",
+      "loop": {
+        "question": "Q2",
+        "filter": "selected"
+      },
+      "questions": [
+        {
+          "id": "L1",
+          "type": "scale",
+          "text": "Как вы в целом оцениваете сервис «{{loop}}»?",
+          "from": 1,
+          "to": 5,
+          "display": "stars",
+          "labels": {
+            "1": "Ужасно",
+            "5": "Отлично"
+          }
+        },
+        {
+          "id": "L2",
+          "type": "multi",
+          "text": "Что вы заказывали в «{{loop}}» за последние 3 месяца?",
+          "options": [
+            {
+              "code": 1,
+              "text": "Пиццу"
+            },
+            {
+              "code": 2,
+              "text": "Суши и роллы"
+            },
+            {
+              "code": 3,
+              "text": "Бургеры"
+            },
+            {
+              "code": 4,
+              "text": "Здоровую еду, салаты"
+            },
+            {
+              "code": 5,
+              "text": "Продукты"
+            },
+            {
+              "code": 97,
+              "text": "Другое",
+              "other": true
+            }
+          ],
+          "note": "В «ГорячоДома» нет продуктов — вариант 5 скрыт действием",
+          "actions": {
+            "before": [
+              {
+                "if": {
+                  "q": "LOOP",
+                  "op": "eq",
+                  "value": 3
+                },
+                "do": "hideOptions",
+                "codes": [
+                  5
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "L3",
+          "type": "matrix",
+          "mode": "single",
+          "text": "Оцените «{{loop}}» по параметрам",
+          "rowOrder": "random",
+          "straightline": "flag",
+          "rows": [
+            {
+              "code": 1,
+              "text": "Скорость доставки"
+            },
+            {
+              "code": 2,
+              "text": "Цены"
+            },
+            {
+              "code": 3,
+              "text": "Выбор ресторанов"
+            },
+            {
+              "code": 4,
+              "text": "Удобство приложения"
+            },
+            {
+              "code": 5,
+              "text": "Работа курьеров"
+            }
+          ],
+          "columns": [
+            {
+              "code": 1,
+              "text": "1 — очень плохо"
+            },
+            {
+              "code": 2,
+              "text": "2"
+            },
+            {
+              "code": 3,
+              "text": "3"
+            },
+            {
+              "code": 4,
+              "text": "4"
+            },
+            {
+              "code": 5,
+              "text": "5 — отлично"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B_loop_cat",
+      "parent": "B_loop_srv",
+      "title": "«{{loop1}}»: {{loop}}",
+      "loop": {
+        "question": "L2",
+        "filter": "selected",
+        "order": "random",
+        "max": 2
+      },
+      "questions": [
+        {
+          "id": "LC1",
+          "type": "scale",
+          "text": "Насколько вы довольны качеством категории «{{loop}}» в сервисе «{{loop1}}»?",
+          "from": 0,
+          "to": 10,
+          "labels": {
+            "0": "Совсем не доволен",
+            "10": "Полностью доволен"
+          }
+        }
+      ]
+    },
+    {
+      "id": "B_loop_srv_end",
+      "parent": "B_loop_srv",
+      "questions": [
+        {
+          "id": "L4",
+          "type": "single",
+          "text": "Будете ли вы и дальше заказывать в «{{loop}}»?",
+          "autoNext": true,
+          "options": [
+            {
+              "code": 1,
+              "text": "Да, точно"
+            },
+            {
+              "code": 2,
+              "text": "Скорее да"
+            },
+            {
+              "code": 3,
+              "text": "Скорее нет"
+            },
+            {
+              "code": 4,
+              "text": "Точно нет"
+            }
+          ]
+        },
+        {
+          "id": "L5",
+          "type": "text",
+          "text": "Почему вы, скорее всего, перестанете заказывать в «{{loop}}»?",
+          "required": false,
+          "showIf": {
+            "q": "L4",
+            "op": "in",
+            "value": [
+              3,
+              4
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "B_attitudes",
+      "title": "Ваше мнение",
+      "order": "random",
+      "questions": [
+        {
+          "id": "A1",
+          "type": "matrix",
+          "mode": "single",
+          "text": "Насколько вы согласны с утверждениями?",
+          "progressiveRows": true,
+          "straightline": "flag",
+          "attention": {
+            "correct": {
+              "q": "A1",
+              "row": 9,
+              "op": "eq",
+              "value": 4
+            }
+          },
+          "rows": [
+            {
+              "code": 900,
+              "text": "Про цены",
+              "group": true
+            },
+            {
+              "code": 1,
+              "text": "Доставка стоит своих денег"
+            },
+            {
+              "code": 2,
+              "text": "Я слежу за акциями и промокодами"
+            },
+            {
+              "code": 901,
+              "text": "Про привычки",
+              "group": true
+            },
+            {
+              "code": 3,
+              "text": "Я заказываю, когда нет сил готовить"
+            },
+            {
+              "code": 4,
+              "text": "Доставка — способ себя порадовать"
+            },
+            {
+              "code": 9,
+              "text": "Чтобы показать, что вы читаете внимательно, выберите «Скорее согласен»",
+              "fixed": true,
+              "noExport": false
+            }
+          ],
+          "columns": [
+            {
+              "code": 1,
+              "text": "Совсем не согласен"
+            },
+            {
+              "code": 2,
+              "text": "Скорее не согласен"
+            },
+            {
+              "code": 3,
+              "text": "Нейтрально"
+            },
+            {
+              "code": 4,
+              "text": "Скорее согласен"
+            },
+            {
+              "code": 5,
+              "text": "Полностью согласен"
+            }
+          ],
+          "note": "Строка 9 — контрольная (attention): неверный ответ помечает анкету как подозрительную"
+        },
+        {
+          "id": "A2",
+          "type": "scale",
+          "text": "Насколько вероятно, что вы порекомендуете «{{Q3}}» друзьям или коллегам?",
+          "from": 0,
+          "to": 10,
+          "labels": {
+            "0": "Точно нет",
+            "10": "Точно да"
+          },
+          "extraOptions": [
+            {
+              "code": 99,
+              "text": "Затрудняюсь ответить"
+            }
+          ],
+          "showIf": {
+            "q": "Q3",
+            "op": "answered"
+          }
+        },
+        {
+          "id": "A3",
+          "type": "scale",
+          "text": "Какое у вас обычно настроение, когда вы ждёте курьера?",
+          "from": 1,
+          "to": 5,
+          "display": "smileys"
+        },
+        {
+          "id": "A4",
+          "type": "slider",
+          "text": "Сколько вы готовы платить за доставку одного заказа?",
+          "min": 0,
+          "max": 500,
+          "step": 10,
+          "unit": "₽",
+          "minLabel": "Бесплатно",
+          "midLabel": "250 ₽",
+          "maxLabel": "500 ₽ и больше"
+        },
+        {
+          "id": "A5",
+          "type": "sum",
+          "text": "Как вы распределяете свой бюджет на еду? Распределите 100%",
+          "total": 100,
+          "unit": "%",
+          "options": [
+            {
+              "code": 1,
+              "text": "Продукты, готовлю сам(а)"
+            },
+            {
+              "code": 2,
+              "text": "Доставка готовой еды"
+            },
+            {
+              "code": 3,
+              "text": "Кафе и рестораны"
+            },
+            {
+              "code": 4,
+              "text": "Готовая еда из магазина"
+            }
+          ]
+        },
+        {
+          "id": "A6",
+          "type": "scale",
+          "text": "Насколько вам удобно оплачивать заказы в приложениях?",
+          "from": 1,
+          "to": 5,
+          "labels": {
+            "1": "Очень неудобно",
+            "5": "Очень удобно"
+          },
+          "autoNext": true
+        }
+      ]
+    },
+    {
+      "id": "B_advanced",
+      "title": "Выбор сервиса",
+      "questions": [
+        {
+          "id": "X1",
+          "type": "maxdiff",
+          "text": "Что для вас **самое важное** и **наименее важное** в доставке?",
+          "perSet": 4,
+          "sets": 5,
+          "bestLabel": "Самое важное",
+          "worstLabel": "Наименее важное",
+          "options": [
+            {
+              "code": 1,
+              "text": "Доставка за 30 минут"
+            },
+            {
+              "code": 2,
+              "text": "Бесплатная доставка"
+            },
+            {
+              "code": 3,
+              "text": "Горячая еда"
+            },
+            {
+              "code": 4,
+              "text": "Кешбэк баллами"
+            },
+            {
+              "code": 5,
+              "text": "Отслеживание курьера на карте"
+            },
+            {
+              "code": 6,
+              "text": "Большой выбор ресторанов"
+            },
+            {
+              "code": 7,
+              "text": "Эко-упаковка"
+            },
+            {
+              "code": 8,
+              "text": "Поддержка в чате 24/7"
+            }
+          ]
+        },
+        {
+          "id": "X2",
+          "type": "conjoint",
+          "text": "Представьте, что вы заказываете ужин. Какой вариант вы бы выбрали?",
+          "tasks": 6,
+          "alternatives": 3,
+          "none": "Не заказал(а) бы ни в одном",
+          "attributes": [
+            {
+              "id": "SRV",
+              "text": "Сервис",
+              "header": true,
+              "fixed": true,
+              "levels": [
+                {
+                  "code": 1,
+                  "text": "Быстроед",
+                  "image": "https://example.com/surveylab/1.png"
+                },
+                {
+                  "code": 2,
+                  "text": "Тарелка",
+                  "image": "https://example.com/surveylab/2.png"
+                },
+                {
+                  "code": 3,
+                  "text": "ГорячоДома",
+                  "image": "https://example.com/surveylab/3.png"
+                }
+              ]
+            },
+            {
+              "id": "PRICE",
+              "text": "Доставка",
+              "levels": [
+                {
+                  "code": 1,
+                  "text": "Бесплатно"
+                },
+                {
+                  "code": 2,
+                  "text": "99 ₽"
+                },
+                {
+                  "code": 3,
+                  "text": "199 ₽"
+                }
+              ]
+            },
+            {
+              "id": "TIME",
+              "text": "Время",
+              "levels": [
+                {
+                  "code": 1,
+                  "text": "20–30 мин"
+                },
+                {
+                  "code": 2,
+                  "text": "40–50 мин"
+                },
+                {
+                  "code": 3,
+                  "text": "около часа"
+                }
+              ]
+            },
+            {
+              "id": "PROMO",
+              "text": "Бонус",
+              "levels": [
+                {
+                  "code": 1,
+                  "text": "Скидка 10%"
+                },
+                {
+                  "code": 2,
+                  "text": "Кешбэк 15% баллами"
+                },
+                {
+                  "code": 3,
+                  "text": "Без бонуса"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "X3",
+          "type": "hotspot",
+          "text": "Посмотрите на главный экран приложения. Что **первым** привлекает ваше внимание? Отметьте до двух мест",
+          "image": "https://example.com/surveylab/app.png",
+          "maxSelected": 2,
+          "options": [
+            {
+              "code": 1,
+              "text": "Шапка с адресом",
+              "area": {
+                "x": 0,
+                "y": 0,
+                "w": 100,
+                "h": 11
+              }
+            },
+            {
+              "code": 2,
+              "text": "Поиск",
+              "area": {
+                "x": 5,
+                "y": 13.5,
+                "w": 90,
+                "h": 7
+              }
+            },
+            {
+              "code": 3,
+              "text": "Баннер со скидкой",
+              "area": {
+                "x": 5,
+                "y": 23.5,
+                "w": 90,
+                "h": 20
+              }
+            },
+            {
+              "code": 4,
+              "text": "Категории",
+              "area": {
+                "x": 5,
+                "y": 46.5,
+                "w": 90,
+                "h": 13
+              }
+            },
+            {
+              "code": 5,
+              "text": "Карточка ресторана",
+              "area": {
+                "x": 5,
+                "y": 62.5,
+                "w": 90,
+                "h": 19
+              }
+            },
+            {
+              "code": 6,
+              "text": "Кнопка корзины",
+              "area": {
+                "x": 5,
+                "y": 86,
+                "w": 90,
+                "h": 10
+              }
+            }
+          ]
+        },
+        {
+          "id": "X4",
+          "type": "matrix",
+          "mode": "multi",
+          "carousel": true,
+          "text": "С какими качествами у вас ассоциируется каждый сервис?",
+          "hint": "Можно отметить несколько качеств",
+          "rowsFrom": {
+            "question": "Q1",
+            "filter": "selected"
+          },
+          "rows": [],
+          "columns": [
+            {
+              "code": 1,
+              "text": "Быстрый"
+            },
+            {
+              "code": 2,
+              "text": "Недорогой"
+            },
+            {
+              "code": 3,
+              "text": "Вкусная еда"
+            },
+            {
+              "code": 4,
+              "text": "Надёжный"
+            },
+            {
+              "code": 99,
+              "text": "Ничего из этого",
+              "shared": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B_house",
+      "title": "Ваша семья",
+      "questions": [
+        {
+          "id": "H1",
+          "type": "number",
+          "text": "Сколько человек, **кроме вас**, живёт вместе с вами?",
+          "min": 0,
+          "max": 7,
+          "suffix": "чел.",
+          "hint": "Если живёте один/одна — укажите 0"
+        }
+      ]
+    },
+    {
+      "id": "B_members",
+      "title": "Член семьи №{{loop}}",
+      "loop": {
+        "question": "H1",
+        "max": 5
+      },
+      "questions": [
+        {
+          "id": "M1",
+          "type": "dropdown",
+          "text": "Кем вам приходится член семьи №{{loop}}?",
+          "options": [
+            {
+              "code": 1,
+              "text": "Супруг(а) / партнёр"
+            },
+            {
+              "code": 2,
+              "text": "Ребёнок"
+            },
+            {
+              "code": 3,
+              "text": "Родитель"
+            },
+            {
+              "code": 4,
+              "text": "Другой родственник"
+            },
+            {
+              "code": 5,
+              "text": "Сосед(ка), друг"
+            }
+          ]
+        },
+        {
+          "id": "M2",
+          "type": "number",
+          "text": "Сколько лет члену семьи №{{loop}}?",
+          "min": 0,
+          "max": 110,
+          "suffix": "лет"
+        },
+        {
+          "id": "M3",
+          "type": "single",
+          "text": "Член семьи №{{loop}} тоже заказывает доставку сам(а)?",
+          "showIf": {
+            "q": "M2",
+            "op": "gte",
+            "value": 14
+          },
+          "options": [
+            {
+              "code": 1,
+              "text": "Да"
+            },
+            {
+              "code": 2,
+              "text": "Нет"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B_ads",
+      "title": "Реклама",
+      "loop": {
+        "items": [
+          {
+            "code": 1,
+            "text": "Курьер-супергерой"
+          },
+          {
+            "code": 2,
+            "text": "Ужин за 15 минут"
+          },
+          {
+            "code": 3,
+            "text": "Семейная пицца"
+          }
+        ],
+        "order": "random",
+        "max": 2
+      },
+      "questions": [
+        {
+          "id": "V1",
+          "type": "scale",
+          "text": "Представьте рекламный ролик «{{loop}}». Насколько вам нравится такая идея?",
+          "from": 1,
+          "to": 5,
+          "labels": {
+            "1": "Совсем не нравится",
+            "5": "Очень нравится"
+          }
+        },
+        {
+          "id": "V2",
+          "type": "text",
+          "text": "Что бы вы изменили в идее ролика «{{loop}}»?",
+          "required": false,
+          "placeholder": "Необязательно"
+        }
+      ]
+    },
+    {
+      "id": "B_demo",
+      "title": "Последние вопросы",
+      "questions": [
+        {
+          "id": "D0",
+          "type": "dropdown",
+          "text": "Ваш род занятий",
+          "options": [
+            {
+              "code": 1,
+              "text": "Работаю по найму"
+            },
+            {
+              "code": 2,
+              "text": "Свой бизнес / фриланс"
+            },
+            {
+              "code": 3,
+              "text": "Учусь"
+            },
+            {
+              "code": 4,
+              "text": "Не работаю"
+            },
+            {
+              "code": 5,
+              "text": "На пенсии"
+            },
+            {
+              "code": 97,
+              "text": "Другое",
+              "other": true
+            }
+          ]
+        },
+        {
+          "id": "D1",
+          "type": "single",
+          "text": "Какое описание лучше подходит к доходу вашей семьи?",
+          "columnCount": 2,
+          "options": [
+            {
+              "code": 1,
+              "text": "Хватает только на еду"
+            },
+            {
+              "code": 2,
+              "text": "На еду и одежду"
+            },
+            {
+              "code": 3,
+              "text": "На бытовую технику"
+            },
+            {
+              "code": 4,
+              "text": "На автомобиль"
+            },
+            {
+              "code": 5,
+              "text": "Ни в чём себе не отказываем"
+            },
+            {
+              "code": 99,
+              "text": "Предпочитаю не отвечать",
+              "bottom": true
+            }
+          ]
+        },
+        {
+          "id": "D2",
+          "type": "date",
+          "text": "Когда вы в последний раз заказывали доставку?",
+          "min": "2026-01-01",
+          "max": "2026-09-27"
+        },
+        {
+          "id": "D9",
+          "type": "number",
+          "text": "Сколько в среднем стоит ваш заказ?",
+          "min": 100,
+          "max": 20000,
+          "suffix": "₽",
+          "actions": {
+            "after": [
+              {
+                "if": {
+                  "q": "D9",
+                  "op": "lt",
+                  "value": 250
+                },
+                "do": "error",
+                "message": "Минимальная сумма заказа в сервисах — 250 ₽. Проверьте, пожалуйста, ответ."
+              }
+            ]
+          }
+        },
+        {
+          "id": "D6",
+          "type": "text",
+          "text": "Во сколько вы обычно ужинаете?",
+          "inputType": "time"
+        },
+        {
+          "id": "D5",
+          "type": "single",
+          "text": "Готовы ли вы участвовать в следующих опросах о доставке?",
+          "options": [
+            {
+              "code": 1,
+              "text": "Да"
+            },
+            {
+              "code": 2,
+              "text": "Нет"
+            }
+          ],
+          "actions": {
+            "after": [
+              {
+                "if": {
+                  "q": "D5",
+                  "op": "eq",
+                  "value": 2
+                },
+                "do": "end",
+                "message": "Спасибо за участие! Больше мы вас не побеспокоим."
+              }
+            ]
+          }
+        },
+        {
+          "id": "D7",
+          "type": "text",
+          "text": "Как к вам обращаться?",
+          "required": false,
+          "pattern": "[А-Яа-яЁё\\s-]+",
+          "patternMessage": "Имя — кириллицей",
+          "noPaste": true,
+          "placeholder": "Имя кириллицей"
+        },
+        {
+          "id": "D3",
+          "type": "text",
+          "text": "Ваш e-mail для приглашений",
+          "inputType": "email",
+          "placeholder": "name@example.com"
+        },
+        {
+          "id": "D4",
+          "type": "phone",
+          "text": "Телефон — на случай, если e-mail не дойдёт",
+          "required": false
+        },
+        {
+          "id": "D8",
+          "type": "file",
+          "text": "Если хотите, приложите фото последнего чека или заказа",
+          "required": false,
+          "accept": "image",
+          "maxFiles": 2
+        },
+        {
+          "id": "H_nps",
+          "type": "hidden",
+          "text": "Группа NPS: 1 — сторонники, 2 — нейтральные, 3 — критики, 0 — нет оценки",
+          "calc": "if(answered(A2) * (A2 <= 10), if(A2 >= 9, 1, if(A2 >= 7, 2, 3)), 0)"
+        }
+      ]
+    }
+  ],
+  "quotas": [
+    {
+      "id": "QT_m",
+      "title": "Мужчины",
+      "if": {
+        "q": "S2",
+        "op": "eq",
+        "value": 1
+      },
+      "limit": 75
+    },
+    {
+      "id": "QT_w",
+      "title": "Женщины",
+      "if": {
+        "q": "S2",
+        "op": "eq",
+        "value": 2
+      },
+      "limit": 85
+    },
+    {
+      "id": "QT_45",
+      "title": "45+ лет",
+      "if": {
+        "q": "S1",
+        "op": "gte",
+        "value": 45
+      },
+      "limit": 20
+    }
+  ],
+  "minDurationSec": 90
+}
