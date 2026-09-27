@@ -3,6 +3,8 @@
 import { allOptions, allQuestions, allRows, findQuestion } from './logic.ts';
 import type { Condition, Question, Survey } from './types.ts';
 import type { ResponseRecord, ResponseStatus } from './variables.ts';
+import { plainText as plain } from './text.ts';
+import { mean, median as medianOf, sd } from './stats.ts';
 
 /** Переменная таблицы: вопрос, строка матрицы или параметр ссылки */
 export interface VarRef { q?: string; row?: number; param?: string }
@@ -67,9 +69,6 @@ interface VarModel {
 const MIN_BASE = 10;
 const MAX_DISTINCT = 40;
 
-const plain = (text: string) => text
-  .replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\*\*([^*]+)\*\*/g, '$1')
-  .replace(/(^|[^*])\*([^*]+)\*/g, '$1$2').replace(/\s+/g, ' ').trim();
 const title = (q: Question) => `${q.id}. ${plain(q.text)}`.slice(0, 200);
 const empty = (v: unknown) => v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length);
 
@@ -193,17 +192,6 @@ export function varModels(survey: Survey, ref: VarRef, responses: ResponseRecord
 const Z: Record<string, number> = { '0.9': 1.645, '0.95': 1.96, '0.99': 2.576 };
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-function mean(xs: number[]) { return xs.reduce((a, b) => a + b, 0) / xs.length; }
-function sd(xs: number[]) {
-  if (xs.length < 2) return 0;
-  const m = mean(xs);
-  return Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1));
-}
-function medianOf(xs: number[]) {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
 const round1 = (x: number) => Math.round(x * 10) / 10;
 const round2 = (x: number) => Math.round(x * 100) / 100;
 

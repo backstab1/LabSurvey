@@ -2,6 +2,7 @@
 import { allOptions, allRows } from './logic.ts';
 import { conjointShape, maxdiffShape } from './choiceDesign.ts';
 import type { Answers, Option, Survey } from './types.ts';
+import { plainText as clean } from './text.ts';
 
 export type ResponseStatus = 'in_progress' | 'completed' | 'screened_out' | 'terminated' | 'overquota';
 
@@ -68,16 +69,6 @@ const SELECTED_LABELS = [
 ];
 
 /** Убирает переносы строк и подстановки из подписи */
-function clean(text: string): string {
-  return text
-    .replace(/\{\{\s*([\w.]+)\s*\}\}/g, '[$1]')
-    // Разметка текста: картинки убираем, ссылки и выделение — только текст
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/(^|[^*])\*([^*]+)\*/g, '$1$2')
-    .replace(/\s+/g, ' ').trim();
-}
 
 function toDate(iso: string | null): Date | null {
   return iso ? new Date(iso) : null;

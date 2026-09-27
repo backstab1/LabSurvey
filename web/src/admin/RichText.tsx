@@ -1,6 +1,6 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { Menu } from './common.tsx';
-import { plain } from '../runner/rich.tsx';
+import { plainText as plain } from '../../../shared/text.ts';
 import type { Survey } from '../../../shared/types.ts';
 
 /** Вопросы, ответ на которые можно подставить в текст: до вопроса before (или все) */

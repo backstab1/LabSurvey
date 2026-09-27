@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { config } from '../config.ts';
 import { openSql, sqliteHandle, type Param } from '../sql.ts';
 import { initSchema } from '../schema.ts';
+import * as stats from '../../shared/stats.ts';
 
 export const sql = await openSql({ url: config.databaseUrl, sqliteFile: config.dbFile });
 const pg = sql.kind === 'postgres';
@@ -50,12 +51,8 @@ export function newId(len = 10): string {
 
 export const now = () => new Date().toISOString();
 
-export function median(list: number[]): number | null {
-  if (!list.length) return null;
-  const s = [...list].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
-}
+/** Медиана в целых (секунды); пустой список — null */
+export const median = (list: number[]): number | null => (list.length ? Math.round(stats.median(list)) : null);
 
 /** JSON-столбец: разобрать или вернуть запасное значение (NULL в базе) */
 export function parseJson<T>(v: unknown, fallback: T): T {

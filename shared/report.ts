@@ -2,6 +2,7 @@
 import { allOptions, allQuestions, allRows } from './logic.ts';
 import type { Question, Survey } from './types.ts';
 import type { ResponseRecord } from './variables.ts';
+import { median } from './stats.ts';
 
 export interface ReportRow {
   code?: number;
@@ -51,10 +52,6 @@ const pct = (x: number, n: number) => (n ? Math.round((x / n) * 1000) / 10 : 0);
 const round = (x: number) => Math.round(x * 100) / 100;
 const TEXTS = 30;
 
-function median(sorted: number[]): number {
-  const m = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
-}
 
 /** Строит отчёт по выбранным ответам (обычно — завершённым) */
 export function buildReport(survey: Survey, responses: ResponseRecord[], unfinished: (ResponseRecord & { lastPage: string | null })[] = []): Report {

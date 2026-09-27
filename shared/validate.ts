@@ -14,6 +14,9 @@ export interface ValidationResult {
   warnings: Issue[];
 }
 
+/** Куда проверка сообщает о проблеме: err — ошибка, warn — предупреждение */
+type Sink = (where: string, message: string) => void;
+
 export const ID_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 
 /** Имена служебных переменных выгрузки — не могут быть ID вопросов */
@@ -31,7 +34,7 @@ const SCRIPT_KEYS = {
   question: ['beforeShow', 'onShow', 'onChange', 'validate'],
 } as const;
 
-function checkScripts(scripts: unknown, level: keyof typeof SCRIPT_KEYS, where: string, err: (w: string, m: string) => void) {
+function checkScripts(scripts: unknown, level: keyof typeof SCRIPT_KEYS, where: string, err: Sink) {
   if (scripts === undefined) return;
   if (!isObj(scripts)) return err(where, 'scripts: ожидается объект');
   const allowed: readonly string[] = SCRIPT_KEYS[level];
@@ -367,7 +370,7 @@ const LOOP_SOURCE_TYPES = new Set(['single', 'multi', 'dropdown', 'ranking', 'ma
 /** Структура циклов; true — можно разворачивать */
 function checkLoops(
   s: Survey, qIndex: Map<string, { pos: number; q: Question }>, blockStart: Map<string, number>,
-  err: (w: string, m: string) => void, warn: (w: string, m: string) => void,
+  err: Sink, warn: Sink,
 ): boolean {
   let ok = true;
   const e = (w: string, m: string) => { ok = false; err(w, m); };
@@ -426,7 +429,7 @@ function checkLoops(
 }
 
 /** Блоки с перемешиванием: порядок внутри блока у каждого респондента свой */
-function checkRandomBlocks(s: Survey, err: (w: string, m: string) => void, warn: (w: string, m: string) => void) {
+function checkRandomBlocks(s: Survey, err: Sink, warn: Sink) {
   for (const b of s.blocks) {
     if (!isObj(b) || !Array.isArray(b.questions)) continue;
     const bw = typeof b.id === 'string' ? b.id : 'блок';
@@ -460,7 +463,7 @@ const TEXT_SETTINGS = [
 ];
 const URL_SETTINGS = ['redirectComplete', 'redirectScreenout', 'redirectEarlyFinish', 'redirectOverquota'];
 
-function validateSettings(st: Record<string, unknown>, err: (w: string, m: string) => void, warn: (w: string, m: string) => void) {
+function validateSettings(st: Record<string, unknown>, err: Sink, warn: Sink) {
   const w = (k: string) => `settings.${k}`;
   for (const k of BOOL_SETTINGS) if (st[k] !== undefined && typeof st[k] !== 'boolean') err(w(k), 'Ожидается true или false');
   for (const k of TEXT_SETTINGS) if (st[k] !== undefined && typeof st[k] !== 'string') err(w(k), 'Ожидается строка');
@@ -493,7 +496,7 @@ const OPTION_FLAGS = [
   'group', 'groupHidden', 'groupExclusive', 'alwaysShow', 'noLoop', 'bottom', 'shared',
 ];
 
-function validateOptions(list: unknown, where: string, name: string, err: (w: string, m: string) => void, allowEmpty = false) {
+function validateOptions(list: unknown, where: string, name: string, err: Sink, allowEmpty = false) {
   if (!Array.isArray(list)) return err(where, `Нужен массив ${name}`);
   if (list.length === 0 && !allowEmpty) return err(where, `${name}: нужен хотя бы один вариант`);
   const codes = new Set<number>();
@@ -522,8 +525,8 @@ function validateOptions(list: unknown, where: string, name: string, err: (w: st
 function validateQuestion(
   q: Question,
   w: string,
-  err: (w: string, m: string) => void,
-  warn: (w: string, m: string) => void,
+  err: Sink,
+  warn: Sink,
 ) {
   if (q.prefillParam !== undefined && (typeof q.prefillParam !== 'string' || !/^[\w.-]{1,50}$/.test(q.prefillParam))) {
     err(w, 'prefillParam: имя параметра ссылки (латиница, цифры, _ . -)');

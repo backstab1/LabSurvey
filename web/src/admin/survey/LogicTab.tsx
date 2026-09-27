@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Segmented } from '../common.tsx';
-import { plain } from '../../runner/rich.tsx';
+import { plainText as plain } from '../../../../shared/text.ts';
 import { describeCondition } from './ConditionEditor.tsx';
 import { TYPE_ICONS } from './Builder.tsx';
 import { analyzeFlow, type FlowEdge, type FlowNode } from '../../../../shared/flow.ts';
