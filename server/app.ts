@@ -34,6 +34,8 @@ export async function buildApp() {
   if (existsSync(dist)) {
     // Файлы ищутся при каждом запросе — пересборка фронтенда не требует перезапуска сервера
     await app.register(fastifyStatic, { root: dist });
+    // Короткие адреса статических страниц
+    app.get('/docs', (_req, reply) => reply.sendFile('docs.html'));
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith('/api/') || req.url.startsWith('/assets/') || req.url.startsWith('/oauth/') || req.url.startsWith('/.well-known/') || req.url.startsWith('/media/')) return reply.code(404).send({ error: 'Не найдено' });
       return reply.sendFile('index.html');

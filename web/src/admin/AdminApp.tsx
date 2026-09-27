@@ -65,6 +65,7 @@ export function AdminApp() {
             {!isClient(me) && <a href="/admin/surveys" className={section === 'surveys' ? 'active' : ''} onClick={go('/admin/surveys')}>Анкеты</a>}
           </nav>
           <div className="spacer" />
+          <a className="btn btn-secondary btn-sm" href="/docs.html" target="_blank" rel="noopener" title="Как собрать анкету, логика, скрипты, выгрузки">Документация</a>
           <Menu className="btn btn-secondary btn-sm user-menu" label={<>{me.login} <span className="muted">· {ROLE_LABELS[me.role]}</span></>} title="Учётная запись" items={[
             me.role === 'admin' && { label: 'Пользователи', onClick: () => navigate('/admin/users') },
             me.role === 'admin' && { label: 'Журнал действий', onClick: () => navigate('/admin/audit') },

@@ -27,6 +27,9 @@ export function ScriptsEditor({ level, value, onChange, only }: {
   };
   return (
     <div className="stack">
+      <p className="muted small" style={{ margin: 0 }}>
+        Объект <code>sl</code>, форматы ответов и готовые примеры — в <a href="/docs.html#scripts" target="_blank" rel="noopener">документации по скриптам</a>.
+      </p>
       {HOOKS[level].filter(([key]) => !only || only.includes(key)).map(([key, label, help]) => {
         let syntaxError = '';
         const code = (value as Record<string, string | undefined> | undefined)?.[key] ?? '';

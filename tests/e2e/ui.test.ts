@@ -381,3 +381,29 @@ test('full-feature survey: every admin screen, question dialog and respondent sc
   await mobile.close();
   await ctx.close();
 });
+
+test('documentation: opens from the admin, search filters sections, no horizontal scroll on a phone', async (t) => {
+  if (!needBrowser(t)) return;
+  const { ctx, page } = await adminContext();
+  const errors: string[] = [];
+  const [docs] = await Promise.all([ctx.waitForEvent('page'), page.getByRole('link', { name: 'Документация' }).click()]);
+  docs.on('pageerror', (e) => errors.push(e.message));
+  await docs.locator('#toc a').first().waitFor();
+  await docs.getByLabel('Поиск по документации').fill('sl.set');
+  const visible = await docs.locator('#toc a:not([hidden])').allTextContents();
+  assert.ok(visible.includes('Скрипты: как устроены'), visible.join(', '));
+  assert.ok(!visible.includes('Квоты'), 'поиск должен скрыть лишние разделы');
+  await ctx.close();
+
+  const mobile = await phone();
+  const m = await mobile.newPage();
+  m.on('pageerror', (e) => errors.push(e.message));
+  await m.goto(`${base}/docs#t-conjoint`);
+  assert.equal(await m.locator('#t-conjoint').evaluate((d) => (d as HTMLDetailsElement).open), true, 'ссылка на тип раскрывает его');
+  assert.equal(await m.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), 0);
+  await m.getByRole('button', { name: 'Оглавление' }).click();
+  await m.getByRole('link', { name: 'Примеры скриптов' }).click();
+  await m.getByRole('heading', { name: /Примеры скриптов/ }).waitFor();
+  await mobile.close();
+  assert.deepEqual(errors, []);
+});
