@@ -3,7 +3,7 @@ import {
   authenticate, checkUserPassword, clearSession, currentUser, hashPassword, isBuiltInLogin, loginBlocked, loginFailed,
   requireAdminRole, requireUser, setSession, testToken,
 } from '../auth.ts';
-import { audit, invitees, oauth, projects, responses, surveys, users, type NotifyConfig, type TableSet, type Role, type SheetsConfig } from '../db.ts';
+import { audit, invitees, isEmail, mailings, oauth, projects, responses, surveys, users, type NotifyConfig, type TableSet, type Role, type SheetsConfig } from '../db.ts';
 import { defFor, loadProject } from '../projectCtx.ts';
 import { buildTable, cellToText } from '../export/table.ts';
 import { writeXlsx } from '../export/xlsx.ts';
@@ -21,6 +21,9 @@ import { auditHooks, auditLogin } from '../audit.ts';
 import { quotaCounts, resetQuotas } from '../quotas.ts';
 import { buildReport } from '../../shared/report.ts';
 import { send, telegramConfigured } from '../notify.ts';
+import { kickMailer, mailConfigured, mailServerError, sendTest } from '../mail.ts';
+import { baseUrl } from '../oauth.ts';
+import { hasLinkPlaceholder } from '../../shared/mailTemplate.ts';
 import { backupPath, listBackups, makeBackup } from '../backup.ts';
 import { createReadStream } from 'node:fs';
 import { config } from '../config.ts';
@@ -493,6 +496,70 @@ export async function adminRoutes(app: FastifyInstance) {
 
     priv.post<{ Params: { id: string; iid: string } }>('/api/admin/projects/:id/invitees/:iid/reissue', async (req) => {
       await invitees.reissue(req.params.id, Number(req.params.iid));
+      return { ok: true };
+    });
+
+    // ---- Рассылка приглашений по e-mail ----
+    type MailBody = { audience?: string; ids?: unknown; subject?: unknown; body?: unknown; emailField?: unknown; to?: unknown };
+    /** Проверка шаблона письма; возвращает текст ошибки */
+    const templateError = (b: MailBody): string | null => {
+      if (typeof b.subject !== 'string' || !b.subject.trim()) return 'Укажите тему письма';
+      if (b.subject.length > 200) return 'Тема длиннее 200 символов';
+      if (typeof b.body !== 'string' || !b.body.trim()) return 'Напишите текст письма';
+      if (b.body.length > 10_000) return 'Текст письма длиннее 10 000 символов';
+      if (!hasLinkPlaceholder(b.body)) return 'В тексте нет {{link}} — без неё человек не получит свою ссылку';
+      return null;
+    };
+
+    priv.get<{ Params: { id: string } }>('/api/admin/projects/:id/mailings', async (req, reply) => {
+      if (!(await projects.get(req.params.id))) return reply.code(404).send({ error: 'Проект не найден' });
+      return {
+        configured: mailConfigured(), from: config.smtp.from || null, perMinute: config.smtp.perMinute,
+        serverError: mailServerError, list: await mailings.list(req.params.id),
+      };
+    });
+
+    priv.post<{ Params: { id: string }; Body: MailBody }>('/api/admin/projects/:id/mailings', async (req, reply) => {
+      if (!(await projects.get(req.params.id))) return reply.code(404).send({ error: 'Проект не найден' });
+      if (!mailConfigured()) return reply.code(400).send({ error: 'Почта не настроена: задайте SMTP_HOST и MAIL_FROM в .env сервера' });
+      const b = req.body ?? {};
+      const err = templateError(b);
+      if (err) return reply.code(400).send({ error: err });
+      const audiences = ['not_sent', 'not_completed', 'all', 'ids'] as const;
+      const audience = audiences.find((a) => a === b.audience);
+      if (!audience) return reply.code(400).send({ error: 'Укажите, кому отправить' });
+      const ids = Array.isArray(b.ids) ? b.ids.filter((x): x is number => Number.isInteger(x)) : [];
+      if (audience === 'ids' && !ids.length) return reply.code(400).send({ error: 'Не выбраны люди' });
+      const people = await invitees.list(req.params.id);
+      if (typeof b.emailField !== 'string' || !people.some((p) => b.emailField as string in p.fields)) {
+        return reply.code(400).send({ error: 'Выберите столбец списка с адресами' });
+      }
+      const r = await mailings.create({
+        projectId: req.params.id, audience, subject: (b.subject as string).trim(), body: b.body as string, emailField: b.emailField,
+        baseUrl: baseUrl(req), createdBy: req.user?.login ?? null,
+      }, ids);
+      if (r.mailing.total) kickMailer();
+      return r;
+    });
+
+    priv.post<{ Params: { id: string }; Body: MailBody }>('/api/admin/projects/:id/mailings/test', async (req, reply) => {
+      if (!(await projects.get(req.params.id))) return reply.code(404).send({ error: 'Проект не найден' });
+      if (!mailConfigured()) return reply.code(400).send({ error: 'Почта не настроена: задайте SMTP_HOST и MAIL_FROM в .env сервера' });
+      const b = req.body ?? {};
+      const err = templateError(b);
+      if (err) return reply.code(400).send({ error: err });
+      if (!isEmail(b.to)) return reply.code(400).send({ error: 'Проверьте адрес для теста' });
+      const first = (await invitees.list(req.params.id))[0];
+      try {
+        await sendTest(b.to.trim(), { subject: b.subject as string, body: b.body as string }, first ?? { fields: {}, extId: null, token: 'TEST' }, baseUrl(req), req.params.id);
+      } catch (e) {
+        return reply.code(502).send({ error: `Почтовый сервер не принял письмо: ${(e as Error).message}` });
+      }
+      return { ok: true };
+    });
+
+    priv.post<{ Params: { id: string; mid: string } }>('/api/admin/projects/:id/mailings/:mid/cancel', async (req, reply) => {
+      if (!(await mailings.cancel(req.params.id, Number(req.params.mid)))) return reply.code(404).send({ error: 'Рассылка не найдена или уже закончилась' });
       return { ok: true };
     });
 

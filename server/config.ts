@@ -38,6 +38,19 @@ export const config = {
   isProduction: process.env.NODE_ENV === 'production',
   /** Внешний адрес сервиса (https://surveys.example.ru) — для ИИ-коннектора; по умолчанию берётся из запроса */
   publicUrl: process.env.PUBLIC_URL ?? '',
+  /** Почта для приглашений: SMTP-сервер (Яндекс 360, Mail.ru, Unisender Go, SendPulse, свой) */
+  smtp: {
+    host: process.env.SMTP_HOST ?? '',
+    port: Number(process.env.SMTP_PORT ?? 465),
+    /** TLS сразу (порт 465); 0 — STARTTLS (порт 587) */
+    secure: (process.env.SMTP_SECURE ?? (process.env.SMTP_PORT === '587' ? '0' : '1')) !== '0',
+    user: process.env.SMTP_USER ?? '',
+    pass: process.env.SMTP_PASS ?? '',
+    /** Отправитель: "Опросы <surveys@example.ru>"; по умолчанию SMTP_USER */
+    from: process.env.MAIL_FROM || process.env.SMTP_USER || '',
+    /** Писем в минуту — у почтовых сервисов есть лимиты */
+    perMinute: Math.max(1, Number(process.env.MAIL_PER_MINUTE ?? 60)),
+  },
 };
 
 if (!config.adminPassword) {

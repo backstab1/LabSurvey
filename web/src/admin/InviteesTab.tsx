@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { Modal, toast } from './common.tsx';
 import type { ProjectInfo } from './ProjectPage.tsx';
 import { STATUS_LABELS, type ResponseStatus } from '../../../shared/variables.ts';
 import { INVITE_PARAM } from '../../../shared/types.ts';
 import { paramName, parseTable } from '../../../shared/tableImport.ts';
+import { MailDialog, MailingsHistory, MailMark, type MailStatus } from './MailDialog.tsx';
 
 interface Invitee {
   id: number; token: string; extId: string | null; fields: Record<string, string>;
   responseId: string | null; openedAt: string | null; status: ResponseStatus | null; rejected: boolean; completedAt: string | null;
+  mailPending: boolean; mailSentAt: string | null; mailCount: number; mailError: string | null;
 }
 
 type State = 'none' | 'started' | ResponseStatus;
@@ -101,8 +103,15 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<'all' | State>('all');
   const [q, setQ] = useState('');
+  const [mail, setMail] = useState<MailStatus | null>(null);
+  const [mailing, setMailing] = useState(false);
   const load = () => api<Invitee[]>('GET', `/api/admin/projects/${info.id}/invitees`).then(setList).catch((e) => toast((e as Error).message));
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [info.id]);
+  const loadMail = useCallback(() => {
+    api<MailStatus>('GET', `/api/admin/projects/${info.id}/mailings`).then(setMail).catch(() => {});
+    api<Invitee[]>('GET', `/api/admin/projects/${info.id}/invitees`).then(setList).catch(() => {});
+  }, [info.id]);
+  useEffect(() => { load(); loadMail(); /* eslint-disable-next-line */ }, [info.id]);
+  const hasMail = (list ?? []).some((p) => p.mailSentAt || p.mailPending || p.mailError);
 
   const linkOf = (p: Invitee) => `${window.location.origin}/s/${info.id}?${INVITE_PARAM}=${p.token}`;
   const columns = useMemo(() => [...new Set((list ?? []).flatMap((p) => Object.keys(p.fields)))], [list]);
@@ -142,11 +151,12 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
         <div className="row">
           <h2 className="grow" style={{ margin: 0 }}>Персональные ссылки</h2>
           {total > 0 && <button className="btn btn-secondary btn-sm" onClick={downloadCsv}>Скачать ссылки (CSV)</button>}
+          {total > 0 && !readOnly && mail && <button className="btn btn-secondary btn-sm" onClick={() => setMailing(true)}>Разослать по e-mail</button>}
           {!readOnly && <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>+ Добавить людей</button>}
         </div>
         <p className="muted small" style={{ margin: 0 }}>
           У каждого человека из списка — своя ссылка: пройти по ней можно один раз, начатую анкету — продолжить с любого устройства.
-          Разошлите ссылки сами (почтой, в мессенджере) — файл CSV подходит для рассылки слиянием.
+          Разошлите приглашения прямо отсюда — кнопка «Разослать по e-mail» (с напоминаниями тем, кто не завершил), или скачайте ссылки в CSV для своей рассылки.
         </p>
         {!readOnly && (
           <label className="check">
@@ -170,6 +180,8 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
         )}
       </div>
 
+      {mail && <MailingsHistory projectId={info.id} status={mail} readOnly={readOnly} onChange={loadMail} />}
+
       {list === null ? <p className="muted">Загрузка…</p> : total === 0 ? (
         <div className="card"><p className="muted" style={{ margin: 0 }}>Список пуст. Добавьте людей — вставкой из Excel или файлом CSV.</p></div>
       ) : (
@@ -192,7 +204,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="table">
-              <thead><tr><th>ID</th>{columns.slice(0, 3).map((c) => <th key={c} className="mono">{c}</th>)}<th>Статус</th><th className="wide-only">Когда</th><th /></tr></thead>
+              <thead><tr><th>ID</th>{columns.slice(0, 3).map((c) => <th key={c} className="mono">{c}</th>)}<th>Статус</th><th className="wide-only">Когда</th>{hasMail && <th>Письмо</th>}<th /></tr></thead>
               <tbody>
                 {shown.slice(0, 500).map((p) => {
                   const st = stateOf(p);
@@ -202,6 +214,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
                       {columns.slice(0, 3).map((c) => <td key={c}>{p.fields[c] ?? ''}</td>)}
                       <td><span className={`badge inv-${st}`}>{STATE_LABELS[st]}</span>{p.rejected && <span className="badge closed">брак</span>}</td>
                       <td className="wide-only muted small">{fmt(p.completedAt ?? p.openedAt)}</td>
+                      {hasMail && <td><MailMark p={p} /></td>}
                       <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                         <button className="btn-link small" onClick={() => { navigator.clipboard.writeText(linkOf(p)); toast('Ссылка скопирована'); }}>ссылка</button>
                         {!readOnly && (
@@ -228,6 +241,10 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
             {shown.length > 500 && <p className="muted small" style={{ padding: '0 12px' }}>Показаны первые 500 из {shown.length} — уточните поиск. В CSV — весь список.</p>}
           </div>
         </div>
+      )}
+      {mailing && mail && list && (
+        <MailDialog projectId={info.id} projectTitle={info.title} people={list} status={mail}
+          onClose={() => setMailing(false)} onSent={() => { setMailing(false); loadMail(); }} />
       )}
       {adding && <ImportModal projectId={info.id} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); reload(); }} />}
     </div>

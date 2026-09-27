@@ -7,6 +7,7 @@ import { PANEL_PARAM, stripProjectFields, type Answers, type Panel, type Project
 import { migrateSurvey } from '../shared/migrate.ts';
 import type { ResponseRecord, ResponseStatus } from '../shared/variables.ts';
 import type { CrosstabSpec } from '../shared/crosstab.ts';
+import { isEmail } from '../shared/mailTemplate.ts';
 
 const db = new DatabaseSync(config.dbFile);
 db.exec(`
@@ -892,7 +893,33 @@ db.exec(`
     created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS invitees_project ON invitees(project_id);
+  CREATE TABLE IF NOT EXISTS mailings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    audience TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    email_field TEXT NOT NULL,
+    base_url TEXT NOT NULL,
+    created_by TEXT,
+    created_at TEXT NOT NULL,
+    total INTEGER NOT NULL DEFAULT 0,
+    sent INTEGER NOT NULL DEFAULT 0,
+    failed INTEGER NOT NULL DEFAULT 0,
+    finished_at TEXT,
+    cancelled INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS mailings_project ON mailings(project_id);
 `);
+{
+  const cols = (db.prepare('PRAGMA table_info(invitees)').all() as { name: string }[]).map((c) => c.name);
+  // Рассылка: письмо в очереди (ID рассылки), когда ушло последнее, сколько всего, последняя ошибка
+  if (!cols.includes('mail_pending')) db.exec('ALTER TABLE invitees ADD COLUMN mail_pending INTEGER');
+  if (!cols.includes('mail_sent_at')) db.exec('ALTER TABLE invitees ADD COLUMN mail_sent_at TEXT');
+  if (!cols.includes('mail_count')) db.exec('ALTER TABLE invitees ADD COLUMN mail_count INTEGER NOT NULL DEFAULT 0');
+  if (!cols.includes('mail_error')) db.exec('ALTER TABLE invitees ADD COLUMN mail_error TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS invitees_mail_pending ON invitees(mail_pending)');
+}
 
 export interface Invitee {
   id: number;
@@ -909,6 +936,11 @@ export interface Invitee {
   status: ResponseStatus | null;
   rejected: boolean;
   completedAt: string | null;
+  /** Письмо ждёт отправки (в очереди рассылки) */
+  mailPending: boolean;
+  mailSentAt: string | null;
+  mailCount: number;
+  mailError: string | null;
 }
 
 const toInvitee = (r: Row): Invitee => ({
@@ -916,6 +948,8 @@ const toInvitee = (r: Row): Invitee => ({
   fields: JSON.parse(r.fields as string), responseId: (r.response_id as string) ?? null, openedAt: (r.opened_at as string) ?? null,
   createdAt: r.created_at as string, status: (r.status as ResponseStatus) ?? null, rejected: r.rejected === 1,
   completedAt: (r.completed_at as string) ?? null,
+  mailPending: r.mail_pending != null, mailSentAt: (r.mail_sent_at as string) ?? null, mailCount: (r.mail_count as number) ?? 0,
+  mailError: (r.mail_error as string) ?? null,
 });
 
 const INVITEE_SELECT = `SELECT i.*, r.status, r.rejected, r.completed_at FROM invitees i LEFT JOIN responses r ON r.id = i.response_id`;
@@ -969,5 +1003,121 @@ export const invitees = {
   },
   async count(projectId: string): Promise<number> {
     return (db.prepare('SELECT COUNT(*) AS n FROM invitees WHERE project_id = ?').get(projectId) as Row).n as number;
+  },
+};
+
+// ---- Рассылки приглашений по e-mail ----
+
+/** Кому: ещё не получали письмо / не завершили (напоминание) / все / выбранные */
+export type MailAudience = 'not_sent' | 'not_completed' | 'all' | 'ids';
+
+export interface Mailing {
+  id: number;
+  projectId: string;
+  audience: MailAudience;
+  subject: string;
+  body: string;
+  /** Столбец списка с адресом */
+  emailField: string;
+  /** Адрес сервиса для ссылок в письмах */
+  baseUrl: string;
+  createdBy: string | null;
+  createdAt: string;
+  total: number;
+  sent: number;
+  failed: number;
+  /** Сколько ещё в очереди */
+  pending: number;
+  finishedAt: string | null;
+  cancelled: boolean;
+}
+
+const toMailing = (r: Row): Mailing => ({
+  id: r.id as number, projectId: r.project_id as string, audience: r.audience as MailAudience, subject: r.subject as string,
+  body: r.body as string, emailField: r.email_field as string, baseUrl: r.base_url as string, createdBy: (r.created_by as string) ?? null,
+  createdAt: r.created_at as string, total: r.total as number, sent: r.sent as number, failed: r.failed as number,
+  pending: (r.pending as number) ?? 0, finishedAt: (r.finished_at as string) ?? null, cancelled: r.cancelled === 1,
+});
+
+export { isEmail };
+
+const MAILING_SELECT = 'SELECT m.*, (SELECT COUNT(*) FROM invitees i WHERE i.mail_pending = m.id) AS pending FROM mailings m';
+
+export const mailings = {
+  /**
+   * Создать рассылку и поставить письма в очередь. Люди без адреса и те, кому письмо уже стоит в очереди, пропускаются.
+   * Возвращает рассылку и сколько людей пропущено из-за пустого или неверного адреса.
+   */
+  async create(m: Pick<Mailing, 'projectId' | 'audience' | 'subject' | 'body' | 'emailField' | 'baseUrl' | 'createdBy'>, ids?: number[]): Promise<{ mailing: Mailing; noEmail: number }> {
+    const where = {
+      not_sent: 'i.mail_sent_at IS NULL',
+      not_completed: "(r.status IS NULL OR r.status = 'in_progress')",
+      all: '1 = 1',
+      ids: '1 = 1',
+    }[m.audience];
+    const rows = db.prepare(`${INVITEE_SELECT} WHERE i.project_id = ? AND i.mail_pending IS NULL AND ${where}`).all(m.projectId) as Row[];
+    const idSet = m.audience === 'ids' ? new Set(ids ?? []) : null;
+    const chosen = rows.map(toInvitee).filter((p) => !idSet || idSet.has(p.id));
+    const withEmail = chosen.filter((p) => isEmail(p.fields[m.emailField]));
+    let id = 0;
+    db.exec('BEGIN');
+    try {
+      const r = db.prepare(`INSERT INTO mailings (project_id, audience, subject, body, email_field, base_url, created_by, created_at, total)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(m.projectId, m.audience, m.subject, m.body, m.emailField, m.baseUrl, m.createdBy, now(), withEmail.length);
+      id = Number(r.lastInsertRowid);
+      const mark = db.prepare('UPDATE invitees SET mail_pending = ? WHERE id = ?');
+      for (const p of withEmail) mark.run(id, p.id);
+      if (!withEmail.length) db.prepare('UPDATE mailings SET finished_at = ? WHERE id = ?').run(now(), id);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+    return { mailing: (await this.get(id))!, noEmail: chosen.length - withEmail.length };
+  },
+  async get(id: number): Promise<Mailing | null> {
+    const r = db.prepare(`${MAILING_SELECT} WHERE m.id = ?`).get(id) as Row | undefined;
+    return r ? toMailing(r) : null;
+  },
+  async list(projectId: string): Promise<Mailing[]> {
+    return (db.prepare(`${MAILING_SELECT} WHERE m.project_id = ? ORDER BY m.id DESC LIMIT 50`).all(projectId) as Row[]).map(toMailing);
+  },
+  /** Следующее письмо из очереди (сначала более ранние рассылки) */
+  async nextPending(): Promise<{ mailing: Mailing; invitee: Invitee } | null> {
+    for (;;) {
+      const r = db.prepare(`${INVITEE_SELECT} WHERE i.mail_pending IS NOT NULL ORDER BY i.mail_pending, i.id LIMIT 1`).get() as Row | undefined;
+      if (!r) return null;
+      const mailing = await this.get(r.mail_pending as number);
+      if (mailing) return { mailing, invitee: toInvitee(r) };
+      db.prepare('UPDATE invitees SET mail_pending = NULL WHERE id = ?').run(r.id as number);
+    }
+  },
+  /** Итог отправки одного письма: error — текст ошибки или null */
+  async markSent(mailingId: number, inviteeId: number, error: string | null): Promise<void> {
+    db.exec('BEGIN');
+    try {
+      // Письмо могли убрать из очереди (рассылку остановили) — тогда не считаем
+      const still = db.prepare('SELECT 1 FROM invitees WHERE id = ? AND mail_pending = ?').get(inviteeId, mailingId);
+      if (error) {
+        db.prepare('UPDATE invitees SET mail_pending = NULL, mail_error = ? WHERE id = ?').run(error.slice(0, 300), inviteeId);
+        if (still) db.prepare('UPDATE mailings SET failed = failed + 1 WHERE id = ?').run(mailingId);
+      } else {
+        db.prepare('UPDATE invitees SET mail_pending = NULL, mail_error = NULL, mail_sent_at = ?, mail_count = mail_count + 1 WHERE id = ?').run(now(), inviteeId);
+        db.prepare('UPDATE mailings SET sent = sent + 1 WHERE id = ?').run(mailingId);
+      }
+      db.prepare(`UPDATE mailings SET finished_at = ? WHERE id = ? AND finished_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM invitees WHERE mail_pending = ?)`).run(now(), mailingId, mailingId);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+  },
+  /** Остановить рассылку: неотправленные письма убираются из очереди */
+  async cancel(projectId: string, id: number): Promise<boolean> {
+    const n = db.prepare('UPDATE mailings SET cancelled = 1, finished_at = COALESCE(finished_at, ?) WHERE id = ? AND project_id = ? AND finished_at IS NULL')
+      .run(now(), id, projectId).changes;
+    if (Number(n) > 0) db.prepare('UPDATE invitees SET mail_pending = NULL WHERE mail_pending = ?').run(id);
+    return Number(n) > 0;
   },
 };

@@ -797,3 +797,15 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 
 /* Ссылки-кнопки, которые сейчас нельзя нажать (например, выгрузка без статусов) */
 .links-disabled a.btn { opacity: .5; pointer-events: none; }
+
+/* ---- Рассылка по e-mail ---- */
+.mail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 900px) { .mail-grid { grid-template-columns: minmax(0, 1fr); } }
+.mail-vars { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mail-var { border: 1px solid var(--border); background: var(--surface); border-radius: 99px; padding: 2px 10px; font: 12px var(--mono); cursor: pointer; color: var(--text); }
+.mail-var:hover { border-color: var(--accent); color: var(--accent); }
+.mail-preview { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); padding: 14px 16px; }
+.mail-subject { font-weight: 600; margin: 4px 0 10px; }
+.mail-body { background: var(--surface); border-radius: 8px; padding: 14px 16px; font-size: 14px; max-height: 340px; overflow-y: auto; }
+.mail-body p { margin: 0 0 10px; }
+.mail-button { display: inline-block; background: #3b7a06; color: #fff; border-radius: 8px; padding: 8px 16px; font-weight: 600; }

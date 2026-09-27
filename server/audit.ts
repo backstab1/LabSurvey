@@ -75,6 +75,11 @@ const RULES: Record<string, Rule> = {
   'POST /api/admin/projects/:id/responses/:rid/reject': {
     action: (req) => (req.body?.rejected ? 'Забраковал анкету респондента' : 'Снял брак с анкеты'), target: project(), details: (req) => ({ response: p(req, 'rid') }),
   },
+  'POST /api/admin/projects/:id/mailings': {
+    action: 'Разослал приглашения по e-mail', target: project(),
+    details: (req, res) => ({ audience: req.body?.audience, emails: (res?.mailing as { total?: number } | undefined)?.total }),
+  },
+  'POST /api/admin/projects/:id/mailings/:mid/cancel': { action: 'Остановил рассылку', target: project() },
   'POST /api/admin/projects/:id/reject-suspect': { action: 'Забраковал подозрительные анкеты', target: project(), details: (_r, res) => ({ count: res?.rejected }) },
   'DELETE /api/admin/projects/:id/responses/:rid': { action: 'Удалил ответ респондента', target: project(), details: (req) => ({ response: p(req, 'rid') }) },
   'GET /api/admin/projects/:id/export.:format': {

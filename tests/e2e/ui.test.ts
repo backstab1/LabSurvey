@@ -14,6 +14,10 @@ process.env.ADMIN_PASSWORD = 'e2e-secret';
 process.env.BACKUP_HOURS = '0';
 const { buildApp } = await import('../../server/app.ts');
 const { TEMPLATES } = await import('../../web/src/admin/templates.ts');
+// Почта: письма складываются сюда вместо SMTP
+const mail = await import('../../server/mail.ts');
+const outbox: { to: string; subject: string; text: string }[] = [];
+mail.setMailSenderForTests(async (m) => { outbox.push(m); });
 
 let app: FastifyInstance;
 let base = '';
@@ -339,6 +343,9 @@ test('full-feature survey: every admin screen, question dialog and respondent sc
   await page.waitForTimeout(500);
 
   // ---- Проект: все вкладки ----
+  await ctx.request.post(`${base}/api/admin/projects/${projectId}/invitees`, { data: { people: [
+    { extId: '1', fields: { name: 'Анна', email: 'anna@example.ru' } }, { extId: '2', fields: { name: 'Олег' } },
+  ] } });
   await page.goto(`${base}/admin/p/${projectId}`);
   await ready(page, '.tabs .tab', errors);
   for (const tab of ['Панели', 'Список', 'Квоты', 'Данные', 'Отчёт', 'Таблицы', 'Настройки сбора', 'Сводка']) {
@@ -349,6 +356,18 @@ test('full-feature survey: every admin screen, question dialog and respondent sc
       await page.locator('tr.clickable').first().click();
       await page.locator('.modal').waitFor();
       await page.getByRole('button', { name: 'Закрыть' }).click();
+    }
+    if (tab === 'Список') {
+      where = 'проект → Список → рассылка';
+      await page.getByRole('button', { name: 'Разослать по e-mail' }).click();
+      const dlg = page.locator('.modal');
+      await dlg.getByText('Здравствуйте, Анна!').waitFor();
+      await dlg.getByText('Адрес есть у 1 из 2').waitFor();
+      await dlg.getByPlaceholder('ваш@адрес.ru').fill('me@example.ru');
+      await dlg.getByRole('button', { name: 'Отправить тест' }).click();
+      await page.getByText('Тестовое письмо отправлено').waitFor();
+      assert.equal(outbox.at(-1)?.to, 'me@example.ru');
+      await dlg.getByRole('button', { name: 'Отмена' }).click();
     }
     if (tab === 'Отчёт') {
       await page.getByRole('checkbox', { name: 'Тестовые ответы' }).check();
