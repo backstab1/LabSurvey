@@ -9,6 +9,8 @@ export const fileIds = (v: unknown): string[] => (typeof v === 'string' && v ? v
 
 export function isRequired(q: Question): boolean {
   if (q.type === 'info' || q.type === 'hidden') return false;
+  // Без согласия (или явного отказа) дальше не пройти
+  if (q.type === 'consent') return true;
   return q.required !== false;
 }
 
@@ -91,7 +93,10 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
 
   if (q.type === 'matrix') return validateMatrix(ctx, q, a, required);
 
-  if (empty) return required ? (q.requiredMessage || (q.type === 'slider' ? 'Передвиньте ползунок' : 'Пожалуйста, ответьте на вопрос')) : null;
+  if (empty) {
+    if (!required) return null;
+    return q.requiredMessage || (q.type === 'slider' ? 'Передвиньте ползунок' : q.type === 'consent' ? 'Чтобы продолжить, отметьте согласие' : 'Пожалуйста, ответьте на вопрос');
+  }
   const v = a!.v;
 
   switch (q.type) {
@@ -227,6 +232,10 @@ export function validateAnswer(ctx: RespondentContext, q: Question, a: Answer | 
       }
       return null;
     }
+    case 'consent':
+      if (v === 1) return null;
+      if (v === 0 && q.declineLabel) return null;
+      return 'Некорректный ответ';
     case 'conjoint': {
       if (typeof v !== 'object' || Array.isArray(v) || v === null) return 'Некорректный ответ';
       const { tasks, alternatives } = conjointShape(q);
@@ -307,6 +316,8 @@ function validateMatrix(
 /** Приводит ответ к каноническому виду перед сохранением (телефон, пустые «Другое») */
 export function normalizeAnswer(q: Question, a: Answer): Answer {
   const out: Answer = { v: a.v };
+  // Время согласия ставит сервер — из браузера его не принимаем
+  if (q.type === 'consent') return out;
   if (q.type === 'phone' && typeof a.v === 'string') out.v = normalizePhone(a.v, q.format) ?? a.v;
   if (q.type === 'text' && typeof a.v === 'string') out.v = a.v.trim();
   // Распределение суммы: пустые поля — не ответ

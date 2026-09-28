@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { rich } from './rich.tsx';
 import type { Answer, MatrixQuestion, Option } from '../../../shared/types.ts';
 import { OtherInput } from './OtherInput.tsx';
+import { CardSort, Differential } from './MatrixViews.tsx';
 
 export function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows: Option[]; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
   const v = (answer?.v && typeof answer.v === 'object' && !Array.isArray(answer.v) ? answer.v : {}) as Record<string, number | number[]>;
@@ -89,6 +90,12 @@ export function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows:
     </label>
   );
 
+  if (q.view === 'cards' || q.view === 'differential') {
+    const View = q.view === 'cards' ? CardSort : Differential;
+    return <View q={q} rows={rows} columns={columns} v={v} sharedBlock={sharedBlock}
+      emit={(nv) => emit(sharedCols.some((c) => sharedOn(c)) ? Object.fromEntries(Object.entries(nv).filter(([, x]) => !sharedCols.some((c) => inColumn(x, c.code)))) : nv, others)} />;
+  }
+
   const markerCls = q.hideMarker ? ' no-marker' : '';
   if (q.carousel) {
     return (
@@ -158,6 +165,8 @@ export function Matrix({ q, rows, answer, onChange }: { q: MatrixQuestion; rows:
     </>
   );
 }
+
+const inColumn = (x: number | number[], col: number) => (Array.isArray(x) ? x.includes(col) : x === col);
 
 export function MatrixCarousel({ q, columns, rows, rowLabel, cell, answered }: {
   q: MatrixQuestion;

@@ -9,15 +9,17 @@ import { CALC_FUNCTIONS, parseCalc } from '../../../../shared/calc.ts';
 import { allIds } from '../../../../shared/refactor.ts';
 import { ID_RE, RESERVED_IDS } from '../../../../shared/validate.ts';
 import { Menu, Modal, NumField, Segmented, compact, copyText } from '../common.tsx';
-import { newQuestion, TYPE_ICONS } from './Builder.tsx';
+import { newQuestion } from './Builder.tsx';
+import { TypeIcon } from './TypeIcon.tsx';
 import {
-  CHOICE_TYPES, QUESTION_TYPE_LABELS, type Action, type Option, type OptionsFrom, type Question, type QuestionType, type Survey,
+  CHOICE_TYPES, CONSENT_LABEL, KIND_GROUPS, KIND_LABELS, kindOf, type Action, type Option, type OptionsFrom, type Question, type QuestionKind, type Survey,
 } from '../../../../shared/types.ts';
 import { Block, questionSettings } from './QuestionSettings.tsx';
 import type { Patch } from './AdvancedEditors.tsx';
 /** Смена типа с сохранением всего, что можно перенести */
-function convert(q: Question, type: QuestionType): Question {
-  const fresh = newQuestion(type, q.id) as any;
+function convert(q: Question, kind: QuestionKind): Question {
+  const fresh = newQuestion(kind, q.id) as any;
+  const type = fresh.type as Question['type'];
   const old = q as any;
   const keep = {
     id: q.id, text: q.text || fresh.text, hint: q.hint, required: q.required, showIf: q.showIf, scripts: q.scripts, actions: q.actions,
@@ -32,8 +34,13 @@ function convert(q: Question, type: QuestionType): Question {
       options: opts.map((o) => compact({ ...o, exclusive: type === 'multi' ? o.exclusive : undefined, other: type === 'ranking' ? undefined : o.other })),
     }) as Question;
   }
+  if (type === 'matrix' && q.type === 'matrix') {
+    // Смена вида матрицы (таблица, карточки, дифференциал): строки и столбцы остаются
+    const rows = fresh.view === 'differential' ? q.rows : q.rows.map((r) => compact({ ...r, right: undefined }));
+    return compact({ ...q, rows, view: fresh.view, mode: fresh.view === 'differential' ? 'single' : q.mode }) as Question;
+  }
   if (type === 'matrix' && opts?.length) {
-    return compact({ ...fresh, ...keep, rows: opts.map((o) => compact({ ...o, exclusive: undefined })), rowsFrom: old.optionsFrom }) as Question;
+    return compact({ ...fresh, ...keep, rows: opts.map((o) => compact({ ...o, exclusive: undefined })), rowsFrom: old.optionsFrom ?? old.rowsFrom }) as Question;
   }
   return compact({ ...fresh, ...keep }) as Question;
 }
@@ -93,7 +100,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
 
   return (
     <Modal size="medium" onClose={onClose}
-      title={<><span className="type-icon">{TYPE_ICONS[q.type]}</span> {q.id} <span className="muted" style={{ fontWeight: 400 }}>· {position}</span></>}
+      title={<><span className="type-icon"><TypeIcon kind={kindOf(q)} /></span> {q.id} <span className="muted" style={{ fontWeight: 400 }}>· {position}</span></>}
       actions={<>
         <button className="icon-btn" title="Предыдущий вопрос" disabled={!hasPrev} onClick={() => onNav(-1)}>‹</button>
         <button className="icon-btn" title="Следующий вопрос" disabled={!hasNext} onClick={() => onNav(1)}>›</button>
@@ -124,13 +131,15 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
                 {idError && <span className="field-error">{idError}</span>}
               </label>
               <label className="field grow"><span>Тип</span>
-                <select className="input" value={q.type} onChange={(e) => onChange(convert(q, e.target.value as QuestionType))}>
-                  {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => (
-                    <option key={t} value={t}>{TYPE_ICONS[t]}  {QUESTION_TYPE_LABELS[t]}</option>
+                <select className="input" value={kindOf(q)} onChange={(e) => onChange(convert(q, e.target.value as QuestionKind))}>
+                  {KIND_GROUPS.map((g) => (
+                    <optgroup key={g.title} label={g.title}>
+                      {g.kinds.map((t) => <option key={t} value={t}>{KIND_LABELS[t]}</option>)}
+                    </optgroup>
                   ))}
                 </select>
               </label>
-              {answerable && (
+              {answerable && q.type !== 'consent' && (
                 <label className="switch" title="Без ответа нельзя перейти дальше">
                   <input type="checkbox" checked={q.required !== false} onChange={(e) => set({ required: e.target.checked ? undefined : false })} />
                   <span>Обязательный</span>
@@ -257,20 +266,56 @@ function TypeBody({ def, q, set }: { def: Survey; q: Question; set: (p: Patch) =
             { carry: carry('optionsFrom', q.optionsFrom) })}
         </>
       );
-    case 'matrix':
+    case 'matrix': {
+      const cards = q.view === 'cards';
+      const diff = q.view === 'differential';
+      const rowsTitle = cards ? 'Карточки' : diff ? 'Пары противоположностей' : 'Список строк';
+      const colsTitle = cards ? 'Группы' : diff ? 'Точки шкалы' : 'Список столбцов';
       return (
         <>
-          <Segmented value={q.mode} onChange={(mode) => set({ mode })}
-            options={[{ value: 'single', label: 'Один ответ в строке' }, { value: 'multi', label: 'Несколько ответов в строке' }]} />
+          {!diff && (
+            <Segmented value={q.mode} onChange={(mode) => set({ mode })}
+              options={cards
+                ? [{ value: 'single', label: 'Одна группа на карточку' }, { value: 'multi', label: 'Несколько групп' }]
+                : [{ value: 'single', label: 'Один ответ в строке' }, { value: 'multi', label: 'Несколько ответов в строке' }]} />
+          )}
+          {cards && <p className="muted small" style={{ margin: 0 }}>Респондент видит карточки по одной и относит каждую к группе (на компьютере – ещё и перетаскиванием). В данных – как матрица: переменная на карточку, значение – код группы.</p>}
+          {diff && <p className="muted small" style={{ margin: 0 }}>Каждая строка – пара противоположностей: «Дорогой» ↔ «Дешёвый». Точки шкалы – между ними; подписи точек видны под кружками (можно оставить числа 3 2 1 0 1 2 3).</p>}
           <div className="grid2">
-            <ListButton title="Список строк" options={q.rows} from={q.rowsFrom} onClick={() => setList('rows')} />
-            <ListButton title="Список столбцов" options={q.columns} onClick={() => setList('columns')} />
+            <ListButton title={rowsTitle} options={q.rows} from={q.rowsFrom} onClick={() => setList('rows')} />
+            <ListButton title={colsTitle} options={q.columns} onClick={() => setList('columns')} />
           </div>
-          {list === 'rows' && dialog('Список строк', q.rows, 'rows',
-            { other: true, flags: true, groups: true, noExport: true, noExportOther: true, logic: true, bottom: true, script: true },
-            { placeholder: 'Утверждение', carry: carry('rowsFrom', q.rowsFrom) })}
-          {list === 'columns' && dialog('Список столбцов', q.columns, 'columns', { scores: true, shared: true }, { placeholder: 'Ответ' })}
+          {list === 'rows' && dialog(rowsTitle, q.rows, 'rows',
+            cards ? { flags: true, noExport: true, logic: true, image: true, hideText: true }
+              : diff ? { flags: true, groups: true, noExport: true, logic: true, right: true }
+                : { other: true, flags: true, groups: true, noExport: true, noExportOther: true, logic: true, bottom: true, script: true },
+            { placeholder: cards ? 'Текст карточки' : diff ? 'Левый полюс' : 'Утверждение', carry: carry('rowsFrom', q.rowsFrom) })}
+          {list === 'columns' && dialog(colsTitle, q.columns, 'columns', { scores: true, shared: !diff }, { placeholder: cards ? 'Название группы' : 'Ответ' })}
         </>
+      );
+    }
+    case 'consent':
+      return (
+        <div className="stack" style={{ gap: 10 }}>
+          <label className="field"><span>Текст у галочки</span>
+            <input className="input" value={q.label ?? ''} placeholder={CONSENT_LABEL} onChange={(e) => set({ label: e.target.value || undefined })} />
+          </label>
+          <div className="grid2">
+            <label className="field"><span>Кнопка отказа</span>
+              <input className="input" value={q.declineLabel ?? ''} placeholder="нет – без согласия дальше не пройти"
+                onChange={(e) => set({ declineLabel: e.target.value || undefined, ...(e.target.value ? {} : { declineMessage: undefined }) })} />
+              <span className="field-help">Например, «Не даю согласие». Отказ завершает анкету отсевом</span>
+            </label>
+            <label className="field"><span>Сообщение после отказа</span>
+              <input className="input" value={q.declineMessage ?? ''} disabled={!q.declineLabel} placeholder="сообщение об отсеве из настроек"
+                onChange={(e) => set({ declineMessage: e.target.value || undefined })} />
+            </label>
+          </div>
+          <p className="muted small" style={{ margin: 0 }}>
+            Текст согласия – в поле «Текст вопроса»: что собираете, зачем, сколько храните, ссылка на политику (<code>[политика](https://…)</code>).
+            В выгрузке – переменная со значением 1 (согласен) или 0 (отказ) и время ответа; версия анкеты показывает, какой текст видел респондент.
+          </p>
+        </div>
       );
     case 'scale':
       return (

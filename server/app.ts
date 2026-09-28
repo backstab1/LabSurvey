@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { config } from './config.ts';
 import { adminRoutes } from './routes/admin/index.ts';
+import { dashboardRoutes } from './routes/dashboard.ts';
 import { respondentRoutes } from './routes/respondent.ts';
 import { oauthRoutes } from './oauth.ts';
 import { mcpRoutes } from './mcp.ts';
@@ -23,6 +24,7 @@ export async function buildApp() {
   await app.register(adminRoutes);
   await app.register(respondentRoutes);
   await app.register(mediaRoutes);
+  await app.register(dashboardRoutes);
   // ИИ-коннекторы: OAuth и MCP в одном контексте (свой разбор форм)
   await app.register(async (ai) => {
     await ai.register(oauthRoutes);

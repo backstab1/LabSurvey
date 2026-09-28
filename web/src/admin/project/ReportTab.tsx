@@ -6,11 +6,12 @@ import type { QuestionReport, Report, ReportRow } from '../../../../shared/repor
 import { ConditionEditor, defaultCondition, describeCondition } from '../survey/ConditionEditor.tsx';
 import type { Condition } from '../../../../shared/types.ts';
 import type { ProjectInfo } from '../../../../shared/api.ts';
+import { DashboardCard } from './DashboardCard.tsx';
 
 const STATUSES: ResponseStatus[] = ['completed', 'screened_out', 'overquota', 'terminated', 'in_progress'];
 
 /** Топлайн: распределения по каждому вопросу — чтобы видеть результаты, не выгружая данные */
-export function ReportTab({ info }: { info: ProjectInfo }) {
+export function ReportTab({ info, readOnly = true, client = false, reload }: { info: ProjectInfo; readOnly?: boolean; client?: boolean; reload?: () => Promise<unknown> }) {
   const [statuses, setStatuses] = useState<ResponseStatus[]>(['completed']);
   const [test, setTest] = useState(!info.published);
   const [filter, setFilter] = useState<Condition | undefined>();
@@ -26,6 +27,7 @@ export function ReportTab({ info }: { info: ProjectInfo }) {
 
   return (
     <div className="stack report">
+      {!client && reload && <DashboardCard info={info} readOnly={readOnly} reload={reload} />}
       <div className="card row report-filters">
         {STATUSES.map((s) => (
           <label key={s} className="check">
@@ -77,7 +79,7 @@ export function ReportTab({ info }: { info: ProjectInfo }) {
   );
 }
 
-function QuestionBlock({ q, projectId }: { q: QuestionReport; projectId: string }) {
+export function QuestionBlock({ q, projectId }: { q: QuestionReport; projectId: string }) {
   return (
     <div className="card stack report-q">
       <div className="report-q-head">
@@ -157,7 +159,7 @@ function QuestionBlock({ q, projectId }: { q: QuestionReport; projectId: string 
   );
 }
 
-function Bars({ rows, note, counts }: { rows: ReportRow[]; note?: string; counts?: boolean }) {
+export function Bars({ rows, note, counts }: { rows: ReportRow[]; note?: string; counts?: boolean }) {
   const max = Math.max(1, ...rows.map((r) => (counts ? r.count : r.pct)));
   return (
     <div className="bars">

@@ -2,7 +2,8 @@ import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Segmented } from '../common.tsx';
 import { plainText as plain } from '../../../../shared/text.ts';
 import { describeCondition } from './ConditionEditor.tsx';
-import { TYPE_ICONS } from './Builder.tsx';
+import { TypeIcon } from './TypeIcon.tsx';
+import { KIND_LABELS, kindOf } from '../../../../shared/types.ts';
 import { analyzeFlow, type FlowEdge, type FlowNode } from '../../../../shared/flow.ts';
 import { describeLoop, shownTitle } from './LoopEditor.tsx';
 import { loopDepth } from '../../../../shared/loops.ts';
@@ -141,7 +142,7 @@ export function LogicTab({ def, onOpen }: { def: Survey; onOpen: (id: string) =>
                 <div className="lhead">
                   <span className="lnum">{n.number ?? '·'}</span>
                   <span className="qid">{n.id}</span>
-                  <span className="ltype" title={n.q.type}>{TYPE_ICONS[n.q.type]}</span>
+                  <span className="ltype" title={KIND_LABELS[kindOf(n.q)]}><TypeIcon kind={kindOf(n.q)} size={14} /></span>
                   <span className="ltext">{plain(n.q.text) || <em className="muted">без текста</em>}</span>
                 </div>
                 <div className="lmeta">

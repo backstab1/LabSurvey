@@ -24,6 +24,7 @@ function opsFor(q: Question | undefined, isParam: boolean): ConditionOp[] {
     case 'single': case 'dropdown': return ['eq', 'neq', 'in', 'notIn', 'answered', 'notAnswered'];
     case 'matrix': return ['eq', 'neq', 'in', 'notIn', 'gt', 'gte', 'lt', 'lte', 'answered', 'notAnswered'];
     case 'text': case 'phone': return ['eq', 'neq', 'answered', 'notAnswered'];
+    case 'consent': return ['eq', 'neq', 'answered', 'notAnswered'];
     default: return ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'notIn', 'answered', 'notAnswered'];
   }
 }
@@ -33,6 +34,7 @@ function valueChoices(def: Survey, q: Question | undefined, row: number | undefi
   if (!q) return null;
   if (q.type === 'single' || q.type === 'multi' || q.type === 'dropdown' || q.type === 'ranking') return allOptions(def, q);
   if (q.type === 'hotspot') return q.options;
+  if (q.type === 'consent') return [{ code: 1, text: 'Согласен' }, { code: 0, text: 'Отказ' }];
   if (q.type === 'matrix') return row !== undefined ? q.columns : null;
   if (q.type === 'scale') {
     const pts = Array.from({ length: q.to - q.from + 1 }, (_, i) => q.from + i);

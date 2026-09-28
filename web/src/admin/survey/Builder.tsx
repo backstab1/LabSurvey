@@ -5,21 +5,34 @@ import { describeActions } from './ActionsEditor.tsx';
 import { rich } from '../../runner/rich.tsx';
 import { plainText as plain } from '../../../../shared/text.ts';
 import { Menu, toast, copyText } from '../common.tsx';
-import { QUESTION_TYPE_LABELS, type Block, type LoopSpec, type Question, type QuestionType, type Survey } from '../../../../shared/types.ts';
+import { KIND_GROUPS, KIND_LABELS, kindOf, type Block, type LoopSpec, type Question, type QuestionKind, type Survey } from '../../../../shared/types.ts';
+import { TypeIcon } from './TypeIcon.tsx';
 import { LoopDialog, describeLoop, shownTitle } from './LoopEditor.tsx';
 import { loopChain, loopDepth } from '../../../../shared/loops.ts';
 import { allIds, nextId, renameId } from '../../../../shared/refactor.ts';
 import type { ValidationResult } from '../../../../shared/validate.ts';
 
-export const TYPE_ICONS: Record<QuestionType, string> = {
-  single: '◉', multi: '☑', dropdown: '▾', ranking: '⇅', text: '✎', number: '#', scale: '⋯',
-  matrix: '▦', date: '◷', phone: '☏', info: 'ℹ', hidden: '⊘',
-  slider: '⟷', sum: 'Σ', file: '⇪', hotspot: '⌖', maxdiff: '±', conjoint: '⊞',
-};
-
-export function newQuestion(type: QuestionType, id: string): Question {
+export function newQuestion(type: QuestionKind, id: string): Question {
   const base = { id, text: '' };
   switch (type) {
+    case 'cardsort':
+      return {
+        ...base, type: 'matrix', mode: 'single', view: 'cards',
+        rows: [{ code: 1, text: '' }],
+        columns: [{ code: 1, text: 'Группа 1' }, { code: 2, text: 'Группа 2' }, { code: 3, text: 'Группа 3' }],
+      };
+    case 'differential':
+      return {
+        ...base, type: 'matrix', mode: 'single', view: 'differential',
+        rows: [{ code: 1, text: '', right: '' }],
+        columns: ['3', '2', '1', '0', '1', '2', '3'].map((text, i) => ({ code: i + 1, text })),
+      };
+    case 'consent':
+      return {
+        ...base, type,
+        text: 'Для участия в опросе нужно ваше согласие на обработку персональных данных: ответов на вопросы и технических сведений (IP-адрес, браузер). '
+          + 'Данные используются только для целей исследования.',
+      };
     case 'single': case 'dropdown': case 'multi': case 'ranking':
       return { ...base, type, options: [{ code: 1, text: '' }] } as Question;
     case 'scale': return { ...base, type, from: 1, to: 5 };
@@ -128,7 +141,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
 
   const issueFor = (id: string) => issues.errors.find((e) => e.where === id || e.where.startsWith(id + ' '));
 
-  const addQuestion = (at: Pos, type: QuestionType) => {
+  const addQuestion = (at: Pos, type: QuestionKind) => {
     const id = nextId(allIds(def), type === 'hidden' ? 'H' : 'Q');
     mutate((d) => { d.blocks[at.bi].questions.splice(at.qi, 0, newQuestion(type, id)); });
     setPicker(null);
@@ -282,7 +295,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                 <button key={x.id} className={`outline-q${issueFor(x.id) ? ' has-issue' : ''}`} title={plain(x.text)} onClick={() => {
                   if (collapsed.has(b.id)) { toggleBlock(b.id); setTimeout(() => jumpTo(x.id), 50); } else jumpTo(x.id);
                 }}>
-                  <span className="qid">{x.id}</span><span className="qtext">{plain(x.text) || QUESTION_TYPE_LABELS[x.type]}</span>
+                  <span className="qid">{x.id}</span><span className="qtext">{plain(x.text) || KIND_LABELS[kindOf(x)]}</span>
                 </button>
               ))}
             </div>
@@ -471,7 +484,7 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, pinne
           onDragEnd={onDragEnd}>⋮⋮</span>
         {n !== null && <span className="qnum">{n}</span>}
         <span className="qid">{q.id}</span>
-        <span className="qtype">{TYPE_ICONS[q.type]} {QUESTION_TYPE_LABELS[q.type]}</span>
+        <span className="qtype"><TypeIcon kind={kindOf(q)} size={15} />{KIND_LABELS[kindOf(q)]}</span>
         {chips.map((c, i) => <span key={i} className={`chip-info ${c.kind}`} title={c.text}>{c.text}</span>)}
         <span className="grow" />
         <span className="card-tools" onClick={(e) => e.stopPropagation()}>
@@ -510,7 +523,7 @@ const pipeMark = (t: string) => t.replace(/\{\{\s*([\w.]+)\s*\}\}/g, '[$1]');
 /** Полоска между карточками: «+» добавляет вопрос в это место, сюда же можно бросить перетаскиваемую карточку */
 function Inserter({ active, last, dropping, onOpen, onPick, onPaste, onClose, onDragOver, onDrop }: {
   active: boolean; last?: boolean; dropping: boolean;
-  onOpen: () => void; onPick: (t: QuestionType) => void; onPaste: () => void; onClose: () => void;
+  onOpen: () => void; onPick: (t: QuestionKind) => void; onPaste: () => void; onClose: () => void;
   onDragOver: () => void; onDrop: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -530,12 +543,17 @@ function Inserter({ active, last, dropping, onOpen, onPick, onPaste, onClose, on
         : <button className="insert-btn" title="Вставить вопрос сюда" onClick={onOpen}>+</button>}
       {active && (
         <div className="type-picker">
-          {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => (
-            <button key={t} onClick={() => onPick(t)}>
-              <span className="type-icon">{TYPE_ICONS[t]}</span>{QUESTION_TYPE_LABELS[t]}
-            </button>
+          {KIND_GROUPS.map((g) => (
+            <div key={g.title} className="type-group">
+              <div className="type-group-title">{g.title}</div>
+              {g.kinds.map((t) => (
+                <button key={t} onClick={() => onPick(t)}>
+                  <span className="type-icon"><TypeIcon kind={t} /></span>{KIND_LABELS[t]}
+                </button>
+              ))}
+            </div>
           ))}
-          <button className="paste-btn" onClick={onPaste}><span className="type-icon">⎘</span>Вставить из буфера (JSON)</button>
+          <button className="paste-btn" onClick={onPaste}><span className="type-icon"><TypeIcon kind="paste" /></span>Вставить из буфера (JSON)</button>
         </div>
       )}
     </div>

@@ -3,6 +3,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { sqliteHandle, type Sql } from './sql.ts';
 import { stripProjectFields, type ProjectStatus, type Survey } from '../shared/types.ts';
+import { qualityScore } from '../shared/quality.ts';
 
 /** SQLite: таблицы создавались по мере развития сервиса — старые базы доводятся до текущей схемы */
 function initSqlite(db: DatabaseSync) {
@@ -167,6 +168,12 @@ function initSqlite(db: DatabaseSync) {
   addCol('invitees', 'mail_count', 'INTEGER NOT NULL DEFAULT 0');
   addCol('invitees', 'mail_error', 'TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS invitees_mail_pending ON invitees(mail_pending)');
+  // Защита от ботов: отпечаток устройства, балл риска, результат постбэка панели; дашборд для заказчика
+  addCol('responses', 'device', 'TEXT');
+  addCol('responses', 'score', 'INTEGER');
+  addCol('responses', 'postback', 'TEXT');
+  addCol('projects', 'dashboard', 'TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS responses_device ON responses(project_id, device)');
 }
 
 /**
@@ -318,6 +325,11 @@ const PG_SCHEMA = `
     cancelled INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS mailings_project ON mailings(project_id);
+  ALTER TABLE responses ADD COLUMN IF NOT EXISTS device TEXT;
+  ALTER TABLE responses ADD COLUMN IF NOT EXISTS score INTEGER;
+  ALTER TABLE responses ADD COLUMN IF NOT EXISTS postback TEXT;
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS dashboard TEXT;
+  CREATE INDEX IF NOT EXISTS responses_device ON responses(project_id, device);
 `;
 
 /** Таблицы в порядке зависимостей — для переноса данных и резервных копий */
@@ -401,4 +413,8 @@ function migrateToProjects(db: DatabaseSync) {
 export async function initSchema(sql: Sql): Promise<void> {
   if (sql.kind === 'postgres') await sql.exec(PG_SCHEMA);
   else initSqlite(sqliteHandle(sql)!);
+  // Балл риска для анкет с пометками, сохранённых до появления баллов
+  for (const r of await sql.all('SELECT id, flags FROM responses WHERE score IS NULL AND flags IS NOT NULL')) {
+    await sql.run('UPDATE responses SET score = ? WHERE id = ?', [qualityScore(JSON.parse(r.flags as string)), r.id as string]);
+  }
 }

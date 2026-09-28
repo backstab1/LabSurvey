@@ -147,7 +147,7 @@ export function Overview({ info, readOnly, client, setStatus, reload, onTab }: {
 }
 
 /** Столбики по дням: завершили (основной цвет) поверх начавших (светлый); подробности — при наведении */
-function DailyChart({ days }: { days: DayStat[] }) {
+export function DailyChart({ days }: { days: DayStat[] }) {
   const max = Math.max(1, ...days.map((d) => d.started));
   const total = days.reduce((a, d) => a + d.completed, 0);
   const fmtDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
@@ -176,7 +176,7 @@ function DailyChart({ days }: { days: DayStat[] }) {
   );
 }
 
-function QuotaProgress({ quotas }: { quotas: ProjectInfo['quotas'] }) {
+export function QuotaProgress({ quotas }: { quotas: ProjectInfo['quotas'] }) {
   return (
     <div className="quota-lines">
       {quotas.map((q) => {

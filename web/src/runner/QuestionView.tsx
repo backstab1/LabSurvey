@@ -3,8 +3,8 @@ import { groupOf, pipe, resolveOptions, resolveRows } from '../../../shared/logi
 import { isRequired } from '../../../shared/answers.ts';
 import { rich } from './rich.tsx';
 import { Conjoint, FileUpload, Hotspot, MaxDiff, Slider, SumInput } from './AdvancedViews.tsx';
-import { settingsOf } from '../../../shared/types.ts';
-import type { Answer, NumberQuestion, Option, Question, RankingQuestion, RespondentContext, ScaleQuestion, TextQuestion } from '../../../shared/types.ts';
+import { CONSENT_LABEL, settingsOf } from '../../../shared/types.ts';
+import type { Answer, ConsentQuestion, NumberQuestion, Option, Question, RankingQuestion, RespondentContext, ScaleQuestion, TextQuestion } from '../../../shared/types.ts';
 import { Matrix } from './MatrixView.tsx';
 import { OtherInput } from './OtherInput.tsx';
 
@@ -22,7 +22,7 @@ export function QuestionView({ q, ctx, answer, error, onChange }: Props) {
     return <div className="question info" id={`q-${q.id}`}><div className="q-text">{rich(text)}</div></div>;
   }
   return (
-    <fieldset className={`question${error ? ' has-error' : ''}`} id={`q-${q.id}`}>
+    <fieldset className={`question${q.type === 'consent' ? ' consent' : ''}${error ? ' has-error' : ''}`} id={`q-${q.id}`}>
       <legend className="q-text">
         {rich(text)}
         {!isRequired(q) && <span className="optional"> (необязательно)</span>}
@@ -57,6 +57,7 @@ function Body({ q, ctx, answer, onChange }: Omit<Props, 'error'>) {
     case 'hotspot': return <Hotspot q={q} answer={answer} onChange={onChange} />;
     case 'maxdiff': return <MaxDiff q={q} ctx={ctx} answer={answer} onChange={onChange} />;
     case 'conjoint': return <Conjoint q={q} ctx={ctx} answer={answer} onChange={onChange} />;
+    case 'consent': return <Consent q={q} answer={answer} onChange={onChange} />;
     default: return null;
   }
 }
@@ -352,5 +353,24 @@ function PhoneInput({ format, answer, onChange }: { format: 'ru' | 'internationa
         if (!digits || (format === 'ru' && digits === '7')) return onChange(undefined);
         onChange({ v: format === 'ru' ? formatRuPhone(raw) : '+' + digits });
       }} />
+  );
+}
+
+/** Согласие на обработку ПДн: галочка; если разрешён отказ — второй вариант */
+function Consent({ q, answer, onChange }: { q: ConsentQuestion; answer?: Answer; onChange: (a: Answer | undefined) => void }) {
+  const v = answer?.v;
+  return (
+    <div className="options consent-box">
+      <label className={`option${v === 1 ? ' selected' : ''}`}>
+        <input type="checkbox" checked={v === 1} onChange={(e) => onChange(e.target.checked ? { v: 1 } : undefined)} />
+        <span>{rich(q.label || CONSENT_LABEL)}</span>
+      </label>
+      {q.declineLabel && (
+        <label className={`option${v === 0 ? ' selected' : ''}`}>
+          <input type="checkbox" checked={v === 0} onChange={(e) => onChange(e.target.checked ? { v: 0 } : undefined)} />
+          <span>{rich(q.declineLabel)}</span>
+        </label>
+      )}
+    </div>
   );
 }

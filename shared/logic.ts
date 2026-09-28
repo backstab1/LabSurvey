@@ -1,7 +1,7 @@
 import {
   END, SCREENOUT,
   type Action, type Answer, type Answers, type AnswerValue, type Block, type Condition, type MatrixQuestion, type Option, type Page,
-  type Question, type RespondentContext, type SimpleCondition, type Survey,
+  type Question, type RespondentContext, type SimpleCondition, type Survey, rowLabel,
 } from './types.ts';
 import { calcValue } from './calc.ts';
 import { expandAllLoops, expandLoops, hasLoops, loopBase } from './loops.ts';
@@ -689,7 +689,7 @@ export function answerText(ctx: RespondentContext, q: Question, rowCode?: string
       if (rowCode !== undefined) return v[rowCode] !== undefined ? rowVal(v[rowCode]) : '';
       const rows = resolveRows(ctx, q);
       return Object.entries(v)
-        .map(([r, rv]) => `${rows.find((x) => String(x.code) === r)?.text ?? r}: ${rowVal(rv)}`)
+        .map(([r, rv]) => { const row = rows.find((x) => String(x.code) === r); return `${row ? rowLabel(row) : r}: ${rowVal(rv)}`; })
         .join('; ');
     }
     case 'slider':
@@ -715,6 +715,8 @@ export function answerText(ctx: RespondentContext, q: Question, rowCode?: string
       if (typeof a.v !== 'object' || Array.isArray(a.v) || a.v === null) return '';
       return Object.entries(a.v as Record<string, number>).map(([s, c]) => `${s}: ${c === 0 ? (q.none ?? '–') : `карточка ${c}`}`).join('; ');
     }
+    case 'consent':
+      return a.v === 1 ? 'Согласен' : a.v === 0 ? 'Отказ' : '';
     default:
       return String(a.v ?? '');
   }

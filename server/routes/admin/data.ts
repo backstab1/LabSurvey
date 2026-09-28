@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { responses, type StoredResponse } from '../../db.ts';
 import { defFor, loadProject, loadedOf, projectOf, type Loaded } from '../../projectCtx.ts';
 import { resetQuotas } from '../../quotas.ts';
+import { postbackLater } from '../../panelLinks.ts';
 import { removeUploads, uploadPath } from '../../uploads.ts';
 import { buildTable, cellToText } from '../../export/table.ts';
 import { writeXlsx } from '../../export/xlsx.ts';
@@ -45,7 +46,7 @@ function parseSpec(raw: string | undefined): CrosstabSpec {
   const refOk = (x: unknown) => !!x && typeof x === 'object'
     && ((typeof (x as { q?: unknown }).q === 'string') || (typeof (x as { param?: unknown }).param === 'string'));
   if (!s || !Array.isArray(s.rows) || !Array.isArray(s.cols) || !s.rows.every(refOk) || !s.cols.every(refOk)) fail(400, 'spec: rows и cols – списки переменных');
-  if (s.rows.length > 100 || s.cols.length > 10) fail(400, 'Не больше 100 строк и 10 переменных в шапке');
+  if (s.rows.length > 300 || s.cols.length > 10) fail(400, 'Не больше 300 строк и 10 переменных в шапке');
   return s;
 }
 
@@ -76,8 +77,14 @@ export async function dataRoutes(app: FastifyInstance) {
 
   app.post<{ Params: RespParams; Body: { rejected: boolean } }>('/api/admin/projects/:id/responses/:rid/reject', async (req) => {
     const r = await responseOf(req.params.id, req.params.rid);
-    await responses.update(r.id, { rejected: !!req.body?.rejected });
+    const rejected = !!req.body?.rejected;
+    await responses.update(r.id, { rejected });
     resetQuotas(req.params.id);
+    // Панель узнаёт о браке завершённой анкеты (и об отмене брака)
+    if (r.status === 'completed' && rejected !== !!r.rejected) {
+      const l = await loadProject(req.params.id);
+      if (l) postbackLater(defFor(l, r.isTest), r, rejected ? 'quality' : 'complete');
+    }
     return { ok: true };
   });
 
@@ -90,10 +97,14 @@ export async function dataRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Params: Params }>('/api/admin/projects/:id/reject-suspect', async (req) => {
-    await projectOf(req.params.id);
-    const rejected = await responses.rejectSuspect(req.params.id);
+    const l = await loadedOf(req.params.id);
+    const ids = await responses.rejectSuspect(req.params.id);
     resetQuotas(req.params.id);
-    return { rejected };
+    for (const id of ids) {
+      const r = await responses.get(id);
+      if (r?.status === 'completed') postbackLater(defFor(l, false), r, 'quality');
+    }
+    return { rejected: ids.length };
   });
 
   // Файл респондента (вопрос «Загрузка файла»): картинки открываются в браузере, документы скачиваются

@@ -169,14 +169,15 @@ export function questionSettings(def: Survey, q: Question, set: (p: Patch) => vo
     flag('search', 'Добавить строку поиска', 'Поле поиска над вариантами – для длинных списков');
     if (q.options.some((o) => o.group) || q.collapseGroups) flag('collapseGroups', 'Показывать группы в свёрнутом виде', 'Респондент раскрывает группу нажатием');
   }
-  if (q.type === 'single' || q.type === 'multi' || q.type === 'matrix') flag('hideMarker', 'Скрыть маркер выбора', 'Без кружков и квадратиков: выбор подсвечивается');
-  if (q.type === 'matrix') {
+  const tableView = q.type !== 'matrix' || !q.view || q.view === 'table';
+  if ((q.type === 'single' || q.type === 'multi' || q.type === 'matrix') && tableView) flag('hideMarker', 'Скрыть маркер выбора', 'Без кружков и квадратиков: выбор подсвечивается');
+  if (q.type === 'matrix' && tableView) {
     flag('transpose', 'Перевернуть таблицу', 'Строки и столбцы меняются местами');
     flag('verticalHeaders', 'Вертикальный текст в заголовках столбцов');
     flag('progressiveRows', 'Показывать строки по мере ответа');
     flag('carousel', 'Таблица как карусель', 'По одной строке на экране');
   }
-  if (answerable && q.type !== 'matrix' && q.type !== 'ranking') {
+  if (answerable && q.type !== 'matrix' && q.type !== 'ranking' && q.type !== 'consent') {
     group('Предзаполнение');
     textLine('prefillParam', 'Взять ответ из параметра ссылки', 'например, age', (v) => `Из ссылки ?${v}`);
     if (q.prefillParam) flag('prefillSkip', 'Не показывать вопрос, если ответ пришёл из ссылки');
@@ -207,7 +208,7 @@ export function questionSettings(def: Survey, q: Question, set: (p: Patch) => vo
       );
     }
   }
-  if (answerable && q.required !== false) textLine('requiredMessage', 'Сообщение, если нет ответа', 'Пожалуйста, ответьте на вопрос', () => 'Своё сообщение');
+  if (answerable && (q.required !== false || q.type === 'consent')) textLine('requiredMessage', 'Сообщение, если нет ответа', 'Пожалуйста, ответьте на вопрос', () => 'Своё сообщение');
   if (answerable || q.type === 'info') {
     if (!answerable) group('Отображение');
     if (blockOf(def, q.id)?.order) flag('fixed', 'Оставить на месте при перемешивании блока', 'Блок перемешивается для каждого респондента');

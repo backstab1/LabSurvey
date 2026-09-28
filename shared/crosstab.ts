@@ -1,7 +1,7 @@
 // Таблицы (кросс-таблицы): строки — вопросы, столбцы — «шапка» из вопросов и параметров ссылки.
 // Проценты по столбцу и строке, база, средние; значимость различий между столбцами одной шапки — буквами.
 import { allOptions, allQuestions, allRows, findQuestion } from './logic.ts';
-import type { Condition, Question, Survey } from './types.ts';
+import { rowLabel, type Condition, type Question, type Survey } from './types.ts';
 import type { ResponseRecord, ResponseStatus } from './variables.ts';
 import { plainText as plain } from './text.ts';
 import { mean, median as medianOf, sd } from './stats.ts';
@@ -156,6 +156,11 @@ export function varModels(survey: Survey, ref: VarRef, responses: ResponseRecord
     case 'maxdiff':
     case 'conjoint':
       return [];
+    case 'consent':
+      return [{
+        key: q.id, title: title(q), multi: false, categories: [{ key: '1', label: 'Согласен' }, { key: '0', label: 'Отказ' }],
+        cats: (r) => (typeof ans(r) === 'number' ? [String(ans(r))] : null),
+      }];
     case 'slider':
     case 'number':
       return [{
@@ -168,7 +173,7 @@ export function varModels(survey: Survey, ref: VarRef, responses: ResponseRecord
       const picked = ref.row !== undefined ? rows.filter((x) => x.code === ref.row) : rows;
       const cols = q.columns.map((c) => ({ key: String(c.code), label: plain(c.text) }));
       return picked.map((row) => ({
-        key: `${q.id}.${row.code}`, title: `${title(q)} – ${plain(row.text)}`, multi: q.mode === 'multi', categories: cols,
+        key: `${q.id}.${row.code}`, title: `${title(q)} – ${plain(rowLabel(row))}`, multi: q.mode === 'multi', categories: cols,
         cats: (r) => {
           const v = ans(r);
           if (!v || typeof v !== 'object' || Array.isArray(v)) return null;

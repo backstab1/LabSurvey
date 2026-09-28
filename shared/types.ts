@@ -51,6 +51,8 @@ export interface Option {
   shared?: boolean;
   /** Клик по картинке (hotspot): прямоугольная область в процентах от размера картинки */
   area?: { x: number; y: number; w: number; h: number };
+  /** Семантический дифференциал: правый полюс строки (левый — text), например «Дорогой» ↔ «Дешёвый» */
+  right?: string;
 }
 
 /** Перенос вариантов из другого вопроса (single/multi/dropdown или строки матрицы) */
@@ -259,10 +261,18 @@ export interface ScaleQuestion extends QuestionBase {
   display?: 'buttons' | 'stars' | 'smileys';
 }
 
+/**
+ * Вид матрицы: table — таблица (по умолчанию); cards — сортировка карточек (строки — карточки, столбцы — группы,
+ * респондент раскладывает карточки по группам); differential — семантический дифференциал (строки — пары
+ * противоположностей: text слева, right справа; столбцы — точки шкалы между ними). Данные у всех видов одинаковые.
+ */
+export type MatrixView = 'table' | 'cards' | 'differential';
+
 export interface MatrixQuestion extends QuestionBase {
   type: 'matrix';
   /** single — один ответ в строке, multi — несколько */
   mode: 'single' | 'multi';
+  view?: MatrixView;
   rows: Option[];
   rowsFrom?: OptionsFrom;
   columns: Option[];
@@ -301,6 +311,23 @@ export interface PhoneQuestion extends QuestionBase {
 export interface InfoBlock extends QuestionBase {
   type: 'info';
 }
+
+/**
+ * Согласие на обработку персональных данных: текст вопроса — текст согласия (со ссылками на политику),
+ * респондент отмечает галочку. Ответ: 1 — согласен, 0 — отказался (если есть кнопка отказа: анкета завершается отсевом).
+ * Время согласия сохраняется в ответе (o.at) и попадает в выгрузку.
+ */
+export interface ConsentQuestion extends QuestionBase {
+  type: 'consent';
+  /** Текст рядом с галочкой; по умолчанию CONSENT_LABEL */
+  label?: string;
+  /** Текст кнопки отказа; не задан — отказаться нельзя, без согласия дальше не пройти */
+  declineLabel?: string;
+  /** Сообщение после отказа (по умолчанию — сообщение об отсеве из настроек анкеты) */
+  declineMessage?: string;
+}
+
+export const CONSENT_LABEL = 'Я даю согласие на обработку моих персональных данных';
 
 /**
  * Скрытая переменная: не показывается, значение задаёт скрипт (sl.set) или параметр ссылки.
@@ -421,7 +448,8 @@ export type Question =
   | FileQuestion
   | HotspotQuestion
   | MaxDiffQuestion
-  | ConjointQuestion;
+  | ConjointQuestion
+  | ConsentQuestion;
 
 export type QuestionType = Question['type'];
 
@@ -531,6 +559,12 @@ export interface SurveySettings {
   /** Ограничение времени на прохождение, минут: по истечении анкета завершается досрочно */
   timeLimitMin?: number;
   timeoutMessage?: string;
+  /** Невидимая проверка браузера перед стартом (вычислительная задача) и пометка автоматизированных браузеров */
+  botCheck?: boolean;
+  /** Повторное прохождение с того же устройства (по отпечатку браузера): flag — пометить, block — не пускать */
+  deviceCheck?: 'flag' | 'block';
+  /** Автоматически браковать анкеты с баллом риска не ниже N (1–100) */
+  autoRejectScore?: number;
 
   // ---- Оформление ----
   /** Логотип над опросом (URL картинки) */
@@ -649,7 +683,35 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   hotspot: 'Клик по картинке',
   maxdiff: 'MaxDiff',
   conjoint: 'Конджойнт',
+  consent: 'Согласие на обработку ПДн',
 };
+
+/** Вид вопроса для конструктора: тип, а у матрицы — ещё и её вид (сортировка карточек, дифференциал) */
+export type QuestionKind = QuestionType | 'cardsort' | 'differential';
+
+export const KIND_LABELS: Record<QuestionKind, string> = {
+  ...QUESTION_TYPE_LABELS,
+  cardsort: 'Сортировка карточек',
+  differential: 'Семантический дифференциал',
+};
+
+export function kindOf(q: Question): QuestionKind {
+  if (q.type === 'matrix' && q.view === 'cards') return 'cardsort';
+  if (q.type === 'matrix' && q.view === 'differential') return 'differential';
+  return q.type;
+}
+
+/** Группы видов вопросов — для меню «Добавить вопрос» и выбора типа */
+export const KIND_GROUPS: { title: string; kinds: QuestionKind[] }[] = [
+  { title: 'Выбор', kinds: ['single', 'multi', 'dropdown', 'ranking'] },
+  { title: 'Шкалы и таблицы', kinds: ['scale', 'slider', 'matrix', 'differential'] },
+  { title: 'Ввод', kinds: ['text', 'number', 'date', 'phone', 'file'] },
+  { title: 'Методики', kinds: ['cardsort', 'sum', 'hotspot', 'maxdiff', 'conjoint'] },
+  { title: 'Служебные', kinds: ['info', 'consent', 'hidden'] },
+];
+
+/** Подпись строки матрицы: у дифференциала — «левый – правый» */
+export const rowLabel = (o: Option): string => (o.right ? `${o.text} – ${o.right}` : o.text);
 
 // ---- Проекты ----
 
@@ -669,6 +731,7 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 /** Настройки сбора: живут в проекте и накладываются на настройки анкеты */
 export const PROJECT_SETTING_KEYS = [
   'openFrom', 'closeAt', 'maxResponses', 'password', 'allowRetake', 'uniqueParam', 'maxStartsPerIpHour', 'minDurationSec', 'inviteOnly',
+  'botCheck', 'deviceCheck', 'autoRejectScore',
 ] as const;
 
 /** Параметр персональной ссылки: /s/<проект>?inv=<ключ>. В ответ не сохраняется — вместо него поля из списка и inv_id */
@@ -698,7 +761,24 @@ export interface Panel {
   redirectScreenout?: string;
   redirectOverquota?: string;
   redirectEarlyFinish?: string;
+  /** Анкета забракована по качеству (автоматически по баллу риска) */
+  redirectQuality?: string;
+  /** Секрет подписи ссылок (HMAC): подпись добавляется к редиректам и постбэку, проверяется во входящей ссылке */
+  hashSecret?: string;
+  /** Параметр с подписью, по умолчанию hash */
+  hashParam?: string;
+  /** Алгоритм HMAC, по умолчанию sha256 */
+  hashAlgo?: 'sha256' | 'sha1' | 'md5';
+  /** Вид подписи, по умолчанию hex */
+  hashFormat?: 'hex' | 'base64' | 'base64url';
+  /** Проверять подпись входящей ссылки: без верной подписи опрос не откроется */
+  verifyEntry?: boolean;
+  /** Постбэк (S2S): GET-запрос с сервера о статусе. Подстановки: {{status}}, {{param.uid}}, {{resp_id}}, {{Q1}} */
+  postbackUrl?: string;
 }
+
+/** Статусы в постбэке панели */
+export type PanelStatus = 'complete' | 'screenout' | 'overquota' | 'terminate' | 'quality';
 
 /** Параметр ссылки, в котором приходит код панели */
 export const PANEL_PARAM = 'panel';
@@ -707,6 +787,20 @@ export interface ProjectConfig {
   settings?: ProjectSettings;
   quotas?: Quota[];
   panels?: Panel[];
+}
+
+/** Живой дашборд для заказчика: страница /d/<token> без входа, только агрегаты (без открытых ответов) */
+export interface DashboardConfig {
+  token: string;
+  enabled: boolean;
+  /** Заголовок страницы; по умолчанию — название проекта */
+  title?: string;
+  hideDaily?: boolean;
+  hideQuotas?: boolean;
+  hideSources?: boolean;
+  hideReport?: boolean;
+  /** Вопросы, которые не показывать в отчёте дашборда */
+  hideQuestions?: string[];
 }
 
 /** Анкета с настройками сбора и квотами проекта — её видит движок опроса, выгрузка и отчёт */

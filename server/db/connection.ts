@@ -6,7 +6,7 @@ import { initSchema } from '../schema.ts';
 import * as stats from '../../shared/stats.ts';
 
 export const sql = await openSql({ url: config.databaseUrl, sqliteFile: config.dbFile });
-const pg = sql.kind === 'postgres';
+export const pg = sql.kind === 'postgres';
 
 await initSchema(sql);
 

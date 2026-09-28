@@ -10,12 +10,14 @@ import { expandLoops, withLoops } from '../../../shared/loops.ts';
 import {
   DEFAULT_SETTINGS, END, OPTION_TYPES, settingsOf, type Answer, type AnswerValue, type Answers, type Page, type Question, type RespondentContext, type Survey,
 } from '../../../shared/types.ts';
-import type { RunnerState } from '../../../shared/api.ts';
+import type { BotSolution, RunnerState, Telemetry } from '../../../shared/api.ts';
+import { deviceFingerprint, isAutomated, solveChallenge } from './botcheck.ts';
 
 type Loaded =
   | { kind: 'state'; state: RunnerState }
   | { kind: 'closed'; title: string; message: string }
   | { kind: 'password'; title: string; error?: string }
+  | { kind: 'checking' }
   | { kind: 'error'; message: string };
 
 /** Опрос открыт внутри iframe на чужом сайте */
@@ -51,7 +53,7 @@ export function Runner({ surveyId }: { surveyId: string }) {
     window.scrollTo(0, 0);
   };
 
-  const start = (password?: string) => {
+  const start = (password?: string, pow?: BotSolution) => {
     let rid: string | null = null;
     // В предпросмотре new=1 — всегда новая сессия; в опросе — просьба пройти ещё раз (сервер решает, можно ли)
     const fresh = query.get('new') === '1';
@@ -60,8 +62,19 @@ export function Runner({ surveyId }: { surveyId: string }) {
     query.forEach((v, k) => { params[k] = v; });
     const startAt = preview ? query.get('start') ?? undefined : undefined;
     setChecking(true);
-    api('POST', `/api/s/${surveyId}/start`, { rid, params, preview: preview && !test, test, startAt, restart: fresh && !preview, password, surveyPreview: query.get('survey') === '1' })
+    let fp: string | undefined;
+    try { fp = preview ? undefined : deviceFingerprint(); } catch { /* без отпечатка */ }
+    api('POST', `/api/s/${surveyId}/start`, {
+      rid, params, preview: preview && !test, test, startAt, restart: fresh && !preview, password, surveyPreview: query.get('survey') === '1',
+      fp, wd: isAutomated() || undefined, pow, url: window.location.href,
+    })
       .then((res) => {
+        // Невидимая проверка браузера: решаем задачу и повторяем старт
+        if (res.needCheck) {
+          setLoaded({ kind: 'checking' });
+          solveChallenge(res.challenge).then((sol) => start(password, sol));
+          return;
+        }
         if (res.closed) setLoaded({ kind: 'closed', title: res.title, message: res.message });
         else if (res.needPassword) setLoaded({ kind: 'password', title: res.title, error: res.error });
         else applyState(res);
@@ -73,6 +86,7 @@ export function Runner({ surveyId }: { surveyId: string }) {
   useEffect(() => { start(); }, []);
 
   if (!loaded) return <div className="runner"><div className="runner-card muted">Загрузка…</div></div>;
+  if (loaded.kind === 'checking') return <div className="runner"><div className="runner-card muted" role="status">Проверяем браузер…</div></div>;
   if (loaded.kind === 'error') return <Final title="SurveyLAB" message={loaded.message} />;
   if (loaded.kind === 'closed') return <Final title={loaded.title} message={loaded.message} />;
   if (loaded.kind === 'password') return <PasswordGate title={loaded.title} error={loaded.error} busy={checking} onSubmit={start} />;
@@ -182,6 +196,15 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
   const [pageError, setPageError] = useState('');
   const [busy, setBusy] = useState(false);
   const [autoSubmit, setAutoSubmit] = useState(false);
+  // Как вводили открытые ответы: события набора и вставленные символы — для проверки качества на сервере
+  const telemetry = useRef<Telemetry>({});
+  const track = (target: EventTarget, patch: (t: { k: number; p: number }) => void) => {
+    const id = (target as HTMLElement).closest?.('[id^="q-"]')?.id.slice(2);
+    if (!id) return;
+    const t = telemetry.current[id] ?? { k: 0, p: 0 };
+    patch(t);
+    telemetry.current[id] = t;
+  };
 
   const answers: Answers = { ...state.answers, ...local };
   // Стёртые на этой странице ответы не должны подтягиваться из сохранённых
@@ -319,7 +342,10 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
     if (action === 'finish' && !window.confirm('Завершить опрос? Вернуться к нему будет нельзя.')) return;
     setBusy(true);
     try {
-      onState(await api('POST', `/api/s/${surveyId}/${action}`, { rid: state.rid, page: page.id, answers: payload(), hp: hpRef.current?.value || undefined }));
+      onState(await api('POST', `/api/s/${surveyId}/${action}`, {
+        rid: state.rid, page: page.id, answers: payload(), hp: hpRef.current?.value || undefined,
+        tm: Object.keys(telemetry.current).length ? telemetry.current : undefined,
+      }));
     } catch (e) {
       if (e instanceof ApiError && e.status === 422 && e.data?.errors) showErrors(e.data.errors);
       else setPageError(e instanceof Error ? e.message : 'Ошибка сети. Попробуйте ещё раз.');
@@ -343,7 +369,13 @@ function PageView({ state, page, surveyId, onState, onExpire }: {
           <div className="progress-fill" style={{ width: `${state.progress}%` }} />
         </div>
       )}
-      <div className="runner-card" onKeyDown={(e) => {
+      <div className="runner-card"
+        onInput={(e) => {
+          const type = (e.nativeEvent as InputEvent).inputType ?? '';
+          if (type.startsWith('insert') && type !== 'insertFromPaste' && type !== 'insertFromDrop') track(e.target, (t) => { t.k++; });
+        }}
+        onPaste={(e) => { const n = e.clipboardData.getData('text').length; track(e.target, (t) => { t.p += n; }); }}
+        onKeyDown={(e) => {
         // Enter в однострочном поле — «Далее»
         const t = e.target as HTMLElement;
         if (e.key === 'Enter' && settings.enterSubmits && t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'checkbox' && (t as HTMLInputElement).type !== 'radio') {

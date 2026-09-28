@@ -1,8 +1,9 @@
 // Модель переменных для выгрузки (Excel, SPSS, Google Sheets): одна строка — один респондент
 import { allOptions, allRows } from './logic.ts';
 import { conjointShape, maxdiffShape } from './choiceDesign.ts';
-import type { Answers, Option, Survey } from './types.ts';
+import { rowLabel, type Answers, type Option, type Survey } from './types.ts';
 import { plainText as clean } from './text.ts';
+import { SUSPECT_SCORE, qualityScore } from './quality.ts';
 
 export type ResponseStatus = 'in_progress' | 'completed' | 'screened_out' | 'terminated' | 'overquota';
 
@@ -38,18 +39,11 @@ export interface ResponseRecord {
   timings?: Record<string, number>;
   /** Анкета забракована командой */
   rejected?: boolean;
-  /** Пометки качества: bot, attention:Q5, straightline:M1 */
+  /** Пометки качества: bot, attention:Q5, straightline:M1, paste:Q7… — см. shared/quality.ts */
   flags?: string[];
 }
 
-/** Пометка качества — по-человечески */
-export function flagLabel(flag: string): string {
-  if (flag === 'bot') return 'бот (заполнено скрытое поле)';
-  const [kind, id] = flag.split(':');
-  if (kind === 'attention') return `ошибка в контрольном вопросе ${id}`;
-  if (kind === 'straightline') return `одинаковые ответы в матрице ${id}`;
-  return flag;
-}
+export { flagLabel } from './quality.ts';
 
 export type Cell = number | string | Date | null;
 
@@ -128,9 +122,10 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
 
   if (responses.some((r) => r.flags?.length)) {
     add({
-      name: 'suspect', label: 'Подозрительная анкета (бот, контрольный вопрос, прямолинейные ответы)', kind: 'numeric', measure: 'nominal',
-      valueLabels: [{ value: 0, label: 'Нет' }, { value: 1, label: 'Да' }], get: (r) => (r.flags?.length ? 1 : 0),
+      name: 'suspect', label: `Подозрительная анкета (балл риска от ${SUSPECT_SCORE})`, kind: 'numeric', measure: 'nominal',
+      valueLabels: [{ value: 0, label: 'Нет' }, { value: 1, label: 'Да' }], get: (r) => (qualityScore(r.flags) >= SUSPECT_SCORE ? 1 : 0),
     });
+    add({ name: 'quality_score', label: 'Балл риска (0–100)', kind: 'numeric', measure: 'scale', get: (r) => qualityScore(r.flags) });
     add({ name: 'quality_flags', label: 'Пометки качества', kind: 'string', measure: 'nominal', get: (r) => (r.flags?.length ? r.flags.join(',') : null) });
   }
 
@@ -203,7 +198,7 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
             if (row.noExport) continue;
             if (q.mode === 'single') {
               add({
-                name: `${q.id}_${row.code}`, label: `${text}: ${clean(row.text)}`, kind: 'numeric', measure: 'ordinal',
+                name: `${q.id}_${row.code}`, label: `${text}: ${clean(rowLabel(row))}`, kind: 'numeric', measure: 'ordinal',
                 valueLabels: q.columns.map((c) => ({ value: c.code, label: clean(c.text) })),
                 get: (r) => {
                   const v = rowVal(r, row.code);
@@ -213,7 +208,7 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
             } else {
               for (const col of q.columns) {
                 add({
-                  name: `${q.id}_${row.code}_${col.code}`, label: `${text}: ${clean(row.text)} – ${clean(col.text)}`,
+                  name: `${q.id}_${row.code}_${col.code}`, label: `${text}: ${clean(rowLabel(row))} – ${clean(col.text)}`,
                   kind: 'numeric', measure: 'nominal', valueLabels: SELECTED_LABELS,
                   get: (r) => {
                     if (!ans(r)) return null;
@@ -344,6 +339,17 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
           }
           break;
         }
+        case 'consent':
+          add({
+            name: q.id, label: text ? `Согласие: ${text.slice(0, 120)}` : 'Согласие на обработку ПДн', kind: 'numeric', measure: 'nominal',
+            valueLabels: [{ value: 1, label: 'Согласен' }, { value: 0, label: 'Отказ' }],
+            get: (r) => (typeof ans(r)?.v === 'number' ? (ans(r)!.v as number) : null),
+          });
+          add({
+            name: `${q.id}_at`, label: 'Время ответа на согласие', kind: 'datetime', measure: 'scale',
+            get: (r) => toDate(ans(r)?.o?.at ?? null),
+          });
+          break;
         case 'info':
           break;
       }

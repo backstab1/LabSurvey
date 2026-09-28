@@ -420,6 +420,88 @@ test('full-feature survey: every admin screen, question dialog and respondent sc
   await ctx.close();
 });
 
+test('consent, card sort and differential on a phone with bot check; client dashboard shows the result', async (t) => {
+  if (!needBrowser(t)) return;
+  const { ctx, page } = await adminContext();
+  const id = await publishVia(ctx, {
+    formatVersion: 2, title: 'Новые вопросы',
+    blocks: [{ id: 'B1', questions: [
+      { id: 'C1', type: 'consent', text: 'Нужно ваше согласие на обработку данных', declineLabel: 'Не даю согласие' },
+      {
+        id: 'CS', type: 'matrix', view: 'cards', mode: 'single', text: 'Разложите карточки',
+        rows: [{ code: 1, text: 'Скорость' }, { code: 2, text: 'Цена' }, { code: 3, text: 'Выбор блюд' }],
+        columns: [{ code: 1, text: 'Важно' }, { code: 2, text: 'Не важно' }],
+      },
+      {
+        id: 'SD', type: 'matrix', view: 'differential', mode: 'single', text: 'Каким вам кажется сервис?',
+        rows: [{ code: 1, text: 'Дорогой', right: 'Дешёвый' }, { code: 2, text: 'Медленный', right: 'Быстрый' }],
+        columns: ['3', '2', '1', '0', '1', '2', '3'].map((text, i) => ({ code: i + 1, text })),
+      },
+    ] }],
+  });
+  await ctx.request.put(`${base}/api/admin/projects/${id}`, { data: { settings: { botCheck: true }, dashboard: { enabled: true } } });
+
+  const mobile = await phone();
+  const r = await mobile.newPage();
+  const errors: string[] = [];
+  r.on('pageerror', (e) => errors.push(e.message));
+  await r.goto(`${base}/s/${id}`);
+  const noHorizontalScroll = async () => {
+    const [sw, cw] = await r.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+    assert.ok(sw <= cw + 1, `горизонтальная прокрутка: ${sw} > ${cw}`);
+  };
+  // Проверка браузера проходит сама, затем согласие
+  await r.getByText('Нужно ваше согласие на обработку данных').waitFor();
+  await r.getByRole('button', { name: 'Далее' }).click();
+  await r.getByText('Чтобы продолжить, отметьте согласие').waitFor();
+  await r.locator('.option', { hasText: 'Я даю согласие' }).click();
+  await r.getByRole('button', { name: 'Далее' }).click();
+  // Карточки: по одной, после выбора группы — следующая
+  await r.locator('.sort-card', { hasText: 'Скорость' }).waitFor();
+  await noHorizontalScroll();
+  await r.locator('.sort-target', { hasText: 'Важно' }).first().click();
+  await r.locator('.sort-card', { hasText: 'Цена' }).waitFor();
+  await r.locator('.sort-target', { hasText: 'Не важно' }).click();
+  await r.locator('.sort-card', { hasText: 'Выбор блюд' }).waitFor();
+  await r.locator('.sort-target', { hasText: /^Важно$/ }).click();
+  await r.locator('.sort-done').waitFor();
+  // Переложить карточку из группы
+  await r.locator('.sort-pile', { hasText: 'Не важно' }).locator('.sort-chip-text', { hasText: 'Цена' }).click();
+  await r.locator('.sort-card', { hasText: 'Цена' }).waitFor();
+  await r.locator('.sort-target', { hasText: /^Важно$/ }).click();
+  await r.getByRole('button', { name: 'Далее' }).click();
+  // Дифференциал: полюса над точками, без горизонтальной прокрутки
+  await r.getByText('Каким вам кажется сервис?').waitFor();
+  await noHorizontalScroll();
+  await r.getByRole('button', { name: 'Отправить' }).click();
+  await r.getByText('Дайте ответ во всех строках').waitFor();
+  await r.locator('.diff-row').nth(0).locator('.diff-point').nth(5).click();
+  await r.locator('.diff-row').nth(1).locator('.diff-point').nth(1).click();
+  await r.getByRole('button', { name: 'Отправить' }).click();
+  await r.getByText('Спасибо! Ваши ответы сохранены.').waitFor();
+  assert.deepEqual(errors, []);
+  await mobile.close();
+
+  const list = await (await ctx.request.get(`${base}/api/admin/projects/${id}/responses`)).json();
+  const one = await (await ctx.request.get(`${base}/api/admin/projects/${id}/responses/${list[0].id}`)).json();
+  assert.deepEqual(one.response.answers.CS.v, { 1: 1, 2: 1, 3: 1 });
+  assert.deepEqual(one.response.answers.SD.v, { 1: 6, 2: 2 });
+  assert.equal(one.response.answers.C1.v, 1);
+
+  // Дашборд: ссылка из вкладки «Отчёт» открывается без входа
+  await page.goto(`${base}/admin/p/${id}?tab=report`);
+  const link = await page.getByLabel('Ссылка на дашборд').inputValue();
+  const guest = await browser!.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ru-RU' });
+  const d = await guest.newPage();
+  await d.goto(link);
+  await d.getByRole('heading', { name: 'Новые вопросы' }).waitFor();
+  await d.locator('.report-q', { hasText: 'Разложите карточки' }).waitFor();
+  await d.locator('.report-q', { hasText: 'Дорогой – Дешёвый' }).waitFor();
+  assert.equal(await d.locator('.report-q', { hasText: 'согласие' }).count(), 0, 'согласие на дашборд не попадает');
+  await guest.close();
+  await ctx.close();
+});
+
 test('documentation: opens from the admin, search filters sections, no horizontal scroll on a phone', async (t) => {
   if (!needBrowser(t)) return;
   const { ctx, page } = await adminContext();

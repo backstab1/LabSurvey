@@ -36,6 +36,8 @@ export interface ListFeatures {
   hideText?: boolean;
   /** «Общий для всей таблицы» (столбцы матрицы) */
   shared?: boolean;
+  /** Правый полюс (строки семантического дифференциала) */
+  right?: boolean;
 }
 
 /** Перенос вариантов из другого вопроса — показывается над списком */
@@ -143,7 +145,7 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
       ) : (
         <div className="stack" style={{ gap: 10 }}>
           <div className="list-toolbar">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => insertAt(options.length, [{ code: nextCode(), text: '' }])}>+ Добавить</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => insertAt(options.length, [{ code: nextCode(), text: '', ...(features.right ? { right: '' } : {}) }])}>+ Добавить</button>
             {features.quickAdd && !options.some((o) => o.other || o.code === 97) && <button type="button" className="btn btn-secondary btn-sm" onClick={addOther}>+ «Другое»</button>}
             {features.quickAdd && !options.some((o) => o.code === 99) && <button type="button" className="btn btn-secondary btn-sm" onClick={addDk}>+ «Затрудняюсь»</button>}
             <button type="button" className="btn btn-secondary btn-sm" title="Ввести или вставить все варианты текстом"
@@ -171,7 +173,7 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
                 <div key={i} className={`list-item${isOpen ? ' open' : ''}${o.hidden ? ' is-hidden' : ''}${o.group ? ' is-group' : ''}`}>
                   <div className="list-row" role="row" onClick={() => { setOpen(isOpen ? null : i); setTab('main'); }}>
                     <span className={`list-code mono${dupCodes.has(o.code) ? ' dup' : ''}`} title={dupCodes.has(o.code) ? 'Код повторяется' : undefined}>{o.code}</span>
-                    <span className="list-text">{o.text || <span className="muted">{placeholder}</span>}</span>
+                    <span className="list-text">{o.text || <span className="muted">{placeholder}</span>}{features.right && <> <span className="muted">↔</span> {o.right || <span className="muted">правый полюс</span>}</>}</span>
                     <span className="list-marks">
                       {o.group && <span className="mark">группа{o.groupHidden ? ' (скрыт)' : ''}</span>}
                       {o.other && <span className="mark">открытое{o.otherType === 'number' ? ' число' : o.otherType === 'date' ? ' дата' : o.otherType === 'time' ? ' время' : ''}</span>}
@@ -206,7 +208,7 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
                             <input className={`input mono${dupCodes.has(o.code) ? ' invalid' : ''}`} type="number" value={o.code}
                               onChange={(e) => setAt(i, { code: Number(e.target.value) })} />
                           </label>
-                          <label className="field grow"><span>Текст</span>
+                          <label className="field grow"><span>{features.right ? 'Левый полюс' : 'Текст'}</span>
                             <input ref={textRef} className="input opt-text" value={o.text} placeholder={placeholder}
                               onChange={(e) => setAt(i, { text: e.target.value })}
                               onKeyDown={(e) => {
@@ -233,6 +235,11 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
                                 } else insertAt(i + 1, items, i + items.length);
                               }} />
                           </label>
+                          {features.right && (
+                            <label className="field grow"><span>Правый полюс</span>
+                              <input className="input" value={o.right ?? ''} placeholder="Противоположность" onChange={(e) => setAt(i, { right: e.target.value })} />
+                            </label>
+                          )}
                           {features.scores && (
                             <label className="field list-code-field"><span>Баллы</span>
                               <input className="input" type="number" value={o.score ?? ''} title="Для формул score(…)"

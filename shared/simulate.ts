@@ -48,6 +48,8 @@ function candidate(ctx: RespondentContext, q: Question): Answer | undefined {
       const extra = (q.extraOptions ?? []).map((o) => o.code);
       return { v: Math.random() < 0.05 && extra.length ? pick(extra) : pick(points) };
     }
+    case 'consent':
+      return { v: q.declineLabel && Math.random() < 0.05 ? 0 : 1 };
     case 'matrix': {
       const v: Record<string, number | number[]> = {};
       for (const r of answerRows(ctx, q)) {

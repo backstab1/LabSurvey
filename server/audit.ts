@@ -21,7 +21,7 @@ const project = (k = 'id') => (req: Req) => ['project', p(req, k)] as [string, s
 const created = (type: string) => (_req: Req, res: Record<string, unknown> | null) => [type, res?.id as string | undefined] as [string, string | undefined];
 
 const PROJECT_FIELDS: Record<string, string> = {
-  title: 'название', surveyId: 'анкета', settings: 'настройки сбора', quotas: 'квоты', panels: 'панели', tables: 'наборы таблиц',
+  title: 'название', surveyId: 'анкета', settings: 'настройки сбора', quotas: 'квоты', panels: 'панели', tables: 'наборы таблиц', dashboard: 'дашборд для заказчика',
 };
 
 const RULES: Record<string, Rule> = {
@@ -57,6 +57,7 @@ const RULES: Record<string, Rule> = {
   'GET /api/admin/surveys/:id/export.json': { action: 'Скачал анкету (JSON)', target: survey() },
 
   'POST /api/admin/projects': { action: 'Создал проект', target: created('project'), details: (req) => ({ survey: req.body?.surveyId }) },
+  'POST /api/admin/projects/:id/dashboard/token': { action: 'Сменил ссылку дашборда для заказчика', target: project() },
   'POST /api/admin/projects/:id/copy': { action: 'Скопировал проект', target: created('project'), details: (req) => ({ from: p(req, 'id') }) },
   'PUT /api/admin/projects/:id': {
     action: (req) => {

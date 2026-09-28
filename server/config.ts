@@ -38,6 +38,8 @@ export const config = {
   /** За прокси (nginx) — брать IP из X-Forwarded-For */
   trustProxy: process.env.TRUST_PROXY === '1',
   isProduction: process.env.NODE_ENV === 'production',
+  /** Сложность невидимой проверки браузера: нулевых бит в SHA-256 (16 — около 0,3 с на телефоне) */
+  botCheckBits: Math.min(24, Math.max(8, Number(process.env.BOT_CHECK_BITS ?? 16))),
   /** Внешний адрес сервиса (https://surveys.example.ru) — для ИИ-коннектора; по умолчанию берётся из запроса */
   publicUrl: process.env.PUBLIC_URL ?? '',
   /** Почта для приглашений: SMTP-сервер (Яндекс 360, Mail.ru, Unisender Go, SendPulse, свой) */

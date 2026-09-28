@@ -1,7 +1,8 @@
 // Ответы респондентов: сессии прохождения, выборки для выгрузок, счётчики по статусам и панелям
 import type { Param, Row } from '../sql.ts';
-import { enc, flag, jsonGet, jsonKey, marks, median, newId, now, parseJson, sql, updateRow } from './connection.ts';
+import { enc, flag, jsonGet, jsonKey, marks, median, newId, now, parseJson, pg, sql, updateRow } from './connection.ts';
 import { PANEL_PARAM, type Answers } from '../../shared/types.ts';
+import { SUSPECT_SCORE, qualityScore } from '../../shared/quality.ts';
 import type { ResponseRecord, ResponseStatus } from '../../shared/variables.ts';
 import type { PanelCounts, ResponseCounts } from '../../shared/api.ts';
 export type { PanelCounts };
@@ -16,13 +17,20 @@ export interface StoredResponse extends ResponseRecord {
   history: string[];
   currentPage: string | null;
   updatedAt: string;
+  /** Отпечаток устройства (хеш) — для проверки повторного прохождения */
+  device?: string | null;
+  /** Результат постбэка панели */
+  postback?: PostbackResult | null;
 }
+
+/** Постбэк панели: статус, когда отправлен, успешно ли и ошибка */
+export interface PostbackResult { status: string; at: string; ok: boolean; error?: string }
 
 export interface ResponsePatch {
   answers?: Answers; history?: string[]; currentPage?: string | null; status?: ResponseStatus;
   completedAt?: string | null; durationSec?: number | null; version?: number;
   ending?: { message?: string; redirect?: string } | null;
-  timings?: Record<string, number>; rejected?: boolean; flags?: string[];
+  timings?: Record<string, number>; rejected?: boolean; flags?: string[]; postback?: PostbackResult | null;
 }
 
 const toResponse = (r: Row): StoredResponse => ({
@@ -46,6 +54,8 @@ const toResponse = (r: Row): StoredResponse => ({
   timings: parseJson(r.timings, {}),
   rejected: r.rejected === 1,
   flags: parseJson(r.flags, []),
+  device: (r.device as string) ?? null,
+  postback: parseJson(r.postback, null),
 });
 
 /** Код панели из JSON параметров ссылки; пусто — без панели */
@@ -54,11 +64,13 @@ const panelKey = (v: unknown) => (v === null || v === undefined || v === '' ? nu
 export const responses = {
   async create(r: Omit<StoredResponse, 'id' | 'updatedAt' | 'completedAt' | 'durationSec'>): Promise<StoredResponse> {
     const id = newId(12);
+    const flags = r.flags?.length ? r.flags : null;
     await sql.run(`INSERT INTO responses
-      (id, project_id, survey_id, version, status, is_test, answers, history, current_page, params, ip, user_agent, started_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      (id, project_id, survey_id, version, status, is_test, answers, history, current_page, params, ip, user_agent, started_at, updated_at, device, flags, score)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
       id, r.projectId, r.surveyId, r.version, r.status, r.isTest ? 1 : 0, JSON.stringify(r.answers), JSON.stringify(r.history),
-      r.currentPage, JSON.stringify(r.params), r.ip, r.userAgent, r.startedAt, now(),
+      r.currentPage, JSON.stringify(r.params), r.ip, r.userAgent, r.startedAt, now(), r.device ?? null,
+      flags ? JSON.stringify(flags) : null, flags ? qualityScore(flags) : null,
     ]);
     return (await this.get(id))!;
   },
@@ -69,11 +81,31 @@ export const responses = {
   },
 
   async update(id: string, patch: ResponsePatch): Promise<void> {
+    // Балл риска всегда пересчитывается вместе с пометками
+    const extra: [string, Param][] = [['updated_at', now()]];
+    if (patch.flags) extra.push(['score', patch.flags.length ? qualityScore(patch.flags) : null]);
     await updateRow('responses', 'id = ?', id, patch, {
       answers: ['answers', enc.json], history: ['history', enc.json], currentPage: 'current_page', status: 'status',
       completedAt: 'completed_at', durationSec: 'duration_sec', version: 'version', timings: ['timings', enc.json],
       rejected: ['rejected', enc.bool], flags: ['flags', enc.jsonOrNull], ending: ['ending', enc.nullableJson],
-    }, [['updated_at', now()]]);
+      postback: ['postback', enc.nullableJson],
+    }, extra);
+  },
+
+  /** Есть ли в проекте другая настоящая анкета с этого устройства */
+  async deviceSeen(projectId: string, device: string, exceptId?: string): Promise<StoredResponse | null> {
+    const r = await sql.get(`SELECT * FROM responses WHERE project_id = ? AND is_test = 0 AND device = ? AND id <> ?
+      ORDER BY started_at DESC LIMIT 1`, [projectId, device, exceptId ?? '']);
+    return r ? toResponse(r) : null;
+  },
+
+  /** Есть ли у другой настоящей анкеты проекта точно такой же открытый ответ на вопрос */
+  async sameText(projectId: string, questionId: string, text: string, exceptId: string): Promise<boolean> {
+    const expr = pg ? `(answers::jsonb -> ? ->> 'v')` : 'json_extract(answers, ?)';
+    const key = pg ? questionId : `$."${questionId.replace(/"/g, '')}".v`;
+    const r = await sql.get(`SELECT 1 AS x FROM responses WHERE project_id = ? AND is_test = 0 AND id <> ? AND ${expr} = ? LIMIT 1`,
+      [projectId, exceptId, key, text]);
+    return !!r;
   },
 
   /** Ответы проекта; бракованные — только с includeRejected, from / to — по времени начала (ISO) */
@@ -142,6 +174,9 @@ export const responses = {
       byPanel.set(k, [...(byPanel.get(k) ?? []), r.d as number]);
     }
     for (const [k, list] of byPanel) of(k).medianSec = median(list);
+    const failed = await sql.all(`SELECT ${jsonGet('params')} AS panel, COUNT(*) AS n FROM responses
+      WHERE project_id = ? AND is_test = 0 AND postback LIKE '%"ok":false%' GROUP BY 1`, [jsonKey(PANEL_PARAM), projectId]);
+    for (const r of failed) of(panelKey(r.panel)).postbackFailed = r.n as number;
     return [...out.values()];
   },
 
@@ -154,7 +189,7 @@ export const responses = {
 
   /** Счётчики по статусам; бракованные анкеты считаются отдельно (rejected) и в статусы не входят */
   async counts(projectId: string): Promise<ResponseCounts> {
-    const rows = await sql.all(`SELECT is_test, status, rejected, ${flag('flags IS NOT NULL')} AS flagged, COUNT(*) AS n FROM responses
+    const rows = await sql.all(`SELECT is_test, status, rejected, ${flag(`score >= ${SUSPECT_SCORE}`)} AS flagged, COUNT(*) AS n FROM responses
       WHERE project_id = ? GROUP BY is_test, status, rejected, 4`, [projectId]);
     const real: Record<string, number> = {};
     let test = 0;
@@ -171,10 +206,12 @@ export const responses = {
     return { real, test, rejected, suspect };
   },
 
-  /** Забраковать все настоящие анкеты с пометками качества; возвращает, сколько забраковано */
-  async rejectSuspect(projectId: string): Promise<number> {
-    return (await sql.run('UPDATE responses SET rejected = 1, updated_at = ? WHERE project_id = ? AND is_test = 0 AND rejected = 0 AND flags IS NOT NULL',
-      [now(), projectId])).changes;
+  /** Забраковать все настоящие подозрительные анкеты (балл риска от SUSPECT_SCORE); возвращает их ID */
+  async rejectSuspect(projectId: string): Promise<string[]> {
+    const where = `project_id = ? AND is_test = 0 AND rejected = 0 AND score >= ${SUSPECT_SCORE}`;
+    const ids = (await sql.all(`SELECT id FROM responses WHERE ${where}`, [projectId])).map((r) => r.id as string);
+    await sql.run(`UPDATE responses SET rejected = 1, updated_at = ? WHERE ${where}`, [now(), projectId]);
+    return ids;
   },
 
   async remove(id: string): Promise<void> {

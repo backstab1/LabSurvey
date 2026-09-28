@@ -32,6 +32,7 @@
 .error-box { background: var(--danger-soft); color: var(--danger); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
 .ok-box { background: var(--ok-soft); color: var(--ok); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
 .warn-box { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.info-box { background: #f1f3f6; color: #4a515b; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
 
 .table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .table th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--border); }
@@ -203,13 +204,19 @@
 .add-page:hover { border-color: var(--accent); color: var(--accent); }
 .type-picker {
   position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 30; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.14); padding: 6px;
-  display: grid; grid-template-columns: repeat(2, minmax(190px, 1fr)); gap: 2px;
+  border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.14); padding: 8px;
+  display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 4px 8px; width: max-content; max-width: calc(100vw - 32px);
 }
+.type-group { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.type-group-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 6px 10px 2px; }
+.type-svg { display: block; flex: none; }
+.qtype { display: inline-flex; align-items: center; gap: 5px; }
+.qtype .type-svg { color: var(--accent); }
+.ltype { display: inline-flex; align-items: center; color: var(--accent); }
 .inserter.last .type-picker { left: 0; transform: none; }
 .type-picker button { display: flex; gap: 10px; align-items: center; border: 0; background: none; padding: 8px 10px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 14px; }
 .type-picker button:hover { background: var(--accent-soft); }
-.type-icon { display: inline-flex; width: 22px; justify-content: center; color: var(--accent); font-size: 15px; }
+.type-icon { display: inline-flex; width: 22px; justify-content: center; align-items: center; color: var(--accent); font-size: 15px; }
 
 /* Модальные окна */
 .modal-backdrop {
@@ -414,6 +421,7 @@
 .chev-btn { font-size: 14px; padding: 6px 8px; }
 .field-error { color: var(--danger); font-size: 12px; }
 .field-help { color: var(--muted); font-size: 12px; }
+.field > .field-help { font-size: 12px; font-weight: 400; }
 .input.invalid { border-color: var(--danger); outline-color: var(--danger); }
 .undo-group { display: inline-flex; gap: 2px; margin-right: 4px; }
 .undo-group .icon-btn { font-size: 18px; padding: 4px 8px; }
@@ -776,6 +784,7 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .daily-key.started { background: #d7e2f7; }
 .badge.ai { background: #efe7fb; color: #6b3fb5; margin-left: 6px; font-size: 11px; }
 .badge.suspect { background: #fff1d6; color: #8a5a00; margin-left: 6px; }
+.badge.flagged { background: #eef0f3; color: #5b6472; margin-left: 6px; }
 .badge.inv-none { background: #eef0f3; color: #5b6472; }
 .badge.inv-started { background: #fff1d6; color: #8a5a00; }
 .badge.inv-completed { background: #e3f5e8; color: #1c7c3a; }
@@ -852,3 +861,32 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .mail-body { background: var(--surface); border-radius: 8px; padding: 14px 16px; font-size: 14px; max-height: 340px; overflow-y: auto; }
 .mail-body p { margin: 0 0 10px; }
 .mail-button { display: inline-block; background: #3b7a06; color: #fff; border-radius: 8px; padding: 8px 16px; font-weight: 600; }
+
+/* ---------- Дашборд для заказчика ---------- */
+.dash { gap: 16px; }
+.dash .card + .card { margin-top: 0; }
+.dash-head { display: flex; align-items: flex-start; gap: 12px; }
+.dash-head h1 { font-size: 24px; margin: 0 0 4px; }
+.dash-filter { align-items: center; gap: 8px; flex-wrap: wrap; }
+.dash-filter .input { width: auto; max-width: 320px; }
+.dash-foot { text-align: center; margin-top: 8px; }
+@media (max-width: 640px) {
+  .container.dash { padding: 12px; }
+  .dash-filter .input { max-width: 100%; width: 100%; }
+}
+
+/* ---------- Дашборд для заказчика ---------- */
+.dash { gap: 16px; }
+.dash .card + .card { margin-top: 0; }
+.dash-head { display: flex; align-items: flex-start; gap: 12px; }
+.dash-head h1 { font-size: 24px; margin: 0 0 4px; }
+.dash-filter { align-items: center; gap: 8px; flex-wrap: wrap; }
+.dash-filter .input { width: auto; max-width: 320px; }
+.dash-foot { text-align: center; margin-top: 8px; }
+@media (max-width: 640px) {
+  .container.dash { padding: 12px; }
+  .dash-filter .input { max-width: 100%; width: 100%; }
+}
+.dash-questions { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.dash-questions .check { align-items: baseline; gap: 6px; }
+@media print { .dash-card { display: none; } }

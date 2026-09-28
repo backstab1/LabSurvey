@@ -14,6 +14,13 @@ import { allQuestions, cleanAnswers, endingAction, findPage, firstPage, nextPage
 import { fileIds } from '../../shared/answers.ts';
 import { expandAllLoops } from '../../shared/loops.ts';
 import { END, INVITE_PARAM, PANEL_PARAM, SCREENOUT, settingsOf, type Answers, type Survey } from '../../shared/types.ts';
+import { botChallenge, verifyBotSolution } from '../botcheck.ts';
+import { verifyEntry } from '../panelLinks.ts';
+import { textFlags } from '../../shared/quality.ts';
+import type { BotSolution, Telemetry } from '../../shared/api.ts';
+
+/** Отпечаток устройства из браузера: hex-хеш */
+const cleanDevice = (fp: unknown) => (typeof fp === 'string' && /^[a-f0-9]{16,64}$/.test(fp) ? fp : null);
 
 const LINK_INCOMPLETE = 'Ссылка на опрос неполная. Откройте её из приглашения ещё раз.';
 
@@ -50,6 +57,8 @@ export async function respondentRoutes(app: FastifyInstance) {
     Params: { id: string };
     Body: {
       rid?: string; params?: unknown; preview?: boolean; test?: string; startAt?: string; restart?: boolean; password?: string;
+      /** Отпечаток устройства, признак автоматизированного браузера, решение проверки браузера, адрес страницы (для подписи панели) */
+      fp?: string; wd?: boolean; pow?: BotSolution; url?: string;
       /** Предпросмотр анкеты из конструктора — вне проекта, даже если ID совпадает с проектом */
       surveyPreview?: boolean;
     };
@@ -107,10 +116,19 @@ export async function respondentRoutes(app: FastifyInstance) {
     const panels = t.loaded?.project.panels ?? [];
     const panel = panelOf(panels, params);
     let panelFull = false;
+    const device = cleanDevice(b.fp);
+    const flags: string[] = [];
     if (!preview && t.projectId) {
       const projectId = t.projectId;
       const st = settingsOf(survey);
       if (panel?.closed) return closed(survey.title, st.closedMessage);
+      // Подписанная ссылка панели: без верной подписи не пускаем (защита от подделки ID и «ложных завершений»)
+      if (panel?.verifyEntry && panel.hashSecret && !(typeof b.url === 'string' && verifyEntry(panel, b.url.slice(0, 2000)))) {
+        return closed(survey.title, 'Ссылка на опрос повреждена или недействительна. Откройте её из приглашения ещё раз.');
+      }
+      // Невидимая проверка браузера: без решения задачи анкета не создаётся
+      if (st.botCheck && !verifyBotSolution(projectId, b.pow)) return { needCheck: true, challenge: botChallenge(projectId) };
+      if (b.wd) flags.push('automation');
       if (st.inviteOnly && !invitee) return closed(survey.title, 'Опрос доступен только по персональной ссылке из приглашения.');
       // Панель с ID респондента: один ответ на ID внутри панели
       if (panel?.idParam) {
@@ -132,6 +150,18 @@ export async function respondentRoutes(app: FastifyInstance) {
       }
       const reason = await closedReason(projectId, survey);
       if (reason) return closed(survey.title, reason);
+      // То же устройство уже проходило опрос: не пускаем или помечаем
+      if (st.deviceCheck && device) {
+        const seen = await responses.deviceSeen(projectId, device);
+        if (seen && st.deviceCheck === 'block' && !st.allowRetake) {
+          if (seen.status === 'in_progress') {
+            const resumed = await resumeSession(projectId, seen.id, survey.title);
+            if (resumed) return resumed;
+          }
+          return closed(survey.title, ALREADY_DONE);
+        }
+        if (seen) flags.push('device');
+      }
       const password = survey.settings?.password;
       if (password && b.password !== password) {
         return { needPassword: true, title: survey.title, error: b.password ? 'Неверный пароль' : undefined };
@@ -142,7 +172,7 @@ export async function respondentRoutes(app: FastifyInstance) {
     const created = await responses.create({
       projectId: t.projectId, surveyId: s.id, version: s.version, status: 'in_progress', isTest: preview, answers: initial, history: [],
       currentPage: null, params, ip: req.ip ?? null, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 500) || null,
-      startedAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(), device, flags,
     });
     if (invitee) await invitees.attach(invitee.id, created.id);
     const startCtx = ctxOf(survey, created, cleanAnswers(ctxOf(survey, created, initial), []));
@@ -158,7 +188,7 @@ export async function respondentRoutes(app: FastifyInstance) {
     return stateOf(survey, (await responses.get(created.id))!, panels);
   });
 
-  app.post<{ Params: { id: string }; Body: { rid: string; page: string; answers: Answers; hp?: string } }>('/api/s/:id/submit', async (req, reply) => {
+  app.post<{ Params: { id: string }; Body: { rid: string; page: string; answers: Answers; hp?: string; tm?: Telemetry } }>('/api/s/:id/submit', async (req, reply) => {
     const { survey, r, panels } = await sessionOf(req.params.id, req.body?.rid);
     if (r.status !== 'in_progress' || r.currentPage !== req.body.page) {
       return { ...stateOf(survey, r, panels), resynced: true };
@@ -171,6 +201,8 @@ export async function respondentRoutes(app: FastifyInstance) {
     }
     if (Object.keys(errors).length) return reply.code(422).send({ errors });
 
+    // Согласие: время ответа ставит сервер — это подтверждение для проверки
+    for (const q of page.questions) if (q.type === 'consent' && pageAnswers[q.id]) pageAnswers[q.id] = { ...pageAnswers[q.id], o: { at: new Date().toISOString() } };
     const answers = mergePage(r.answers, page, pageAnswers);
     const visited = [...r.history, page.id];
     // Время на экране: с момента его показа (последнее обновление сессии), при возврате — суммируется
@@ -180,9 +212,29 @@ export async function respondentRoutes(app: FastifyInstance) {
     // Навигация — по ответам с учётом действий «после ответа» (переменные)
     const nav = ctxOf(survey, r, cleanAnswers(ctxOf(survey, r, answers), visited));
     const quality = qualityCheck(nav, page.questions, req.body.hp, r.flags ?? []);
-    if (quality.flags.length !== (r.flags ?? []).length) await responses.update(r.id, { flags: quality.flags });
+    // Открытые ответы: вставка, ввод без набора, признаки ИИ, совпадение с ответом другого респондента
+    {
+      for (const q of page.questions) {
+        const text = q.type === 'text' ? pageAnswers[q.id]?.v : undefined;
+        if (typeof text !== 'string') continue;
+        const tm = req.body.tm?.[q.id];
+        const stat = tm && Number.isFinite(tm.k) && Number.isFinite(tm.p) ? { k: Number(tm.k), p: Number(tm.p) } : undefined;
+        const found = textFlags(q.id, text, stat);
+        if (r.projectId && !r.isTest && text.trim().length >= 20 && (await responses.sameText(r.projectId, q.id, text.trim(), r.id))) found.push(`duptext:${q.id}`);
+        // Пометки этого вопроса пересчитываются при повторной отправке экрана
+        quality.flags = [...quality.flags.filter((f) => !f.endsWith(`:${q.id}`) || /^(attention|straightline):/.test(f)), ...found];
+      }
+    }
+    if (JSON.stringify(quality.flags) !== JSON.stringify(r.flags ?? [])) {
+      await responses.update(r.id, { flags: quality.flags });
+      r.flags = quality.flags;
+    }
     const next = nextPage(nav, page.id);
-    if (quality.screenout) {
+    // Отказ от согласия на обработку данных — анкета завершается отсевом
+    const declined = page.questions.find((q) => q.type === 'consent' && pageAnswers[q.id]?.v === 0);
+    if (declined?.type === 'consent') {
+      await finalize(survey, r, answers, visited, 'screened_out', declined.declineMessage ? { message: declined.declineMessage } : null);
+    } else if (quality.screenout) {
       // Контрольный вопрос или прямолинейные ответы с отсевом
       await finalize(survey, r, answers, visited, 'screened_out');
     } else if (next !== SCREENOUT && (await fullQuota(ownerOf(r), survey, r.isTest, nav))) {

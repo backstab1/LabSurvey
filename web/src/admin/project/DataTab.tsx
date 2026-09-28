@@ -4,6 +4,7 @@ import { toast } from '../common.tsx';
 import { canEdit, isClient, useMe } from '../AdminApp.tsx';
 import { allQuestions } from '../../../../shared/logic.ts';
 import { STATUS_LABELS, flagLabel, type ResponseStatus } from '../../../../shared/variables.ts';
+import { SUSPECT_SCORE, flagWeight, qualityScore } from '../../../../shared/quality.ts';
 import type { ProjectInfo, ResponseListItem } from '../../../../shared/api.ts';
 import { ResponseModal } from './ResponseModal.tsx';
 import { SheetsCard, NotifyCard } from './Integrations.tsx';
@@ -154,7 +155,12 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{r.id}</td>
                   <td>
                     {STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}{r.rejected && <span className="badge closed">брак</span>}
-                    {!!r.flags?.length && <span className="badge suspect" title={r.flags.map(flagLabel).join('\n')}>подозрительная</span>}
+                    {!!r.flags?.length && (
+                      <span className={`badge ${qualityScore(r.flags) >= SUSPECT_SCORE ? 'suspect' : 'flagged'}`}
+                        title={`Балл риска ${qualityScore(r.flags)}:\n${r.flags.map((f) => `${flagLabel(f)} (+${flagWeight(f)})`).join('\n')}`}>
+                        {qualityScore(r.flags) >= SUSPECT_SCORE ? 'подозрительная' : 'пометки'} · {qualityScore(r.flags)}
+                      </span>
+                    )}
                   </td>
                   <td>{fmtDate(r.startedAt, '–')}</td>
                   <td>{fmtDate(r.completedAt, '–')}</td>

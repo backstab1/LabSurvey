@@ -118,7 +118,7 @@ export function ProjectPage({ id }: { id: string }) {
       {tab === 'invitees' && <InviteesTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'quotas' && <QuotasTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'data' && <DataTab info={info} reload={reload} />}
-      {tab === 'report' && <ReportTab info={info} />}
+      {tab === 'report' && <ReportTab info={info} readOnly={readOnly} client={client} reload={reload} />}
       {tab === 'tables' && <TablesTab info={info} readOnly={readOnly} reload={reload} />}
       {tab === 'settings' && <CollectionSettings info={info} readOnly={readOnly} reload={reload} />}
     </div>

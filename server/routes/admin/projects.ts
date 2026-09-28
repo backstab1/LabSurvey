@@ -1,5 +1,6 @@
 // Проекты: сбор ответов по анкете — настройки, квоты, панели, статус, тестовые ответы
 import type { FastifyInstance } from 'fastify';
+import { randomBytes } from 'node:crypto';
 import { testToken } from '../../auth.ts';
 import { invitees, projects, responses, surveys, type ProjectRow, type TableSet } from '../../db.ts';
 import { loadProject, projectOf, loadedOf, type Loaded } from '../../projectCtx.ts';
@@ -14,7 +15,7 @@ import { fail } from '../../http.ts';
 import type { ProjectInfo, ProjectListItem } from '../../../shared/api.ts';
 import { validatePanels, validateSurvey } from '../../../shared/validate.ts';
 import {
-  PROJECT_SETTING_KEYS, effectiveSurvey, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey,
+  PROJECT_SETTING_KEYS, effectiveSurvey, type DashboardConfig, type Panel, type ProjectSettings, type ProjectStatus, type Quota, type Survey,
 } from '../../../shared/types.ts';
 
 const PROJECT_STATUSES: ProjectStatus[] = ['development', 'collecting', 'processing', 'archive'];
@@ -49,7 +50,7 @@ async function projectInfo(l: Loaded): Promise<ProjectInfo> {
     },
     // Анкета с настройками проекта: для отчёта, данных и условий квот
     draft: l.draft, published: l.live,
-    sheets: p.sheets, notify: p.notify, counts: await responses.counts(p.id),
+    sheets: p.sheets, notify: p.notify, dashboard: p.dashboard, counts: await responses.counts(p.id),
     sheetsAccount: sheetsStatus(), testToken: testToken(p.id), telegramConfigured: telegramConfigured(),
     daily: dailyStats(await responses.timeline(p.id)),
     invitees: await invitees.count(p.id),
@@ -61,8 +62,24 @@ async function projectInfo(l: Loaded): Promise<ProjectInfo> {
 function forClient(info: ProjectInfo): ProjectInfo {
   const { password: _pw, ...settings } = info.settings;
   return {
-    ...info, settings, testToken: '', sheets: null, notify: null, sheetsAccount: { configured: false, email: null }, telegramConfigured: false,
+    ...info, settings, testToken: '', sheets: null, notify: null, dashboard: null, sheetsAccount: { configured: false, email: null }, telegramConfigured: false,
     panels: info.panels.map((x) => ({ id: x.id, title: x.title, limit: x.limit, closed: x.closed })),
+  };
+}
+
+/** Настройки дашборда из запроса: токен сохраняется, новый — при первом включении */
+function dashboardConfig(raw: unknown, prev: DashboardConfig | null): DashboardConfig | null {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== 'object') fail(400, 'dashboard: ожидается объект');
+  const d = raw as Record<string, unknown>;
+  const hideQuestions = Array.isArray(d.hideQuestions) ? d.hideQuestions.filter((x): x is string => typeof x === 'string').slice(0, 500) : undefined;
+  return {
+    token: prev?.token ?? randomBytes(18).toString('base64url'),
+    enabled: !!d.enabled,
+    ...(typeof d.title === 'string' && d.title.trim() ? { title: d.title.trim().slice(0, 200) } : {}),
+    ...(d.hideDaily ? { hideDaily: true } : {}), ...(d.hideQuotas ? { hideQuotas: true } : {}),
+    ...(d.hideSources ? { hideSources: true } : {}), ...(d.hideReport ? { hideReport: true } : {}),
+    ...(hideQuestions?.length ? { hideQuestions } : {}),
   };
 }
 
@@ -107,7 +124,15 @@ export async function projectsRoutes(app: FastifyInstance) {
     return { id: copy.id };
   });
 
-  app.put<{ Params: { id: string }; Body: { title?: string; surveyId?: string; settings?: ProjectSettings; quotas?: Quota[]; panels?: Panel[]; tables?: TableSet[] } }>(
+  // Новая секретная ссылка дашборда: старая перестаёт работать
+  app.post<{ Params: { id: string } }>('/api/admin/projects/:id/dashboard/token', async (req) => {
+    const p = await projectOf(req.params.id);
+    if (!p.dashboard) fail(400, 'Сначала включите дашборд');
+    await projects.update(p.id, { dashboard: { ...p.dashboard, token: randomBytes(18).toString('base64url') } });
+    return { ok: true };
+  });
+
+  app.put<{ Params: { id: string }; Body: { title?: string; surveyId?: string; settings?: ProjectSettings; quotas?: Quota[]; panels?: Panel[]; tables?: TableSet[]; dashboard?: unknown } }>(
     '/api/admin/projects/:id',
     async (req) => {
       const l = await loadedOf(req.params.id);
@@ -136,6 +161,7 @@ export async function projectsRoutes(app: FastifyInstance) {
         if (errs.length) fail(422, errs.join('; '));
         patch.panels = b.panels;
       }
+      if (b.dashboard !== undefined) patch.dashboard = dashboardConfig(b.dashboard, l.project.dashboard);
       if (b.tables !== undefined) {
         if (!tablesOk(b.tables)) fail(400, 'Наборы таблиц: список {name, spec} (не больше 50)');
         patch.tables = b.tables.map((t) => ({ name: t.name.trim().slice(0, 100), spec: t.spec }));

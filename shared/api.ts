@@ -1,6 +1,7 @@
 // Контракт API: что сервер отдаёт браузеру. Сервер помечает этими типами свои ответы, админка и прохождение — читают их.
 // Меняете поле — компилятор покажет обе стороны.
-import type { Panel, ProjectSettings, ProjectStatus, Quota, Survey, Answers } from './types.ts';
+import type { DashboardConfig, Panel, ProjectSettings, ProjectStatus, Quota, Survey, Answers } from './types.ts';
+import type { Report } from './report.ts';
 import type { ResponseStatus } from './variables.ts';
 import type { CrosstabSpec } from './crosstab.ts';
 
@@ -125,6 +126,8 @@ export interface PanelCounts {
   rejected: number;
   /** Медиана длительности завершённых анкет, сек */
   medianSec: number | null;
+  /** Сколько постбэков панели не дошло */
+  postbackFailed?: number;
 }
 
 /** Счётчики анкет проекта; бракованные в статусы не входят */
@@ -178,6 +181,8 @@ export interface ProjectInfo {
   published: Survey | null;
   sheets: SheetsConfig | null;
   notify: NotifyConfig | null;
+  /** Живой дашборд для заказчика (заказчику не отдаётся) */
+  dashboard: DashboardConfig | null;
   counts: ResponseCounts;
   sheetsAccount: { configured: boolean; email: string | null };
   testToken: string;
@@ -202,6 +207,29 @@ export interface ResponseListItem {
   answered: number;
   params: Record<string, string>;
   flags: string[];
+}
+
+// ---------- Дашборд для заказчика ----------
+
+/** Вопрос, по которому можно выбрать подгруппу на дашборде */
+export interface DashboardFilter { id: string; text: string; options: { code: number; label: string }[] }
+
+/** Данные страницы /d/<token>: только агрегаты по завершённым анкетам, без открытых ответов и файлов */
+export interface DashboardData {
+  title: string;
+  status: ProjectStatus;
+  /** Когда посчитано, ISO */
+  generatedAt: string;
+  counts: { completed: number; screenedOut: number; overquota: number; inProgress: number; started: number };
+  /** Цель по завершённым (лимит сбора) */
+  target: number | null;
+  daily?: DayStat[];
+  quotas?: ProjectInfo['quotas'];
+  sources?: { title: string; started: number; completed: number }[];
+  report?: Report;
+  filters: DashboardFilter[];
+  /** Выбранная подгруппа */
+  filter?: { q: string; code: number; label: string };
 }
 
 // ---------- Персональные ссылки и рассылки ----------
@@ -289,5 +317,15 @@ export interface ClosedState { closed: true; title: string; message: string }
 /** Нужен пароль */
 export interface PasswordState { needPassword: true; title: string; error?: string }
 
+/** Задача невидимой проверки браузера: найти n, при котором SHA-256(salt + n) начинается с bits нулевых бит */
+export interface BotChallenge { salt: string; bits: number; exp: number; sig: string }
+export interface BotSolution extends BotChallenge { n: number }
+
+/** Нужна проверка браузера: решить задачу и повторить старт с решением */
+export interface CheckState { needCheck: true; challenge: BotChallenge }
+
 /** Ответ на старт опроса */
-export type StartResult = RunnerState | ClosedState | PasswordState;
+export type StartResult = RunnerState | ClosedState | PasswordState | CheckState;
+
+/** Как респондент вводил открытые ответы экрана: по ID вопроса — событий набора и вставленных символов */
+export type Telemetry = Record<string, { k: number; p: number }>;

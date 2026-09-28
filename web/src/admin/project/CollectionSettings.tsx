@@ -1,6 +1,7 @@
 // Настройки сбора проекта: сроки, лимит, доступ и защита, ссылки и код для сайта
 import { useProjectDraft } from './useProjectDraft.ts';
-import { compact, copyText } from '../common.tsx';
+import { Segmented, compact, copyText } from '../common.tsx';
+import { SUSPECT_SCORE } from '../../../../shared/quality.ts';
 import type { ProjectSettings } from '../../../../shared/types.ts';
 import type { ProjectInfo } from '../../../../shared/api.ts';
 
@@ -69,6 +70,38 @@ export function CollectionSettings({ info, readOnly, reload }: { info: ProjectIn
           <label className="check">
             <input type="checkbox" checked={!!st.allowRetake} onChange={(e) => set({ allowRetake: e.target.checked || undefined })} />
             <span>Разрешить пройти опрос повторно<small className="muted"> – на финальном экране появится кнопка «Пройти ещё раз»</small></span>
+          </label>
+        </fieldset>
+      </div>
+
+      <div className="card stack">
+        <div className="row">
+          <h2 className="grow" style={{ margin: 0 }}>Защита от ботов</h2>
+          {!readOnly && <button className="btn btn-primary btn-sm" disabled={!dirty || busy} onClick={save}>{dirty ? 'Сохранить' : 'Сохранено'}</button>}
+        </div>
+        <p className="muted small" style={{ margin: 0 }}>
+          Каждая анкета получает балл риска 0–100 из пометок качества: ловушка для ботов и автоматизированный браузер – 100, ошибка в контрольном
+          вопросе – 60, одинаковые ответы в матрице, повтор с того же устройства, открытый ответ как у другого респондента – по 50, текст без набора
+          и спидер – по 40, вставка из буфера и текст, похожий на ИИ, – по 30. С {SUSPECT_SCORE} баллов анкета подозрительная.
+          Пометки открытых ответов ставятся всегда, для ответов от 20 символов.
+        </p>
+        <fieldset className="plain stack" disabled={readOnly}>
+          <label className="check">
+            <input type="checkbox" checked={!!st.botCheck} onChange={(e) => set({ botCheck: e.target.checked || undefined })} />
+            <span>Невидимая проверка браузера перед стартом<small className="muted"> – браузер решает короткую задачу (доли секунды, респондент ничего не нажимает). Скрипты без браузера анкету не начнут</small></span>
+          </label>
+          <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+            <span className="small">Повтор с того же устройства</span>
+            <Segmented value={st.deviceCheck ?? 'off'} onChange={(v) => set({ deviceCheck: v === 'off' ? undefined : v })}
+              options={[{ value: 'off', label: 'Не проверять' }, { value: 'flag', label: 'Помечать' }, { value: 'block', label: 'Не пускать' }]} />
+          </div>
+          <span className="field-help" style={{ marginTop: -8 }}>
+            По отпечатку браузера (экран, язык, часовой пояс, видеокарта). Одинаковые модели телефонов бывают неразличимы – для открытой ссылки лучше «Помечать».
+          </span>
+          <label className="field" style={{ maxWidth: 360 }}><span>Браковать автоматически с балла риска</span>
+            <input className="input" type="number" min={1} max={100} placeholder="не браковать" value={st.autoRejectScore ?? ''}
+              onChange={(e) => set({ autoRejectScore: e.target.value ? Math.min(100, Math.max(1, Math.round(Number(e.target.value)))) : undefined })} />
+            <span className="field-help">Такие анкеты не входят в квоты и лимит; панель получает редирект и постбэк «брак по качеству»</span>
           </label>
         </fieldset>
       </div>

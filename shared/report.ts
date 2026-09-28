@@ -1,6 +1,6 @@
 // Отчёт: распределения ответов по вопросам (топлайн) и где респонденты бросают анкету.
 import { allOptions, allQuestions, allRows } from './logic.ts';
-import type { Question, Survey } from './types.ts';
+import { rowLabel, type Question, type Survey } from './types.ts';
 import type { ResponseRecord } from './variables.ts';
 import { median } from './stats.ts';
 
@@ -141,6 +141,13 @@ export function buildReport(survey: Survey, responses: ResponseRecord[], unfinis
           .slice(0, TEXTS);
         break;
       }
+      case 'consent': {
+        rep.rows = [[1, 'Согласен'], [0, 'Отказ']].map(([code, label]) => {
+          const count = answered.filter((r) => r.answers[q.id].v === code).length;
+          return { code: code as number, label: label as string, count, pct: pct(count, n) };
+        });
+        break;
+      }
       case 'maxdiff':
       case 'conjoint':
         // Анализ — по выгрузке ответов и файлу дизайна
@@ -164,7 +171,7 @@ export function buildReport(survey: Survey, responses: ResponseRecord[], unfinis
             return x !== undefined && !(Array.isArray(x) && !x.length);
           });
           return {
-            label: row.text, n: inRow.length,
+            label: rowLabel(row), n: inRow.length,
             cells: q.columns.map((c) => {
               const count = inRow.filter((r) => {
                 const x = (r.answers[q.id].v as Record<string, number | number[]>)[String(row.code)];

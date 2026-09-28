@@ -327,10 +327,13 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
   <a class="card" href="#t-number"><b>Число <code>number</code></b><span>Возраст, доход, количество</span></a>
   <a class="card" href="#t-scale"><b>Шкала / NPS <code>scale</code></b><span>0–10, звёзды, смайлики</span></a>
   <a class="card" href="#t-matrix"><b>Матрица <code>matrix</code></b><span>Оценка нескольких параметров</span></a>
+  <a class="card" href="#t-differential"><b>Семантический дифференциал</b><span>Пары «Дорогой – Дешёвый»</span></a>
+  <a class="card" href="#t-cardsort"><b>Сортировка карточек</b><span>Разложить по группам</span></a>
   <a class="card" href="#t-date"><b>Дата <code>date</code></b><span>Дата покупки, визита</span></a>
   <a class="card" href="#t-phone"><b>Телефон <code>phone</code></b><span>С маской +7</span></a>
   <a class="card" href="#t-info"><b>Информационный экран <code>info</code></b><span>Приветствие, инструкция</span></a>
   <a class="card" href="#t-hidden"><b>Скрытая переменная <code>hidden</code></b><span>Параметры, формулы, сегменты</span></a>
+  <a class="card" href="#t-consent"><b>Согласие на обработку ПДн <code>consent</code></b><span>Галочка согласия по 152-ФЗ</span></a>
   <a class="card" href="#t-slider"><b>Слайдер <code>slider</code></b><span>Цена, готовность платить</span></a>
   <a class="card" href="#t-sum"><b>Распределение суммы <code>sum</code></b><span>Раздать 100%</span></a>
   <a class="card" href="#t-file"><b>Загрузка файла <code>file</code></b><span>Фото полки, чек</span></a>
@@ -447,6 +450,31 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 </table></div>
 <p>На телефоне матрица автоматически показывается карточками. В условиях у матрицы обязательно указывается строка: <code>Q5[2] = 3</code>.</p>
 <p class="muted">Выгрузка: single – <code>Q5_1</code>, <code>Q5_2</code> (код столбца); multi – <code>Q5_&lt;строка&gt;_&lt;столбец&gt;</code> (0/1).</p>
+<p>Вид матрицы – <code>view</code>: <code>table</code> (таблица, по умолчанию), <code>differential</code> (семантический дифференциал) или <code>cards</code> (сортировка карточек). В конструкторе это отдельные пункты в меню «Добавить вопрос». Данные, условия, отчёт и таблицы у всех видов одинаковые.</p>
+</div></details>
+
+<details class="type" id="t-differential"><summary><b>Семантический дифференциал</b> <code>matrix</code> + <code>view: "differential"</code> <span class="sum-hint">пары противоположностей</span></summary><div class="body">
+<p>Каждая строка – пара противоположностей: слева <code>text</code>, справа <code>right</code>. Между ними – точки шкалы (столбцы, от 3 до 11). Подписи точек видны под кружками: классика – <code>3 2 1 0 1 2 3</code>, коды – 1…7. На телефоне полюса стоят над точками.</p>
+<div class="pre"><span class="lang">json</span><pre><code>{ "id": "SD1", "type": "matrix", "view": "differential", "mode": "single", "text": "Каким вам кажется бренд «{{Q3}}»?",
+  "rows": [ { "code": 1, "text": "Дорогой", "right": "Дешёвый" }, { "code": 2, "text": "Скучный", "right": "Современный" } ],
+  "columns": [ { "code": 1, "text": "3" }, { "code": 2, "text": "2" }, { "code": 3, "text": "1" }, { "code": 4, "text": "0" },
+               { "code": 5, "text": "1" }, { "code": 6, "text": "2" }, { "code": 7, "text": "3" } ] }</code></pre></div>
+<p>Только один ответ в строке; строки «Другое» не поддерживаются. Заголовки групп строк работают. В выгрузке и отчёте строка подписана «Дорогой – Дешёвый»: <code>SD1_1</code> = код точки.</p>
+</div></details>
+
+<details class="type" id="t-cardsort"><summary><b>Сортировка карточек</b> <code>matrix</code> + <code>view: "cards"</code> <span class="sum-hint">карточки по группам</span></summary><div class="body">
+<p>Респондент видит карточки по одной (текст, можно с картинкой) и нажимает группу, куда её отнести, – открывается следующая. Разложенные карточки видны в группах: нажатие по карточке возвращает её на экран, «×» – обратно в колоду. На компьютере карточки можно перетаскивать. Строки – карточки, столбцы – группы (закрытая сортировка).</p>
+<div class="pre"><span class="lang">json</span><pre><code>{ "id": "CS1", "type": "matrix", "view": "cards", "mode": "single", "text": "Разложите качества сервиса по важности",
+  "rows": [ { "code": 1, "text": "Скорость" }, { "code": 2, "text": "Цена" }, { "code": 3, "text": "Приложение", "image": "https://…/app.png" } ],
+  "columns": [ { "code": 1, "text": "Очень важно" }, { "code": 2, "text": "Не важно" }, { "code": 9, "text": "Не могу оценить", "shared": true } ] }</code></pre></div>
+<div class="tbl"><table>
+<tr><th>Настройка</th><th>Что делает</th></tr>
+<tr><td><code>mode</code></td><td><code>single</code> – одна группа на карточку; <code>multi</code> – несколько групп, дальше по кнопке «Следующая карточка»</td></tr>
+<tr><td><code>requiredRows</code></td><td>Сколько карточек нужно разложить: все (по умолчанию), минимум N или необязательно</td></tr>
+<tr><td>карточка <code>image</code>, <code>hideText</code></td><td>Картинка на карточке; можно оставить только картинку</td></tr>
+<tr><td>группа <code>shared</code></td><td>Вариант под карточками на весь вопрос («Не могу оценить»)</td></tr>
+</table></div>
+<p class="muted">Выгрузка – как у матрицы: <code>CS1_1</code> = код группы (multi – <code>CS1_1_2</code>, 0/1). В отчёте – доля карточки в каждой группе.</p>
 </div></details>
 
 <details class="type" id="t-date"><summary><b>Дата</b> <code>date</code></summary><div class="body">
@@ -459,6 +487,21 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 
 <details class="type" id="t-info"><summary><b>Информационный экран</b> <code>info</code> <span class="sum-hint">без ответа</span></summary><div class="body">
 <p>Приветствие, инструкция перед блоком, показ концепции. Можно вставить картинку: <code>![](адрес)</code>.</p>
+</div></details>
+
+<details class="type" id="t-consent"><summary><b>Согласие на обработку ПДн</b> <code>consent</code> <span class="sum-hint">152-ФЗ</span></summary><div class="body">
+<p>Отдельный экран с текстом согласия и галочкой. Текст вопроса – сам текст согласия (что собираете, зачем, сколько храните, ссылка на политику); он показывается обычным шрифтом. Без галочки дальше не пройти. Если задана кнопка отказа, отказ завершает анкету отсевом со своим сообщением.</p>
+<div class="pre"><span class="lang">json</span><pre><code>{ "id": "CONSENT", "type": "consent",
+  "text": "Для участия нужно ваше согласие на обработку персональных данных… Подробнее – в [политике](https://…).",
+  "label": "Я даю согласие на обработку моих персональных данных",
+  "declineLabel": "Не даю согласие", "declineMessage": "Без согласия мы не можем провести опрос. Спасибо!" }</code></pre></div>
+<div class="tbl"><table>
+<tr><th>Настройка</th><th>Что делает</th></tr>
+<tr><td><code>label</code></td><td>Текст у галочки; по умолчанию «Я даю согласие на обработку моих персональных данных»</td></tr>
+<tr><td><code>declineLabel</code></td><td>Кнопка отказа; не задана – отказаться нельзя</td></tr>
+<tr><td><code>declineMessage</code></td><td>Сообщение после отказа; по умолчанию – сообщение об отсеве</td></tr>
+</table></div>
+<p>Подтверждение согласия хранится в ответе: значение 1 (согласен) или 0 (отказ) и время ответа, которое ставит сервер. В выгрузке – <code>CONSENT</code> и <code>CONSENT_at</code>; переменная <code>version</code> показывает, какую версию текста видел респондент. Согласие всегда обязательное. По закону согласие – отдельный документ: не смешивайте его с другими вопросами на одном экране.</p>
 </div></details>
 
 <details class="type" id="t-hidden"><summary><b>Скрытая переменная</b> <code>hidden</code> <span class="sum-hint">не видна респонденту</span></summary><div class="body">
@@ -838,6 +881,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <tr><td>date</td><td>строка <code>YYYY-MM-DD</code></td><td><code>"2026-10-01"</code></td></tr>
 <tr><td>matrix single</td><td>объект строка → столбец</td><td><code>{ "1": 3, "2": 2 }</code></td></tr>
 <tr><td>matrix multi</td><td>объект строка → массив</td><td><code>{ "1": [1, 2] }</code></td></tr>
+<tr><td>consent</td><td>1 – согласен, 0 – отказ</td><td><code>1</code></td></tr>
 <tr><td>sum</td><td>объект вариант → число</td><td><code>{ "1": 60, "2": 40 }</code></td></tr>
 <tr><td>hidden</td><td>число или строка</td><td><code>"777"</code></td></tr>
 </table></div>
@@ -1012,10 +1056,26 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <tr><td>Прямолинейные ответы</td><td>Матрица → <span class="ui">Одинаковый ответ во всех строках</span></td><td>Один столбец во всех строках (от 3 строк): пометка или отсев</td></tr>
 <tr><td>Спидеры</td><td>Проект → минимальная длительность</td><td>Быстрее N секунд – переменная <code>speeder</code></td></tr>
 <tr><td>Дубли</td><td>Проект → доступ и защита</td><td>Один ответ на ID панелиста, лимит анкет с одного IP</td></tr>
+<tr><td>Открытые ответы</td><td>Работает всегда (ответы от 20 символов)</td><td>Вставка из буфера (<code>paste</code>), текст без набора – его подставил скрипт (<code>notyping</code>), признаки текста от ИИ (<code>aitext</code>), ответ слово в слово как у другого респондента (<code>duptext</code>)</td></tr>
+<tr><td>Автоматизированный браузер</td><td>Работает всегда</td><td>Selenium, Playwright, Puppeteer без маскировки – флаг <code>automation</code></td></tr>
+<tr><td>Невидимая проверка браузера</td><td>Настройки сбора → <span class="ui">Защита от ботов</span></td><td>Перед стартом браузер решает короткую вычислительную задачу (доли секунды, без действий респондента). Скрипты без настоящего браузера анкету не начнут</td></tr>
+<tr><td>Повтор с того же устройства</td><td>Настройки сбора → <span class="ui">Защита от ботов</span></td><td>По отпечатку браузера (экран, язык, часовой пояс, видеокарта): пометить (<code>device</code>) или не пускать</td></tr>
 </table></div>
+<h3 id="risk-score">Балл риска</h3>
+<p>Пометки складываются в балл риска 0–100. С 50 баллов анкета подозрительная: сильный сигнал срабатывает сам, слабые – только вместе.</p>
+<div class="tbl"><table>
+<tr><th>Пометка</th><th>Баллы</th></tr>
+<tr><td>Ловушка для ботов (<code>bot</code>), автоматизированный браузер (<code>automation</code>)</td><td>100</td></tr>
+<tr><td>Ошибка в контрольном вопросе (<code>attention</code>)</td><td>60</td></tr>
+<tr><td>Прямолинейные ответы (<code>straightline</code>), повтор с устройства (<code>device</code>), одинаковый открытый ответ (<code>duptext</code>)</td><td>50</td></tr>
+<tr><td>Текст без набора (<code>notyping</code>), спидер (<code>speeder</code>)</td><td>40</td></tr>
+<tr><td>Вставка из буфера (<code>paste</code>), текст похож на ИИ (<code>aitext</code>)</td><td>30</td></tr>
+</table></div>
+<p><span class="ui">Браковать автоматически с балла риска</span> (настройки сбора): анкета с таким баллом сразу бракуется – не входит в квоты, лимит и отчёт, а панель получает редирект и постбэк «брак по качеству». Признаки ИИ – эвристика (типичные фразы, длинное тире, списки, «вылизанный» текст): смотрите такие ответы глазами, прежде чем браковать вручную.</p>
+<div class="note info"><p>Против ИИ-ботов, которые проходят анкету через настоящий браузер, хорошо работает контрольный вопрос с картинкой: например, две линии со «стрелками» (иллюзия Мюллера-Лайера), у которых длина на самом деле разная. ИИ знает иллюзию и отвечает «одинаковые».</p></div>
 <div class="pre"><span class="lang">json · контрольный вопрос</span><pre><code>{ "id": "Q9", "type": "single", "text": "Чтобы показать, что вы внимательны, выберите «Скорее согласен»",
   "attention": { "correct": { "q": "Q9", "op": "eq", "value": 4 }, "onFail": "flag" }, "options": [ … ] }</code></pre></div>
-<p>Помеченные анкеты видны в «Данных» как подозрительные; в выгрузке – <code>suspect</code> и <code>quality_flags</code>. Их можно забраковать все разом.</p>
+<p>В «Данных» у анкеты видны балл и пометки (наведите на значок); подозрительные можно забраковать все разом. В выгрузке – <code>suspect</code>, <code>quality_score</code> и <code>quality_flags</code>.</p>
 </section>
 
 <section class="doc-sec" id="testing" data-group="Настройки и проверка" data-title="Проверка перед запуском">
@@ -1073,6 +1133,7 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <tr><td>Новых анкет с одного IP за час</td><td>Защита от накруток</td></tr>
 <tr><td>Минимальная длительность</td><td>Более быстрые помечаются как спидеры</td></tr>
 <tr><td>Только по персональным ссылкам</td><td>Общая ссылка не работает</td></tr>
+<tr><td>Защита от ботов</td><td>Невидимая проверка браузера, повтор с того же устройства, автоматический брак по баллу риска (<a href="#quality">Качество ответов</a>)</td></tr>
 </table></div>
 <h3 id="embed">Встраивание на сайт</h3>
 <p><span class="ui">Настройки сбора</span> → <span class="ui">Код для вставки на сайт</span>. Это iframe, высота которого подстраивается под содержимое автоматически.</p>
@@ -1120,8 +1181,16 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
   <li><b>Параметр с ID респондента</b> (<code>uid</code>, <code>pid</code>) – один ответ на ID, без него ссылка не откроется.</li>
   <li><b>Макрос панели для ID</b> (<code>[%RID%]</code>, <code>{uid}</code>) – SurveyLAB соберёт готовую ссылку для панели.</li>
   <li><b>Лимит</b> завершённых анкет от панели и <b>остановку приёма</b>.</li>
-  <li><b>Редиректы по статусам</b>: завершил, отсеян, сверх квоты, досрочно. Подстановки: <code>{{param.uid}}</code>, <code>{{resp_id}}</code>, <code>{{Q1}}</code>.</li>
+  <li><b>Редиректы по статусам</b>: завершил, отсеян, сверх квоты, досрочно, брак по качеству. Подстановки: <code>{{param.uid}}</code>, <code>{{resp_id}}</code>, <code>{{Q1}}</code>.</li>
 </ul>
+<h3 id="panel-hash">Подпись ссылок и постбэк</h3>
+<p>Панели защищаются от подделанных ссылок и «ложных завершений» подписью HMAC. В блоке <span class="ui">Подпись ссылок и постбэк</span> укажите секрет, алгоритм (SHA256, SHA1, MD5) и вид подписи (hex, base64, base64url) – их даёт панель.</p>
+<ul>
+  <li><b>Редиректы и постбэк подписываются</b>: к адресу последним параметром добавляется подпись всего адреса (<code>…&amp;hash=…</code>, имя параметра настраивается).</li>
+  <li><b>Проверять подпись входящей ссылки</b>: панель подписывает ссылку на опрос тем же секретом; без верной подписи опрос не откроется.</li>
+  <li><b>Постбэк (сервер – серверу)</b>: при завершении анкеты SurveyLAB сам отправляет GET-запрос панели. <code>{{status}}</code> – <code>complete</code>, <code>screenout</code>, <code>overquota</code>, <code>terminate</code> или <code>quality</code>. Если команда забракует анкету позже, панель получит <code>quality</code>; если снимет брак – снова <code>complete</code>. До трёх попыток; недошедшие постбэки видны под панелью и в карточке ответа.</li>
+</ul>
+<div class="pre"><span class="lang">постбэк</span><pre><code>https://panel.example/s2s?uid={{param.uid}}&amp;status={{status}}</code></pre></div>
 <p>На «Сводке» – воронка по панелям: начали, завершили, отсеяны, конверсия, инцидентность, медиана времени. В выгрузке – фильтр по панели.</p>
 </section>
 
@@ -1204,6 +1273,7 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <tr><td>ranking</td><td><code>Q7_1</code>, <code>Q7_2</code>… – место</td></tr>
 <tr><td>matrix single</td><td><code>Q5_1</code>, <code>Q5_2</code>… – код столбца</td></tr>
 <tr><td>matrix multi</td><td><code>Q5_1_2</code> (строка_столбец, 0/1)</td></tr>
+<tr><td>consent</td><td><code>C1</code> (1 – согласен, 0 – отказ) + <code>C1_at</code> – время ответа</td></tr>
 <tr><td>scale, number, slider, text, phone, date, hidden</td><td><code>Q1</code></td></tr>
 <tr><td>sum</td><td><code>Q11_1</code>, <code>Q11_2</code>…</td></tr>
 <tr><td>file</td><td><code>Q12_n</code>, <code>Q12_files</code></td></tr>
@@ -1211,7 +1281,7 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <tr><td>conjoint</td><td><code>Q15_t1</code>… + файл дизайна</td></tr>
 <tr><td>циклы</td><td>копии по коду: <code>FREQ_1</code>, <code>RATE_1_2</code></td></tr>
 </table></div>
-<p><b>Служебные:</b> <code>resp_id</code>, <code>status</code>, <code>started_at</code>, <code>completed_at</code>, <code>duration_sec</code>, <code>speeder</code>, <code>ip</code>, <code>user_agent</code>, <code>version</code>, <code>url_&lt;параметр&gt;</code>, <code>suspect</code>, <code>quality_flags</code>, <code>rejected</code>.</p>
+<p><b>Служебные:</b> <code>resp_id</code>, <code>status</code>, <code>started_at</code>, <code>completed_at</code>, <code>duration_sec</code>, <code>speeder</code>, <code>ip</code>, <code>user_agent</code>, <code>version</code>, <code>url_&lt;параметр&gt;</code>, <code>suspect</code>, <code>quality_score</code>, <code>quality_flags</code>, <code>rejected</code>.</p>
 <div class="tbl"><table>
 <tr><th><code>status</code></th><th>Значение</th></tr>
 <tr><td>1</td><td>Завершён</td></tr>
@@ -1237,6 +1307,13 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
   <li><span class="ui">Сохранить набор</span>, чтобы вернуться к таблицам, или выгрузить в Excel.</li>
 </ol>
 <p>Заказчик с ролью «Заказчик» видит отчёт и таблицы своих проектов.</p>
+<h3 id="dashboard">Живой дашборд для заказчика</h3>
+<p>Вкладка <span class="ui">Отчёт</span> → <span class="ui">Живой дашборд для заказчика</span> → включить. Появится секретная ссылка <code>/d/…</code>: страница открывается без входа и сама обновляется раз в минуту. На ней – завершённые, отсеянные, конверсия, динамика по дням, квоты, источники и результаты по вопросам (только завершённые настоящие анкеты), с выбором подгруппы по вопросу с одним ответом или шкале.</p>
+<ul>
+  <li>Открытые ответы, «Другое», телефоны, даты, файлы, скрытые переменные и согласие на страницу не попадают никогда.</li>
+  <li>В <span class="ui">Что показывать</span> можно убрать блоки и отдельные вопросы и задать свой заголовок.</li>
+  <li><span class="ui">Сменить ссылку</span> – старая перестаёт работать у всех. Выключение дашборда тоже закрывает ссылку, а при повторном включении она прежняя.</li>
+</ul>
 </section>
 
 <section class="doc-sec" id="integrations" data-group="Данные" data-title="Google Sheets и уведомления">

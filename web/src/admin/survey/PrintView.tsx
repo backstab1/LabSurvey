@@ -3,7 +3,7 @@ import { api } from '../../api.ts';
 import { describeCondition } from './ConditionEditor.tsx';
 import { describeActions } from './ActionsEditor.tsx';
 import { describeLoop } from './LoopEditor.tsx';
-import { QUESTION_TYPE_LABELS, settingsOf, type Option, type Question, type Survey } from '../../../../shared/types.ts';
+import { CONSENT_LABEL, KIND_LABELS, kindOf, settingsOf, type Option, type Question, type Survey } from '../../../../shared/types.ts';
 
 /**
  * Печатная версия анкеты — для согласования с заказчиком и проверки глазами:
@@ -77,7 +77,7 @@ function OptionList({ list, multi = false }: { list: Option[]; multi?: boolean }
           return (
             <tr key={o.code} className={o.hidden ? 'is-hidden' : ''}>
               <td className="print-code">{o.code}</td>
-              <td>{o.text}{f && <span className="print-flag"> [{f}]</span>}</td>
+              <td>{o.text}{o.right ? ` ↔ ${o.right}` : ''}{f && <span className="print-flag"> [{f}]</span>}</td>
             </tr>
           );
         })}
@@ -114,6 +114,7 @@ function PrintQuestion({ def, q, n }: { def: Survey; q: Question; n: number | nu
   if (q.type === 'file') specs.push(`${(q.accept ?? 'image') === 'image' ? 'фото' : 'файлы'}, до ${q.maxFiles ?? 1} шт., до ${q.maxSizeMb ?? 10} МБ`);
   if (q.type === 'hotspot') specs.push(`области: ${q.options.map((o) => o.text).join(', ')}`);
   if (q.type === 'maxdiff') specs.push(`наборы по ${q.perSet ?? 4}: ${q.options.map((o) => o.text).join(', ')}`);
+  if (q.type === 'consent') specs.push(`галочка «${q.label || CONSENT_LABEL}»${q.declineLabel ? `; отказ «${q.declineLabel}» – отсев` : '; без согласия дальше нельзя'}`);
   if (q.type === 'conjoint') specs.push(`${q.tasks ?? 8} заданий × ${q.alternatives ?? 3} карточки; ${q.attributes.map((a) => `${a.text}: ${a.levels.map((l) => l.text).join(' / ')}`).join('; ')}`);
 
   const after = describeActions(def, q, q.actions?.after);
@@ -124,7 +125,7 @@ function PrintQuestion({ def, q, n }: { def: Survey; q: Question; n: number | nu
       <div className="print-q-head">
         {n !== null && <span className="print-n">{n}.</span>}
         <span className="print-id">{q.id}</span>
-        <span className="print-type">{QUESTION_TYPE_LABELS[q.type]}{specs.filter(Boolean).length ? ` · ${specs.filter(Boolean).join('; ')}` : ''}</span>
+        <span className="print-type">{KIND_LABELS[kindOf(q)]}{specs.filter(Boolean).length ? ` · ${specs.filter(Boolean).join('; ')}` : ''}</span>
         {answerable && q.required === false && <span className="print-type">· необязательный</span>}
       </div>
       {notes}
@@ -142,8 +143,8 @@ function PrintQuestion({ def, q, n }: { def: Survey; q: Question; n: number | nu
       )}
       {q.type === 'matrix' && (
         <div className="print-matrix">
-          <div><div className="print-sub">Строки</div><OptionList list={q.rows} /></div>
-          <div><div className="print-sub">Столбцы</div><OptionList list={q.columns} /></div>
+          <div><div className="print-sub">{q.view === 'cards' ? 'Карточки' : q.view === 'differential' ? 'Пары' : 'Строки'}</div><OptionList list={q.rows} /></div>
+          <div><div className="print-sub">{q.view === 'cards' ? 'Группы' : q.view === 'differential' ? 'Точки шкалы' : 'Столбцы'}</div><OptionList list={q.columns} /></div>
         </div>
       )}
       {after && <div className="print-note">ПОСЛЕ ОТВЕТА: {after}</div>}

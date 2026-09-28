@@ -1,6 +1,6 @@
 // Панели проекта: источники респондентов со своими ссылками, лимитами и редиректами
 import { useProjectDraft } from './useProjectDraft.ts';
-import { compact, copyText } from '../common.tsx';
+import { Segmented, compact, copyText } from '../common.tsx';
 import { pct } from './format.ts';
 import { PANEL_PARAM, type Panel } from '../../../../shared/types.ts';
 import type { ProjectInfo } from '../../../../shared/api.ts';
@@ -8,6 +8,7 @@ import type { ProjectInfo } from '../../../../shared/api.ts';
 const PANEL_REDIRECTS: [keyof Panel, string, string][] = [
   ['redirectComplete', 'Завершил', 'complete'], ['redirectScreenout', 'Отсеян', 'screenout'],
   ['redirectOverquota', 'Сверх квоты', 'overquota'], ['redirectEarlyFinish', 'Вышел досрочно', 'terminate'],
+  ['redirectQuality', 'Брак по качеству', 'quality'],
 ];
 
 /** Ссылка для панели: код панели и ID респондента в виде макроса панели */
@@ -93,7 +94,7 @@ export function PanelsTab({ info, readOnly, reload }: { info: ProjectInfo; readO
                   onClick={() => copyText(link, 'Ссылка для панели скопирована')}>Копировать</button>
               </div>
               <details className="js-details" open={!saved}>
-                <summary>Редиректы по статусам{redirects ? ` (${redirects} из 4)` : ' – не заданы, действуют редиректы анкеты'}</summary>
+                <summary>Редиректы по статусам{redirects ? ` (${redirects} из ${PANEL_REDIRECTS.length})` : ' – не заданы, действуют редиректы анкеты'}</summary>
                 <fieldset className="plain grid2" disabled={readOnly} style={{ marginTop: 6 }}>
                   {PANEL_REDIRECTS.map(([k, label, slug]) => (
                     <label key={k} className="field"><span>{label}</span>
@@ -103,13 +104,52 @@ export function PanelsTab({ info, readOnly, reload }: { info: ProjectInfo; readO
                   ))}
                   <span className="field-help" style={{ gridColumn: '1 / -1' }}>
                     Подстановки: <code>{idRef}</code> – ID респондента у панели, <code>{'{{resp_id}}'}</code> – ID анкеты, <code>{'{{Q1}}'}</code> – ответ на вопрос.
+                    «Брак по качеству» – для анкет, забракованных автоматически по баллу риска (настраивается в «Настройках сбора»).
                   </span>
+                </fieldset>
+              </details>
+              <details className="js-details">
+                <summary>Подпись ссылок и постбэк{p.hashSecret ? ' – подпись включена' : ''}{p.postbackUrl ? ' · постбэк' : ''}</summary>
+                <fieldset className="plain stack" disabled={readOnly} style={{ marginTop: 6, gap: 8 }}>
+                  <p className="muted small" style={{ margin: 0 }}>
+                    Подпись (HMAC) защищает от подделки ссылок: к каждому редиректу и постбэку добавляется параметр с подписью всего адреса,
+                    а входящую ссылку можно проверять – без верной подписи опрос не откроется. Секрет, алгоритм и вид подписи возьмите у панели.
+                  </p>
+                  <div className="grid2">
+                    <label className="field"><span>Секрет подписи</span>
+                      <input className="input mono" type="password" autoComplete="off" placeholder="не подписывать" value={p.hashSecret ?? ''}
+                        onChange={(e) => setAt(i, { hashSecret: e.target.value || undefined, ...(e.target.value ? {} : { verifyEntry: undefined }) })} />
+                    </label>
+                    <label className="field"><span>Параметр подписи</span>
+                      <input className="input mono" placeholder="hash" value={p.hashParam ?? ''} disabled={!p.hashSecret}
+                        onChange={(e) => setAt(i, { hashParam: e.target.value.trim() || undefined })} />
+                    </label>
+                  </div>
+                  <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+                    <Segmented value={p.hashAlgo ?? 'sha256'} onChange={(v) => setAt(i, { hashAlgo: v === 'sha256' ? undefined : v })}
+                      options={[{ value: 'sha256', label: 'HMAC-SHA256' }, { value: 'sha1', label: 'SHA1' }, { value: 'md5', label: 'MD5' }]} />
+                    <Segmented value={p.hashFormat ?? 'hex'} onChange={(v) => setAt(i, { hashFormat: v === 'hex' ? undefined : v })}
+                      options={[{ value: 'hex', label: 'hex' }, { value: 'base64', label: 'base64' }, { value: 'base64url', label: 'base64url' }]} />
+                    <label className="check">
+                      <input type="checkbox" checked={!!p.verifyEntry} disabled={!p.hashSecret} onChange={(e) => setAt(i, { verifyEntry: e.target.checked || undefined })} />
+                      <span>Проверять подпись входящей ссылки</span>
+                    </label>
+                  </div>
+                  <label className="field"><span>Постбэк (сервер – серверу)</span>
+                    <input className="input mono" placeholder={`https://panel.example/postback?id=${idRef}&status={{status}}`} value={p.postbackUrl ?? ''}
+                      onChange={(e) => setAt(i, { postbackUrl: e.target.value.trim() || undefined })} />
+                    <span className="field-help">
+                      GET-запрос с сервера SurveyLAB при каждом завершении анкеты. <code>{'{{status}}'}</code> – complete, screenout, overquota, terminate
+                      или quality (брак). О браке, который команда поставила позже, панель узнает тем же запросом. До трёх попыток.
+                    </span>
+                  </label>
                 </fieldset>
               </details>
               {saved && (
                 <div className="muted small">
                   Начали {started} · завершили {done}{p.limit ? ` из ${p.limit}` : ''} · отсеяны {c?.statuses.screened_out ?? 0}
                   {' '}· сверх квоты {c?.statuses.overquota ?? 0} · конверсия {pct(done, started)}
+                  {c?.postbackFailed ? <span className="field-error"> · постбэк не дошёл: {c.postbackFailed}</span> : null}
                 </div>
               )}
             </div>

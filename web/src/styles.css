@@ -313,3 +313,64 @@ html.embedded .runner { padding-top: 0; padding-bottom: 8px; }
 .crash { max-width: 640px; margin: 48px auto; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
 .crash h2 { margin-top: 0; }
 .crash pre { white-space: pre-wrap; background: var(--danger-soft); color: var(--danger); padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+
+/* ---------- Сортировка карточек ---------- */
+.cardsort { display: flex; flex-direction: column; gap: 14px; }
+.sort-progress { text-align: right; }
+.sort-current { display: flex; flex-direction: column; gap: 10px; }
+.sort-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 96px; padding: 18px;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 6px 18px rgba(20, 30, 50, .08);
+  font-size: 18px; font-weight: 600; text-align: center; cursor: grab; animation: fadein .25s ease;
+}
+.sort-card-img { max-width: 100%; max-height: 180px; object-fit: contain; border-radius: 8px; }
+.sort-hint { text-align: center; }
+.sort-targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.sort-target {
+  min-height: 48px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+  cursor: pointer; font-weight: 500; text-align: center;
+}
+@media (hover: hover) { .sort-target:hover { border-color: var(--accent); } }
+.sort-target.selected { border-color: var(--accent); background: var(--accent-soft); }
+.sort-target.over, .sort-pile.over { border-color: var(--accent); background: var(--accent-soft); }
+.sort-next { display: flex; justify-content: center; }
+.sort-done { text-align: center; color: var(--ok); background: var(--ok-soft); border-radius: var(--radius); padding: 12px; font-size: 15px; }
+.sort-piles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.sort-pile { border: 1px dashed #c3cad4; border-radius: var(--radius); padding: 8px 10px; min-height: 56px; transition: background .1s; }
+.sort-pile-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.sort-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sort-chip { display: inline-flex; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; font-size: 14px; max-width: 100%; }
+.sort-chip.current { border-color: var(--accent); background: var(--accent-soft); }
+.sort-chip-text { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 4px 4px 4px 10px; cursor: pointer; text-align: left; min-width: 0; }
+.sort-chip-img { width: 22px; height: 22px; object-fit: cover; border-radius: 4px; }
+.sort-chip-x { border: 0; background: none; color: var(--muted); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 17px; line-height: 1; }
+.sort-chip-x:hover { color: var(--danger); }
+
+/* ---------- Семантический дифференциал ---------- */
+.diff { display: flex; flex-direction: column; }
+.diff-row { display: grid; grid-template-columns: minmax(90px, 1fr) auto minmax(90px, 1fr); align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.diff-left { text-align: right; }
+.diff-right { text-align: left; }
+.diff-group { font-weight: 600; font-size: 14px; color: #4a515b; padding: 14px 0 4px; }
+.diff-points { display: grid; grid-template-columns: repeat(var(--n), 40px); justify-items: center; }
+.diff-point { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; padding: 4px 0; width: 40px; }
+.diff-point input { position: absolute; opacity: 0; pointer-events: none; }
+.diff-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #b3bcc8; background: var(--surface); transition: all .1s; }
+.diff-point.selected .diff-dot { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--surface); }
+.diff-point:has(:focus-visible) .diff-dot { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) { .diff-point:hover .diff-dot { border-color: var(--accent); } }
+.diff-cap { font-size: 11px; color: var(--muted); line-height: 1.2; min-height: 13px; }
+.has-error .diff-row.unanswered .diff-left, .has-error .diff-row.unanswered .diff-right { color: var(--danger); }
+@media (max-width: 640px) {
+  .diff-row { grid-template-columns: 1fr 1fr; grid-template-areas: 'l r' 'p p'; row-gap: 6px; }
+  .diff-left { grid-area: l; text-align: left; font-size: 15px; }
+  .diff-right { grid-area: r; text-align: right; font-size: 15px; }
+  .diff-points { grid-area: p; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+  .diff-point { width: auto; min-height: 44px; justify-content: center; }
+}
+
+/* ---------- Согласие ---------- */
+.consent-box { display: flex; flex-direction: column; gap: 10px; }
+.consent-decline { align-self: flex-start; }
+/* Текст согласия — обычным шрифтом: это документ, а не вопрос */
+.question.consent .q-text { font-weight: 400; font-size: 15px; line-height: 1.55; }

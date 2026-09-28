@@ -27,7 +27,7 @@ export const RESERVED_IDS = new Set([
 
 const TYPES = new Set([
   'single', 'multi', 'dropdown', 'ranking', 'text', 'number', 'scale', 'matrix', 'date', 'phone', 'info', 'hidden',
-  'slider', 'sum', 'file', 'hotspot', 'maxdiff', 'conjoint',
+  'slider', 'sum', 'file', 'hotspot', 'maxdiff', 'conjoint', 'consent',
 ]);
 const SCRIPT_KEYS = {
   survey: ['init'],
@@ -462,7 +462,7 @@ function checkRandomBlocks(s: Survey, err: Sink, warn: Sink) {
   }
 }
 
-const BOOL_SETTINGS = ['showProgress', 'allowBack', 'allowEarlyFinish', 'showQuestionNumbers', 'enterSubmits', 'autoNext', 'noPaste', 'allowRetake', 'inviteOnly'];
+const BOOL_SETTINGS = ['showProgress', 'allowBack', 'allowEarlyFinish', 'showQuestionNumbers', 'enterSubmits', 'autoNext', 'noPaste', 'allowRetake', 'inviteOnly', 'botCheck'];
 const TEXT_SETTINGS = [
   'completeMessage', 'screenoutMessage', 'earlyFinishMessage', 'closedMessage', 'overquotaMessage', 'timeoutMessage', 'password', 'footerText',
   'nextLabel', 'backLabel', 'submitLabel', 'earlyFinishLabel',
@@ -494,6 +494,10 @@ function validateSettings(st: Record<string, unknown>, err: Sink, warn: Sink) {
   if (st.accentColor !== undefined && (typeof st.accentColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(st.accentColor))) {
     err(w('accentColor'), 'Цвет в формате #RRGGBB');
   }
+  if (st.deviceCheck !== undefined && st.deviceCheck !== 'flag' && st.deviceCheck !== 'block') err(w('deviceCheck'), 'flag или block');
+  if (st.autoRejectScore !== undefined && (!isInt(st.autoRejectScore) || (st.autoRejectScore as number) < 1 || (st.autoRejectScore as number) > 100)) {
+    err(w('autoRejectScore'), 'Целое число от 1 до 100');
+  }
   if (st.allowRetake && st.maxResponses) warn(w('allowRetake'), 'При повторном прохождении один человек может занять несколько мест в лимите ответов');
 }
 
@@ -521,6 +525,7 @@ function validateOptions(list: unknown, where: string, name: string, err: Sink, 
       if (typeof o.script !== 'string') err(where, `${name}[${i + 1}].script: строка с JS-кодом`);
       else try { new Function('sl', o.script); } catch (e) { err(where, `${name}[${i + 1}].script: синтаксическая ошибка – ${(e as Error).message}`); }
     }
+    if (o.right !== undefined && typeof o.right !== 'string') err(where, `${name}[${i + 1}].right: строка`);
     if (o.group && (o.other || o.exclusive)) err(where, `${name}[${i + 1}]: заголовок группы не может быть «другим» или исключающим`);
     if (o.score !== undefined && (typeof o.score !== 'number' || !isFinite(o.score))) err(where, `${name}[${i + 1}].score: число`);
     if (o.image !== undefined && (typeof o.image !== 'string' || !/^(https?:\/\/|\/)\S+$/i.test(o.image))) err(where, `${name}[${i + 1}].image: адрес картинки https://…`);
@@ -599,6 +604,24 @@ function validateQuestion(
         && !(isInt(q.requiredRows) && q.requiredRows >= 1)) {
         err(w, 'requiredRows: "all", "none" или целое ≥ 1');
       }
+      if (q.view !== undefined && !['table', 'cards', 'differential'].includes(q.view)) err(w, 'view: table, cards или differential');
+      if (q.view === 'cards' || q.view === 'differential') {
+        const name = q.view === 'cards' ? 'Сортировка карточек' : 'Семантический дифференциал';
+        if (Array.isArray(q.rows) && q.rows.some((r) => r?.other)) err(w, `${name}: строки «Другое» не поддерживаются`);
+        if (q.transpose || q.carousel || q.progressiveRows || q.verticalHeaders) warn(w, `${name}: настройки вида таблицы (переворот, карусель, постепенный показ, вертикальные заголовки) не действуют`);
+      }
+      if (q.view === 'differential') {
+        if (q.mode !== 'single') err(w, 'Семантический дифференциал: только один ответ в строке (mode: single)');
+        if (Array.isArray(q.rows) && q.rows.some((r) => r && !r.group && !(typeof r.right === 'string' && r.right.trim()))) err(w, 'Семантический дифференциал: у каждой строки нужен правый полюс (right)');
+        if (Array.isArray(q.columns) && (q.columns.length < 3 || q.columns.length > 11)) err(w, 'Семантический дифференциал: от 3 до 11 точек шкалы');
+      }
+      if (q.view === 'cards' && Array.isArray(q.columns) && q.columns.filter((c) => !c?.shared).length < 2) err(w, 'Сортировка карточек: нужно хотя бы 2 группы');
+      if (q.view !== 'differential' && Array.isArray(q.rows) && q.rows.some((r) => r?.right !== undefined)) warn(w, 'right (правый полюс) действует только в семантическом дифференциале');
+      break;
+    case 'consent':
+      for (const k of ['label', 'declineLabel', 'declineMessage'] as const) if (q[k] !== undefined && typeof q[k] !== 'string') err(w, `${k}: строка`);
+      if (q.required === false) warn(w, 'Согласие всегда обязательное: required: false не действует');
+      if (!q.text?.trim()) err(w, 'Нужен текст согласия');
       break;
     case 'number':
       if (q.min !== undefined && typeof q.min !== 'number') err(w, 'min – число');
@@ -707,7 +730,7 @@ function validateQuestion(
 }
 
 const PANEL_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
-const PANEL_URL_KEYS = ['redirectComplete', 'redirectScreenout', 'redirectOverquota', 'redirectEarlyFinish'] as const;
+const PANEL_URL_KEYS = ['redirectComplete', 'redirectScreenout', 'redirectOverquota', 'redirectEarlyFinish', 'redirectQuality', 'postbackUrl'] as const;
 /** Параметры ссылки, которые занимает сам опрос */
 const RESERVED_LINK_PARAMS = new Set(['preview', 'new', 'rid', 'test', 'survey', 'start', 'panel', 'inv', 'inv_id']);
 
@@ -731,9 +754,15 @@ export function validatePanels(panels: unknown): string[] {
     if (p.limit !== undefined && (!Number.isInteger(p.limit) || (p.limit as number) < 1)) errors.push(`${where}: лимит – целое число от 1`);
     for (const k of PANEL_URL_KEYS) {
       if (p[k] !== undefined && (typeof p[k] !== 'string' || !/^https?:\/\/\S+$/i.test(p[k] as string))) {
-        errors.push(`${where}: редирект должен начинаться с http:// или https://`);
+        errors.push(`${where}: ${k === 'postbackUrl' ? 'постбэк' : 'редирект'} должен начинаться с http:// или https://`);
       }
     }
+    if (p.hashSecret !== undefined && (typeof p.hashSecret !== 'string' || !p.hashSecret || p.hashSecret.length > 200)) errors.push(`${where}: секрет подписи – строка до 200 символов`);
+    if (p.hashParam !== undefined && (typeof p.hashParam !== 'string' || !/^[\w-]{1,30}$/.test(p.hashParam))) errors.push(`${where}: параметр подписи – латиница, цифры, _ и -`);
+    if (p.hashAlgo !== undefined && !['sha256', 'sha1', 'md5'].includes(p.hashAlgo as string)) errors.push(`${where}: алгоритм подписи – sha256, sha1 или md5`);
+    if (p.hashFormat !== undefined && !['hex', 'base64', 'base64url'].includes(p.hashFormat as string)) errors.push(`${where}: вид подписи – hex, base64 или base64url`);
+    if (p.verifyEntry && !p.hashSecret) errors.push(`${where}: для проверки входящей ссылки нужен секрет подписи`);
+    if (p.verifyEntry !== undefined && typeof p.verifyEntry !== 'boolean') errors.push(`${where}: verifyEntry – true или false`);
   });
   return errors;
 }

@@ -7,6 +7,8 @@ import { loadProject, type Loaded } from './projectCtx.ts';
 import { queueResponseSync } from './sheets.ts';
 import { noteCompleted } from './quotas.ts';
 import { afterComplete } from './notify.ts';
+import { panelStatus, postbackLater, signUrl } from './panelLinks.ts';
+import { qualityScore } from '../shared/quality.ts';
 import {
   actionError, allQuestions, answerRows, cleanAnswers, evalCondition, findPage, firstPage, isQuestionVisible, pipe, pipeUrl, progressPercent,
 } from '../shared/logic.ts';
@@ -87,11 +89,14 @@ function finished(survey: Survey, r: StoredResponse, panels: Panel[]): { message
   // Своё сообщение и адрес у сработавшего действия важнее общих
   if (r.ending?.message) message = r.ending.message;
   if (r.ending?.redirect) redirect = r.ending.redirect;
-  // Редирект панели важнее всего: подрядчик считает статусы по возвратам
-  const panelRedirect = r.status !== 'in_progress' ? panelOf(panels, r.params)?.[PANEL_REDIRECT[r.status]] : undefined;
+  // Редирект панели важнее всего: подрядчик считает статусы по возвратам. Брак по качеству — свой адрес
+  const panel = r.status !== 'in_progress' ? panelOf(panels, r.params) : undefined;
+  const panelRedirect = r.rejected && r.status === 'completed' && panel?.redirectQuality ? panel.redirectQuality
+    : r.status !== 'in_progress' ? panel?.[PANEL_REDIRECT[r.status]] : undefined;
   if (panelRedirect) redirect = panelRedirect;
   const ctx = ctxOf(survey, r, r.answers);
-  return { message: pipe(message, ctx), redirect: redirect ? pipeUrl(redirect, ctx, r.id) : undefined };
+  const url = redirect ? pipeUrl(redirect, ctx, r.id) : undefined;
+  return { message: pipe(message, ctx), redirect: url && panelRedirect ? signUrl(panel, url) : url };
 }
 
 /** Почему новый респондент не может начать опрос (null — может) */
@@ -224,12 +229,20 @@ export async function finalize(
 ) {
   const completedAt = new Date();
   const final = cleanAnswers(ctxOf(survey, r, answers), visited);
+  const durationSec = Math.round((completedAt.getTime() - new Date(r.startedAt).getTime()) / 1000);
+  const st = settingsOf(survey);
+  // Спидер — слабая пометка качества; анкету с высоким баллом риска можно забраковать сразу
+  let flags = r.flags ?? [];
+  if (status === 'completed' && st.minDurationSec && durationSec < st.minDurationSec && !flags.includes('speeder')) flags = [...flags, 'speeder'];
+  const rejected = !r.isTest && status === 'completed' && !!st.autoRejectScore && qualityScore(flags) >= st.autoRejectScore;
   await responses.update(r.id, {
     answers: final, history: visited, currentPage: null, status, ending,
-    completedAt: completedAt.toISOString(),
-    durationSec: Math.round((completedAt.getTime() - new Date(r.startedAt).getTime()) / 1000),
+    completedAt: completedAt.toISOString(), durationSec,
+    ...(flags !== (r.flags ?? []) ? { flags } : {}),
+    ...(rejected ? { rejected: true } : {}),
   });
-  if (status === 'completed') {
+  if (!r.isTest && r.projectId) postbackLater(survey, { ...r, answers: final, status }, panelStatus(status, rejected));
+  if (status === 'completed' && !rejected) {
     noteCompleted(ownerOf(r), survey, r.isTest, ctxOf(survey, r, final));
     // Уведомления — в фоне, респондент не ждёт
     if (!r.isTest && r.projectId) {
