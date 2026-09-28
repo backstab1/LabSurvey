@@ -1,6 +1,6 @@
 import { calcRefs, parseCalc } from './calc.ts';
 import { LOOP_REF, expandAllLoops, hasLoops, loopChain } from './loops.ts';
-import { END, OPTION_TYPES, SCREENOUT, type Condition, type Question, type Survey } from './types.ts';
+import { END, OPTION_TYPES, SCREENOUT, type Condition, type Question, type Quota, type Survey } from './types.ts';
 
 export interface Issue {
   /** Где проблема: «Q3», «P2 → переход 1», «settings» */
@@ -266,7 +266,7 @@ export function validateSurvey(input: unknown): ValidationResult {
     if (!Array.isArray(s.quotas)) err('quotas', 'Ожидается массив');
     else {
       const seen = new Set<string>();
-      s.quotas.forEach((qt, i) => {
+      const checkQuotas = (list: Quota[], depth: number) => list.forEach((qt, i) => {
         const w = `квота ${isObj(qt) && typeof qt.id === 'string' ? qt.id : i + 1}`;
         if (!isObj(qt)) return err(w, 'Ожидается объект {id, if, limit}');
         if (typeof qt.id !== 'string' || !ID_RE.test(qt.id)) err(w, 'id: латиница, цифры и _, начинается с буквы');
@@ -276,7 +276,13 @@ export function validateSurvey(input: unknown): ValidationResult {
         if (!isInt(qt.limit) || qt.limit < 0) err(w, 'limit: целое ≥ 0');
         if (qt.if === undefined) err(w, 'Укажите условие if');
         else { curLoops = 0; checkCondition(qt.if, w, null, true); }
+        if (qt.children !== undefined) {
+          if (!Array.isArray(qt.children)) err(w, 'children: ожидается массив квот');
+          else if (depth >= 5) err(w, 'Не больше 6 уровней вложенных квот');
+          else checkQuotas(qt.children, depth + 1);
+        }
       });
+      checkQuotas(s.quotas, 0);
     }
   }
 

@@ -3,6 +3,7 @@
 import { config } from './config.ts';
 import { projects, responses, type NotifyConfig, type StoredResponse } from './db.ts';
 import { quotaCounts } from './quotas.ts';
+import { flatQuotas } from '../shared/quotas.ts';
 import { evalCondition } from '../shared/logic.ts';
 import { settingsOf, type RespondentContext, type Survey } from '../shared/types.ts';
 
@@ -67,7 +68,7 @@ export async function afterComplete(projectId: string, survey: Survey, r: Stored
   }
   if (cfg.quotaFull && survey.quotas?.length) {
     const counts = await quotaCounts(projectId, survey, false);
-    for (const q of survey.quotas) {
+    for (const q of flatQuotas(survey.quotas)) {
       if (evalCondition(q.if, ctx) && counts.get(q.id) === q.limit) events.push({ kind: 'quota_full', quota: { id: q.id, title: q.title, limit: q.limit } });
     }
   }

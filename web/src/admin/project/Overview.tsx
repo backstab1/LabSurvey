@@ -183,7 +183,7 @@ function QuotaProgress({ quotas }: { quotas: ProjectInfo['quotas'] }) {
         const pct = q.limit ? Math.min(100, Math.round((q.count / q.limit) * 100)) : 100;
         return (
           <div key={q.id} className="quota-line">
-            <span className="quota-name">{q.title || q.id}</span>
+            <span className="quota-name" style={{ paddingLeft: q.depth * 16 }}>{q.depth > 0 && <span className="muted">└ </span>}{q.title || q.id}</span>
             <div className="quota-bar"><div style={{ width: `${pct}%` }} className={q.count >= q.limit ? 'full' : ''} /></div>
             <span className="small">{q.count} / {q.limit}{q.count >= q.limit ? ' ✓' : ''}</span>
           </div>

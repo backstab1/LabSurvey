@@ -2,7 +2,8 @@
 // Счётчики держатся в памяти и пересчитываются из базы, когда меняются условия квот или удаляются ответы.
 import { responses } from './db.ts';
 import { evalCondition } from '../shared/logic.ts';
-import type { Quota, RespondentContext, Survey } from '../shared/types.ts';
+import { flatQuotas, type FlatQuota } from '../shared/quotas.ts';
+import type { RespondentContext, Survey } from '../shared/types.ts';
 
 const cache = new Map<string, Map<string, number>>();
 
@@ -14,11 +15,12 @@ export async function quotaCounts(projectId: string, survey: Survey, isTest: boo
   const key = keyOf(projectId, survey, isTest);
   let counts = cache.get(key);
   if (!counts) {
-    counts = new Map((survey.quotas ?? []).map((q) => [q.id, 0]));
+    const list = flatQuotas(survey.quotas);
+    counts = new Map(list.map((q) => [q.id, 0]));
     const done = (await responses.list(projectId, { includeTest: isTest, statuses: ['completed'] })).filter((r) => r.isTest === isTest);
     for (const r of done) {
       const ctx: RespondentContext = { survey, answers: r.answers, params: r.params, seed: r.id };
-      for (const q of survey.quotas ?? []) if (evalCondition(q.if, ctx)) counts.set(q.id, (counts.get(q.id) ?? 0) + 1);
+      for (const q of list) if (evalCondition(q.if, ctx)) counts.set(q.id, (counts.get(q.id) ?? 0) + 1);
     }
     // Старые ключи этого проекта (прежние условия) больше не нужны
     for (const k of cache.keys()) if (k.startsWith(`${projectId}:${isTest ? 'test' : 'live'}:`)) cache.delete(k);
@@ -27,10 +29,10 @@ export async function quotaCounts(projectId: string, survey: Survey, isTest: boo
   return counts;
 }
 
-/** Первая квота, под которую подходит респондент и лимит которой уже набран */
-export async function fullQuota(projectId: string, survey: Survey, isTest: boolean, ctx: RespondentContext): Promise<Quota | null> {
+/** Первая квота (любого уровня), под которую подходит респондент и лимит которой уже набран */
+export async function fullQuota(projectId: string, survey: Survey, isTest: boolean, ctx: RespondentContext): Promise<FlatQuota | null> {
   if (!survey.quotas?.length) return null;
-  const matching = survey.quotas.filter((q) => evalCondition(q.if, ctx));
+  const matching = flatQuotas(survey.quotas).filter((q) => evalCondition(q.if, ctx));
   if (!matching.length) return null;
   const counts = await quotaCounts(projectId, survey, isTest);
   return matching.find((q) => (counts.get(q.id) ?? 0) >= q.limit) ?? null;
@@ -40,7 +42,7 @@ export async function fullQuota(projectId: string, survey: Survey, isTest: boole
 export function noteCompleted(projectId: string, survey: Survey, isTest: boolean, ctx: RespondentContext): void {
   const counts = cache.get(keyOf(projectId, survey, isTest));
   if (!counts || !survey.quotas?.length) return;
-  for (const q of survey.quotas) if (evalCondition(q.if, ctx)) counts.set(q.id, (counts.get(q.id) ?? 0) + 1);
+  for (const q of flatQuotas(survey.quotas)) if (evalCondition(q.if, ctx)) counts.set(q.id, (counts.get(q.id) ?? 0) + 1);
 }
 
 /** Ответы удалены — пересчитать при следующем обращении */

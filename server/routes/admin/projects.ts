@@ -4,6 +4,7 @@ import { testToken } from '../../auth.ts';
 import { invitees, projects, responses, surveys, type ProjectRow, type TableSet } from '../../db.ts';
 import { loadProject, projectOf, loadedOf, type Loaded } from '../../projectCtx.ts';
 import { quotaCounts, resetQuotas } from '../../quotas.ts';
+import { flatQuotas } from '../../../shared/quotas.ts';
 import { sheetsStatus } from '../../sheets.ts';
 import { telegramConfigured } from '../../notify.ts';
 import { dailyStats } from '../../daily.ts';
@@ -31,7 +32,7 @@ async function fullQuotas(p: ProjectRow): Promise<number> {
   const l = await loadProject(p.id);
   if (!l?.live) return 0;
   const counts = await quotaCounts(p.id, l.live, false);
-  return p.quotas.filter((q) => (counts.get(q.id) ?? 0) >= q.limit).length;
+  return flatQuotas(p.quotas).filter((q) => (counts.get(q.id) ?? 0) >= q.limit).length;
 }
 
 /** Всё о проекте для страницы проекта */
@@ -41,7 +42,7 @@ async function projectInfo(l: Loaded): Promise<ProjectInfo> {
   return {
     id: p.id, title: p.title, status: p.status, settings: p.settings, quotaDefs: p.quotas, panels: p.panels, tableSets: p.tables,
     panelCounts: await responses.countsByPanel(p.id),
-    quotas: p.quotas.map((q) => ({ id: q.id, title: q.title, limit: q.limit, count: counts?.get(q.id) ?? 0 })),
+    quotas: flatQuotas(p.quotas).map((q) => ({ id: q.id, title: q.title, limit: q.limit, count: counts?.get(q.id) ?? 0, depth: q.depth, parentId: q.parentId })),
     survey: {
       id: s.id, title: s.draft.title, version: s.version, published: !!s.published,
       unpublished: !s.published || JSON.stringify(s.published) !== JSON.stringify(s.draft),

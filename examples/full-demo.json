@@ -1346,7 +1346,26 @@
         "op": "eq",
         "value": 2
       },
-      "limit": 85
+      "limit": 85,
+      "children": [
+        {
+          "id": "QT_w_1",
+          "title": "18–34",
+          "if": {
+            "all": [
+              { "q": "S1", "op": "gte", "value": 18 },
+              { "q": "S1", "op": "lte", "value": 34 }
+            ]
+          },
+          "limit": 40
+        },
+        {
+          "id": "QT_w_2",
+          "title": "35+",
+          "if": { "q": "S1", "op": "gte", "value": 35 },
+          "limit": 45
+        }
+      ]
     },
     {
       "id": "QT_45",

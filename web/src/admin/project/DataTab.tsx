@@ -82,7 +82,7 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
             <tbody>
               {info.quotas.map((q) => (
                 <tr key={q.id}>
-                  <td style={{ width: '40%' }}><strong>{q.title || q.id}</strong> <span className="muted small mono">{q.id}</span></td>
+                  <td style={{ width: '40%', paddingLeft: 8 + q.depth * 18 }}>{q.depth > 0 && <span className="muted">└ </span>}{q.depth ? q.title || q.id : <strong>{q.title || q.id}</strong>} <span className="muted small mono">{q.id}</span></td>
                   <td>
                     <div className="quota-bar"><div style={{ width: `${q.limit ? Math.min(100, (q.count / q.limit) * 100) : 100}%` }} className={q.count >= q.limit ? 'full' : ''} /></div>
                   </td>

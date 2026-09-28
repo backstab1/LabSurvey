@@ -357,6 +357,25 @@ test('full-feature survey: every admin screen, question dialog and respondent sc
       await page.locator('.modal').waitFor();
       await page.getByRole('button', { name: 'Закрыть' }).click();
     }
+    if (tab === 'Квоты') {
+      where = 'проект → Квоты → разбивка';
+      assert.equal(await page.locator('.qnode.nested').count(), 2, 'вложенные квоты из примера');
+      await page.locator('.qrow').first().getByRole('button', { name: 'Разбить…' }).click();
+      const dlg = page.locator('.modal');
+      await dlg.locator('.search-select-btn').click();
+      await dlg.getByPlaceholder('Поиск').fill('S1.');
+      await dlg.getByPlaceholder('Поиск').press('Enter');
+      await dlg.getByRole('button', { name: 'Добавить 5' }).click();
+      assert.equal(await page.locator('.qnode.nested').count(), 7);
+      await page.locator('.qrow').first().getByRole('button', { name: 'Разбить…' }).click();
+      await dlg.locator('.search-select-btn').click();
+      await dlg.getByPlaceholder('Поиск').fill('S2.');
+      await dlg.getByPlaceholder('Поиск').press('Enter');
+      await dlg.getByText('Так же разбить все квоты этого уровня (3)').click();
+      await dlg.getByRole('button', { name: 'Отмена' }).click();
+      await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+      await page.getByText('Квоты сохранены').waitFor();
+    }
     if (tab === 'Список') {
       where = 'проект → Список → рассылка';
       await page.getByRole('button', { name: 'Разослать по e-mail' }).click();

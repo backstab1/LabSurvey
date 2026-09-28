@@ -585,6 +585,46 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
 .quota-bar { flex: 1; min-width: 80px; height: 8px; border-radius: 4px; background: #e3e6ea; overflow: hidden; }
 .quota-bar > div { height: 100%; background: var(--accent); }
 .quota-bar > div.full { background: var(--ok); }
+/* Дерево квот: вложенные сдвинуты вправо, правые колонки (лимит, счётчик) выровнены */
+.qtree { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: visible; }
+.qtree-head, .qrow {
+  display: grid; align-items: start; gap: 8px; padding: 6px 10px;
+  grid-template-columns: calc(var(--d, 0) * 22px) 22px 92px minmax(110px, 1fr) minmax(220px, 1.7fr) 132px 118px 104px;
+  grid-template-areas: "ind tog id title cond limit prog act";
+}
+.qrow > .qindent { grid-area: ind; } .qrow > .qtoggle, .qrow > .qtog { grid-area: tog; }
+.qrow > .qid { grid-area: id; } .qrow > .qtitle { grid-area: title; } .qrow > .qcond { grid-area: cond; }
+.qrow > .qlimit { grid-area: limit; } .qrow > .qprog { grid-area: prog; } .qrow > .qactions { grid-area: act; }
+/* Узкое окно: условие — второй строкой */
+@media (max-width: 1180px) {
+  .qtree-head { display: none; }
+  .qrow {
+    grid-template-columns: calc(var(--d, 0) * 16px) 22px 84px minmax(90px, 1fr) 124px 96px auto;
+    grid-template-areas: "ind tog id title limit prog act" "ind tog cond cond cond cond cond";
+    row-gap: 4px;
+  }
+}
+.qtree-head { padding-top: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.qtree-head > span:nth-child(n+3) { padding-left: 2px; }
+.qrow { border-bottom: 1px solid #eef0f3; }
+.qrow:hover { background: #fafbfc; }
+.qnode.nested > .qrow .qindent { align-self: stretch; margin: -6px 0; border-right: 2px solid #e3e6ea; }
+.qrow > .input, .qlimit .input { height: var(--ctl-h); }
+.qtoggle { height: var(--ctl-h); padding: 0 4px; }
+.qcond { min-width: 0; }
+.qlimit { display: flex; align-items: center; gap: 6px; height: var(--ctl-h); }
+.qlimit .input.mini { width: 70px; }
+.qsum { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.qsum.warn, button.qsum.warn { color: var(--warn); background: var(--warn-soft); border: 0; border-radius: 6px; padding: 3px 6px; cursor: pointer; font-weight: 600; letter-spacing: 0; }
+.qprog { display: flex; align-items: center; gap: 6px; height: var(--ctl-h); }
+.qprog .quota-bar { min-width: 40px; }
+.qprog .ok-text { color: var(--ok); font-weight: 600; }
+.qactions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; height: var(--ctl-h); }
+.qfolded { padding: 4px 10px 6px calc(var(--d, 0) * 22px + 42px); cursor: pointer; border-bottom: 1px solid #eef0f3; }
+.qfolded:hover { color: var(--accent); }
+.qtree-foot { padding: 8px 10px; }
+.qsplit-values { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.qsplit-values .check { font-size: 14px; }
 
 /* Отчёт */
 .report-filters { flex-wrap: wrap; gap: 14px; padding: 12px 16px; }

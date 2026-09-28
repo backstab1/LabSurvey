@@ -554,6 +554,8 @@ export interface Quota {
   title?: string;
   if: Condition;
   limit: number;
+  /** Вложенные квоты: их условие действует вместе с условием этой (Москва → Женщины → 18–24) */
+  children?: Quota[];
 }
 
 export interface Survey {

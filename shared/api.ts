@@ -170,8 +170,8 @@ export interface ProjectInfo {
   tableSets: TableSet[];
   /** Счётчики настоящих анкет по панелям; panel = null — прямая ссылка */
   panelCounts: PanelCounts[];
-  /** Прогресс квот по опубликованной версии */
-  quotas: { id: string; title?: string; limit: number; count: number }[];
+  /** Прогресс квот по опубликованной версии; вложенные — плоским списком после родителя */
+  quotas: { id: string; title?: string; limit: number; count: number; depth: number; parentId?: string }[];
   survey: { id: string; title: string; version: number; published: boolean; unpublished: boolean };
   /** Анкета с настройками проекта */
   draft: Survey;

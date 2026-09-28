@@ -87,3 +87,36 @@ test('full quota ends the survey with overquota status and redirect', async () =
   assert.equal(women.total, 1);
   assert.equal((await call('GET', `/api/admin/projects/${sid}/report?filter=%7Bbad`)).status, 400);
 });
+
+test('nested quotas: a child counts and closes only inside its parent', async () => {
+  await login();
+  const created = await call('POST', '/api/admin/surveys', { definition: { ...survey, quotas: undefined } });
+  await call('POST', `/api/admin/surveys/${created.json.id}/publish`);
+  const sid = await launch(call, created.json.id);
+  // Из VK — 3 анкеты, внутри: мужчины 1, женщины 2 (без условия на VK у вложенных)
+  const tree = [{ id: 'VK', title: 'Из VK', if: { param: 'src', op: 'eq', value: 'vk' }, limit: 3, children: [
+    { id: 'VK_1', title: 'М', if: { q: 'SEX', op: 'eq', value: 1 }, limit: 1 },
+    { id: 'VK_2', title: 'Ж', if: { q: 'SEX', op: 'eq', value: 2 }, limit: 2 },
+  ] }];
+  assert.equal((await call('PUT', `/api/admin/projects/${sid}`, { quotas: tree })).status, 200);
+  const bad = await call('PUT', `/api/admin/projects/${sid}`, { quotas: [{ ...tree[0], children: [{ id: 'VK', if: { q: 'NOPE', op: 'answered' }, limit: 1 }] }] });
+  assert.equal(bad.status, 422);
+  assert.match(JSON.stringify(bad.json), /повторяется/);
+  cookie = '';
+
+  assert.equal((await pass(sid, 1, { src: 'vk' })).status, 'completed');
+  // Второй мужчина из VK — сверх вложенной квоты, мужчина не из VK — проходит
+  assert.equal((await pass(sid, 1, { src: 'vk' })).status, 'overquota');
+  assert.equal((await pass(sid, 1)).status, 'completed');
+  assert.equal((await pass(sid, 2, { src: 'vk' })).status, 'completed');
+  assert.equal((await pass(sid, 2, { src: 'vk' })).status, 'completed');
+  // Родитель набран (3 из 3) — закрыт для всех из VK
+  assert.equal((await pass(sid, 2, { src: 'vk' })).status, 'overquota');
+
+  await login();
+  const info = (await call('GET', `/api/admin/projects/${sid}`)).json;
+  assert.deepEqual(info.quotas.map((q: { id: string; count: number; depth: number }) => [q.id, q.count, q.depth]), [['VK', 3, 0], ['VK_1', 1, 1], ['VK_2', 2, 1]]);
+  assert.equal(info.quotas[1].parentId, 'VK');
+  const list = (await call('GET', '/api/admin/projects')).json;
+  assert.equal(list.find((p: { id: string }) => p.id === sid).quotasFull, 3);
+});
