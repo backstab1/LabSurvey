@@ -120,7 +120,7 @@ export function Menu({ items, label = '⋯', title = 'Ещё', className = 'icon
   );
 }
 
-/** Выпадающий список с группами и поиском (как в Survey Studio) */
+/** Выпадающий список с группами и поиском */
 export function SearchSelect({ value, groups, onChange, className = '', placeholder = '– выберите –' }: {
   value: string;
   groups: { label: string; items: { value: string; label: string }[] }[];

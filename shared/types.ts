@@ -104,7 +104,7 @@ export interface SurveyScripts {
 }
 
 /**
- * Действия — логика без программирования (как в Survey Studio).
+ * Действия — логика без программирования.
  * Выполняются по порядку; у каждого может быть условие `if`.
  */
 export type BeforeActionKind =

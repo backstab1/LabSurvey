@@ -55,7 +55,7 @@ export function listSummary(options: Option[], from?: OptionsFrom): string {
 }
 
 /**
- * Редактор списка вариантов (как в Survey Studio): таблица «Код | Текст», клик по строке раскрывает её —
+ * Редактор списка вариантов: таблица «Код | Текст», клик по строке раскрывает её —
  * вкладки «Основное» (текст, код, картинка, баллы) и «Настройки» (флажки варианта).
  */
 export function OptionsListDialog({ title, options, onChange, onClose, features, placeholder = 'Текст варианта', carry }: {
@@ -261,7 +261,7 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
   );
 }
 
-/** Настройки варианта — флажки как в Survey Studio; недоступные в текущем состоянии — серые */
+/** Настройки варианта — флажки; недоступные в текущем состоянии — серые */
 function OptionSettings({ o, features: f, set }: { o: Option; features: ListFeatures; set: (p: Partial<Option>) => void }) {
   const [showScript, setShowScript] = useState(!!o.script);
   const isGroup = !!o.group;

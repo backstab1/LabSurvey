@@ -1,4 +1,4 @@
-// Квоты проекта: дерево условий и лимитов (как счётчики в Survey Studio).
+// Квоты проекта: дерево условий и лимитов.
 // Вложенная квота действует внутри родителя: Москва → Женщины → 18–24 значит S1 = 1 and S2 = 2 and возраст 18–24.
 import { useState, type CSSProperties } from 'react';
 import { useProjectDraft } from './useProjectDraft.ts';
@@ -31,8 +31,8 @@ const updateAt = (list: Quota[], path: Path, fn: (q: Quota) => Quota) =>
 const countNodes = (q: Quota): number => 1 + (q.children ?? []).reduce((s, c) => s + countNodes(c), 0);
 
 /**
- * Родитель, у которого лимит был равен сумме вложенных, остаётся равным ей и после правки вложенных
- * (как «пересчитать вверх» в SS, только автоматически). Родитель с лимитом, заданным вручную, не трогаем.
+ * Родитель, у которого лимит был равен сумме вложенных, остаётся равным ей и после правки вложенных.
+ * Родитель с лимитом, заданным вручную, не трогаем.
  */
 function resync(old: Quota[], next: Quota[]): Quota[] {
   const before = new Map<string, Quota>();
