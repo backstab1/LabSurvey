@@ -744,7 +744,10 @@ h2 .print-id { font-weight: 400; color: var(--muted); margin-left: 6px; }
 .badge.status-collecting { background: var(--ok-soft); color: var(--ok); }
 .badge.status-processing { background: var(--warn-soft); color: var(--warn); }
 .badge.status-archive { background: #eceff3; color: var(--muted); }
-.quota-line { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(100px, 2fr) auto; gap: 12px; align-items: center; font-size: 14px; }
+/* Одна сетка на все строки — полосы начинаются и кончаются на одной вертикали */
+.quota-lines { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(100px, 2fr) auto; gap: 6px 12px; align-items: center; font-size: 14px; }
+.quota-line { display: contents; }
+.quota-line .quota-count { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .quota-line .quota-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 @media (max-width: 640px) { .top-nav { margin-left: 8px; } .top-nav a { padding: 6px 8px; } }
