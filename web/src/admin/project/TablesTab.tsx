@@ -27,7 +27,7 @@ function refLabel(def: Survey, r: VarRef): string {
   if (!q) return `${r.q} (нет в анкете)`;
   if (r.row !== undefined && q.type === 'matrix') {
     const row = allRows(def, q).find((x) => x.code === r.row);
-    return `${q.id} — ${short(plain(row?.text ?? String(r.row)), 40)}`;
+    return `${q.id} – ${short(plain(row?.text ?? String(r.row)), 40)}`;
   }
   return `${q.id}. ${short(plain(q.text), 60)}`;
 }
@@ -59,15 +59,15 @@ export function TablesTab({ info, readOnly, reload }: { info: ProjectInfo; readO
 
   const set = (patch: Partial<CrosstabSpec>) => setSpec({ ...spec, ...patch });
   const qItems = (list: typeof cand.rows, withMatrixRows: boolean) => list.flatMap((q) => [
-    { value: `q:${q.id}`, label: `${q.id}. ${short(plain(q.text), 60)}${q.type === 'matrix' ? ' — все строки' : ''}` },
+    { value: `q:${q.id}`, label: `${q.id}. ${short(plain(q.text), 60)}${q.type === 'matrix' ? ' – все строки' : ''}` },
     ...(q.type === 'matrix' && withMatrixRows ? allRows(def, q).filter((r) => !r.group && !r.other)
-      .map((r) => ({ value: `q:${q.id}:${r.code}`, label: `${q.id} — ${short(plain(r.text), 50)}` })) : []),
+      .map((r) => ({ value: `q:${q.id}:${r.code}`, label: `${q.id} – ${short(plain(r.text), 50)}` })) : []),
   ]);
   const params = [...new Set([...(result?.params ?? []), ...(info.panels.length ? ['panel'] : [])])];
   const rowGroups = [{ label: 'Вопросы', items: qItems(cand.rows, true) }];
   const colGroups = [
     { label: 'Вопросы', items: qItems(cand.cols.filter((q) => q.type !== 'matrix'), false).concat(qItems(cand.cols.filter((q) => q.type === 'matrix'), true).filter((i) => i.value.split(':').length === 3)) },
-    ...(params.length ? [{ label: 'Параметры ссылки', items: params.map((p) => ({ value: `p:${p}`, label: p === 'panel' ? 'panel — панель' : p })) }] : []),
+    ...(params.length ? [{ label: 'Параметры ссылки', items: params.map((p) => ({ value: `p:${p}`, label: p === 'panel' ? 'panel – панель' : p })) }] : []),
   ];
 
   const saveSet = async (name: string) => {
@@ -91,7 +91,7 @@ export function TablesTab({ info, readOnly, reload }: { info: ProjectInfo; readO
               const s = info.tableSets.find((x) => x.name === e.target.value);
               if (s) { setSpec(s.spec); setSetName(s.name); }
             }}>
-              {!info.tableSets.some((s) => s.name === setName) && <option value={setName}>— не сохранён —</option>}
+              {!info.tableSets.some((s) => s.name === setName) && <option value={setName}>– не сохранён –</option>}
               {info.tableSets.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
             </select>
           )}
@@ -114,7 +114,7 @@ export function TablesTab({ info, readOnly, reload }: { info: ProjectInfo; readO
 
         <div className="grid2">
           <div className="field">
-            <span>Строки — что считаем</span>
+            <span>Строки – что считаем</span>
             <div className="xchips">
               {spec.rows.map((r, i) => (
                 <span key={refKey(r)} className="xchip">{refLabel(def, r)}
@@ -129,7 +129,7 @@ export function TablesTab({ info, readOnly, reload }: { info: ProjectInfo; readO
             </div>
           </div>
           <div className="field">
-            <span>Шапка — в каких разрезах<small className="muted"> (столбец «Всего» есть всегда)</small></span>
+            <span>Шапка – в каких разрезах<small className="muted"> (столбец «Всего» есть всегда)</small></span>
             <div className="xchips">
               {spec.cols.map((r, i) => (
                 <span key={refKey(r)} className="xchip banner">{refLabel(def, r)}
@@ -177,14 +177,14 @@ export function TablesTab({ info, readOnly, reload }: { info: ProjectInfo; readO
       </div>
 
       {error && <div className="error-box">{error}</div>}
-      {!spec.rows.length && <div className="card muted">Добавьте вопросы в строки, а в шапку — разрезы (пол, возраст, панель…). Буквы в ячейках — значимые различия между столбцами одной шапки.</div>}
+      {!spec.rows.length && <div className="card muted">Добавьте вопросы в строки, а в шапку – разрезы (пол, возраст, панель…). Буквы в ячейках – значимые различия между столбцами одной шапки.</div>}
       {loading && !result && <p className="muted">Считаем…</p>}
       {result && (
         <>
           <p className="muted small" style={{ margin: 0 }}>
             Анкет: <strong>{result.total}</strong>{spec.filter && filterOk ? <> · подгруппа: {describeCondition(def, spec.filter)}</> : null}.
-            {spec.sig !== 0 && <> Буква в ячейке — значение в этом столбце значимо больше, чем в столбце с этой буквой (та же шапка, {Math.round((spec.sig ?? 0.95) * 100)}%, база от {result.minBase}).</>}
-            {' '}Серым — база меньше 30.
+            {spec.sig !== 0 && <> Буква в ячейке – значение в этом столбце значимо больше, чем в столбце с этой буквой (та же шапка, {Math.round((spec.sig ?? 0.95) * 100)}%, база от {result.minBase}).</>}
+            {' '}Серым – база меньше 30.
           </p>
           {result.tables.map((t) => <XTable key={t.key} t={t} measures={measures} />)}
         </>
@@ -243,7 +243,7 @@ function XTable({ t, measures }: { t: CrossTable; measures: Measure[] }) {
                 <td>{s.label}</td>
                 {s.cells.map((c, i) => (
                   <td key={i} className={`${small(i) ? 'small-base' : ''}${i === 0 ? ' xtab-total' : ''}`}>
-                    {c.value === null ? '—' : c.value.toLocaleString('ru-RU')}{c.sig && <sup className="xtab-sig">{c.sig}</sup>}
+                    {c.value === null ? '–' : c.value.toLocaleString('ru-RU')}{c.sig && <sup className="xtab-sig">{c.sig}</sup>}
                   </td>
                 ))}
               </tr>

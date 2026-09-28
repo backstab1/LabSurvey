@@ -251,7 +251,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
     copy: () => {
       const list = def.blocks.flatMap((b) => b.questions.filter((x) => sel.has(x.id)));
       navigator.clipboard.writeText(JSON.stringify(list, null, 2));
-      toast(`Скопировано вопросов: ${list.length} — вставьте через «+» в любой анкете`);
+      toast(`Скопировано вопросов: ${list.length} – вставьте через «+» в любой анкете`);
     },
     remove: () => {
       if (!window.confirm(`Удалить выделенные вопросы (${selected.length})?`)) return;
@@ -315,7 +315,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
               <button className="icon-btn chev-btn" title={collapsed.has(b.id) ? 'Развернуть блок' : 'Свернуть блок'}
                 onClick={() => toggleBlock(b.id)}>{collapsed.has(b.id) ? '▸' : '▾'}</button>
               <input className="block-title-input" value={b.title ?? ''} placeholder={`Блок ${bi + 1} (без заголовка)`}
-                title="Заголовок блока — респондент видит его над вопросами блока" onChange={(e) => setBlockTitle(bi, e.target.value)} />
+                title="Заголовок блока – респондент видит его над вопросами блока" onChange={(e) => setBlockTitle(bi, e.target.value)} />
               {issueFor(b.id) && <span className="chip-error">{issueFor(b.id)!.message}</span>}
               <span className="grow" />
               {b.loop && (
@@ -328,7 +328,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                 </span>
               )}
               {collapsed.has(b.id) && <span className="muted small">вопросов: {b.questions.length}</span>}
-              <span className="block-id" title="ID блока — для перехода «в начало блока»">{b.id}</span>
+              <span className="block-id" title="ID блока – для перехода «в начало блока»">{b.id}</span>
               <Menu items={[
                 { label: collapsed.has(b.id) ? 'Развернуть' : 'Свернуть', onClick: () => toggleBlock(b.id) },
                 { label: 'Свернуть все блоки', onClick: () => setCollapsed(new Set(def.blocks.map((x) => x.id))) },
@@ -382,7 +382,7 @@ export function Builder({ def, onChange, issues, focus, onPreview }: {
                     })}
                     onDelete={() => { if (window.confirm(`Удалить ${q.id}?`)) mutate((d) => { d.blocks[bi].questions.splice(qi, 1); }); }}
                     onPreview={() => onPreview(q.id)}
-                    onCopy={() => copyText(JSON.stringify(q, null, 2), `${q.id} скопирован — вставьте через «+» в любой анкете`)} />
+                    onCopy={() => copyText(JSON.stringify(q, null, 2), `${q.id} скопирован – вставьте через «+» в любой анкете`)} />
                 </div>
               );
             })}
@@ -463,7 +463,7 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, pinne
       }}
       onDrop={(e) => { e.preventDefault(); onDropHere(); }}>
       <div className="qcard-head">
-        <input type="checkbox" className="q-select" checked={selected} title="Выделить (Shift — диапазон)" aria-label={`Выделить ${q.id}`}
+        <input type="checkbox" className="q-select" checked={selected} title="Выделить (Shift – диапазон)" aria-label={`Выделить ${q.id}`}
           onClick={(e) => { e.stopPropagation(); onSelect(e.shiftKey); }} onChange={() => {}} />
         <span className="drag-handle" draggable title="Перетащите, чтобы переместить"
           onClick={(e) => e.stopPropagation()}
@@ -487,7 +487,7 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, pinne
         </span>
       </div>
       {error && <div className="card-error">{error}</div>}
-      {q.note && <div className="qcard-note" title="Комментарий для команды — респондент его не видит">💬 {q.note}</div>}
+      {q.note && <div className="qcard-note" title="Комментарий для команды – респондент его не видит">💬 {q.note}</div>}
       {q.type === 'hidden' ? (
         <div className="hidden-var">
           {q.text && <span className="qcard-label">{q.text} · </span>}
@@ -498,7 +498,7 @@ const QuestionCard = memo(function QuestionCard({ def, q, n, error, flash, pinne
           <div className={`qcard-text${q.type === 'info' ? ' info' : ''}`}>{rich(pipeMark(q.text))}</div>
           {q.hint && <div className="qcard-hint">{rich(pipeMark(q.hint))}</div>}
         </>
-      ) : <div className="muted empty-q">Пустой вопрос — нажмите, чтобы заполнить</div>}
+      ) : <div className="muted empty-q">Пустой вопрос – нажмите, чтобы заполнить</div>}
     </div>
   );
 }, (a, b) => a.q === b.q && a.n === b.n && a.error === b.error && a.flash === b.flash && a.dragging === b.dragging && a.selected === b.selected && a.pinned === b.pinned

@@ -74,7 +74,7 @@ export function parseFormula(src: string): Condition | undefined {
     if (is('[')) {
       i++;
       const r = toks[i++];
-      if (!r || r.t !== 'num') throw new FormulaError('В [ ] — код строки матрицы, например Q5[2]');
+      if (!r || r.t !== 'num') throw new FormulaError('В [ ] – код строки матрицы, например Q5[2]');
       out.row = Number(r.v);
       expect(']');
     }
@@ -101,13 +101,13 @@ export function parseFormula(src: string): Condition | undefined {
       i++;
       if (is('any') || is('all')) {
         const kind = toks[i++].v;
-        if (not) throw new FormulaError('«not contains any» не поддерживается — используйте not (Q contains any (…))');
+        if (not) throw new FormulaError('«not contains any» не поддерживается – используйте not (Q contains any (…))');
         return wrap({ ...s, op: kind === 'any' ? 'containsAny' : 'containsAll', value: list() });
       }
       return wrap({ ...s, op: not ? 'notContains' : 'contains', value: value() });
     }
     if (is('answered')) { i++; return wrap({ ...s, op: not ? 'notAnswered' : 'answered' }); }
-    throw new FormulaError(`Непонятный оператор «${t.v}» — ожидалось =, !=, >, <, in, contains, answered`);
+    throw new FormulaError(`Непонятный оператор «${t.v}» – ожидалось =, !=, >, <, in, contains, answered`);
   };
 
   const unary = (): Condition => {

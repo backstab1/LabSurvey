@@ -12,7 +12,7 @@ export async function accountRoutes(app: FastifyInstance) {
     if (u.builtIn) fail(400, 'Пароль главного администратора меняется в .env (ADMIN_PASSWORD)');
     if (!(await checkUserPassword(u.login, String(req.body?.current ?? '')))) fail(400, 'Текущий пароль неверен');
     const next = String(req.body?.next ?? '');
-    if (next.length < MIN_PASSWORD) fail(400, 'Новый пароль — не короче 8 символов');
+    if (next.length < MIN_PASSWORD) fail(400, 'Новый пароль – не короче 8 символов');
     await users.update(u.login, { passwordHash: hashPassword(next) });
     return { ok: true };
   });

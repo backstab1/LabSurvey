@@ -40,7 +40,7 @@ export function ProjectPage({ id }: { id: string }) {
 
   const docTitle = info?.title;
   useEffect(() => {
-    document.title = docTitle ? `${docTitle} — SurveyLAB` : 'SurveyLAB';
+    document.title = docTitle ? `${docTitle} – SurveyLAB` : 'SurveyLAB';
     return () => { document.title = 'SurveyLAB'; };
   }, [docTitle]);
 

@@ -229,7 +229,7 @@ function Dropdown({ options, answer, onChange }: { options: Option[]; answer?: A
   return (
     <div>
       <select className="input" value={value} onChange={(e) => onChange(e.target.value === '' ? undefined : { v: Number(e.target.value), o: answer?.o })}>
-        <option value="">— выберите —</option>
+        <option value="">– выберите –</option>
         {splitGroups(options).map((g, gi) => (g.head && !g.head.groupHidden
           ? <optgroup key={gi} label={g.head.text}>{g.items.map((o) => <option key={o.code} value={o.code}>{o.text}</option>)}</optgroup>
           : g.items.map((o) => <option key={o.code} value={o.code}>{o.text}</option>)))}
@@ -301,7 +301,7 @@ function Scale({ q, answer, onChange }: { q: ScaleQuestion; answer?: Answer; onC
       <div className={`scale-points ${display}`}
         style={{ ['--n' as string]: points.length, ['--nm' as string]: points.length > 7 ? Math.ceil(points.length / 2) : points.length }}>
         {points.map((p, i) => (
-          <button type="button" key={p} aria-pressed={value === p} aria-label={labels[String(p)] ? `${p} — ${labels[String(p)]}` : String(p)}
+          <button type="button" key={p} aria-pressed={value === p} aria-label={labels[String(p)] ? `${p} – ${labels[String(p)]}` : String(p)}
             className={`scale-point${value === p ? ' selected' : ''}${display === 'stars' && inScale && p <= value! ? ' lit' : ''}`}
             title={labels[String(p)] ?? String(p)} onClick={() => onChange({ v: p })}>
             {display === 'stars' ? '★' : display === 'smileys' ? face(i) : p}
@@ -315,7 +315,7 @@ function Scale({ q, answer, onChange }: { q: ScaleQuestion; answer?: Answer; onC
         </div>
       )}
       {midLabels.length > 0 && (
-        <div className="q-hint">{midLabels.map((p) => `${p} — ${labels[String(p)]}`).join('; ')}</div>
+        <div className="q-hint">{midLabels.map((p) => `${p} – ${labels[String(p)]}`).join('; ')}</div>
       )}
       {q.extraOptions?.map((o) => (
         <label key={o.code} className={`option extra${value === o.code ? ' selected' : ''}`}>

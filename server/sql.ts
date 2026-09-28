@@ -151,7 +151,7 @@ export async function openSql(opts: { url?: string; sqliteFile: string }): Promi
   const url = opts.url?.trim();
   if (url && /^postgres(ql)?:\/\//i.test(url)) return openPg(url);
   if (url && /^pglite:/i.test(url)) return openPglite(url.slice('pglite:'.length).replace(/^\/\//, ''));
-  if (url) throw new Error(`DATABASE_URL: ожидается postgres://… (или пусто — SQLite), получено «${url.slice(0, 20)}…»`);
+  if (url) throw new Error(`DATABASE_URL: ожидается postgres://… (или пусто – SQLite), получено «${url.slice(0, 20)}…»`);
   return new SqliteSql(new DatabaseSync(opts.sqliteFile));
 }
 

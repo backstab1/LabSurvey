@@ -53,7 +53,7 @@ export async function writeCrosstabXlsx(res: CrosstabResult, title: string, meas
     r++;
     for (const row of t.rows) {
       for (const m of measures) {
-        ws.getCell(r, 1).value = measures.length > 1 ? `${row.label} — ${MEASURE_LABELS[m]}` : row.label;
+        ws.getCell(r, 1).value = measures.length > 1 ? `${row.label} – ${MEASURE_LABELS[m]}` : row.label;
         row.cells.forEach((cell, k) => {
           const v = ws.getCell(r, colIdx(k));
           if (m === 'count') v.value = cell.count;

@@ -13,7 +13,7 @@ await initSchema(sql);
 /** SQLite: согласованная копия базы в файл (работает, пока сервис принимает ответы) */
 export function backupTo(file: string): void {
   const db = sqliteHandle(sql);
-  if (!db) throw new Error('Копия файлом — только для SQLite');
+  if (!db) throw new Error('Копия файлом – только для SQLite');
   db.prepare('VACUUM INTO ?').run(file);
 }
 

@@ -167,7 +167,7 @@ export async function respondentRoutes(app: FastifyInstance) {
     // Файлы должны быть загружены именно в эту анкету
     for (const q of page.questions) {
       if (q.type !== 'file' || !pageAnswers[q.id]) continue;
-      if (fileIds(pageAnswers[q.id].v).some((id) => !uploadPath(ownerOf(r), r.id, id))) errors[q.id] = 'Файл не найден — загрузите его ещё раз';
+      if (fileIds(pageAnswers[q.id].v).some((id) => !uploadPath(ownerOf(r), r.id, id))) errors[q.id] = 'Файл не найден – загрузите его ещё раз';
     }
     if (Object.keys(errors).length) return reply.code(422).send({ errors });
 

@@ -213,7 +213,7 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
             } else {
               for (const col of q.columns) {
                 add({
-                  name: `${q.id}_${row.code}_${col.code}`, label: `${text}: ${clean(row.text)} — ${clean(col.text)}`,
+                  name: `${q.id}_${row.code}_${col.code}`, label: `${text}: ${clean(row.text)} – ${clean(col.text)}`,
                   kind: 'numeric', measure: 'nominal', valueLabels: SELECTED_LABELS,
                   get: (r) => {
                     if (!ans(r)) return null;
@@ -317,7 +317,7 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
           for (let s = 1; s <= maxdiffShape(q).sets; s++) {
             for (const [k, idx, word] of [['best', 0, 'лучший'], ['worst', 1, 'худший']] as const) {
               add({
-                name: `${q.id}_s${s}_${k}`, label: `${text}: набор ${s} — ${word}`, kind: 'numeric', measure: 'nominal', valueLabels: labels,
+                name: `${q.id}_s${s}_${k}`, label: `${text}: набор ${s} – ${word}`, kind: 'numeric', measure: 'nominal', valueLabels: labels,
                 get: (r) => {
                   const v = ans(r)?.v;
                   const pick = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, number[]>)[String(s)] : undefined;
@@ -334,7 +334,7 @@ export function buildVariables(survey: Survey, responses: ResponseRecord[], opts
           if (q.none) labels.unshift({ value: 0, label: clean(q.none) });
           for (let t = 1; t <= tasks; t++) {
             add({
-              name: `${q.id}_t${t}`, label: `${text}: задание ${t} — выбранная карточка`, kind: 'numeric', measure: 'nominal', valueLabels: labels,
+              name: `${q.id}_t${t}`, label: `${text}: задание ${t} – выбранная карточка`, kind: 'numeric', measure: 'nominal', valueLabels: labels,
               get: (r) => {
                 const v = ans(r)?.v;
                 const c = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, number>)[String(t)] : undefined;

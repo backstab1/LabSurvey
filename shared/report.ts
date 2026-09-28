@@ -104,7 +104,7 @@ export function buildReport(survey: Survey, responses: ResponseRecord[], unfinis
         rep.rows = [
           ...points.map((p) => {
             const count = values.filter((v) => v === p).length;
-            return { code: p, label: q.labels?.[String(p)] ? `${p} — ${q.labels[String(p)]}` : String(p), count, pct: pct(count, n) };
+            return { code: p, label: q.labels?.[String(p)] ? `${p} – ${q.labels[String(p)]}` : String(p), count, pct: pct(count, n) };
           }),
           ...(q.extraOptions ?? []).map((o) => {
             const count = values.filter((v) => v === o.code).length;

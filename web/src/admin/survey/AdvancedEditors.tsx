@@ -42,7 +42,7 @@ export function FileBody({ q, set }: { q: FileQuestion; set: (p: Patch) => void 
       </div>
       <p className="muted small" style={{ margin: 0 }}>
         На телефоне кнопка предлагает сфотографировать или выбрать из галереи. Тип файла проверяется по содержимому. Файлы видны
-        в «Данных» (в ответе и в отчёте), в выгрузке — переменные {q.id}_n и {q.id}_files.
+        в «Данных» (в ответе и в отчёте), в выгрузке – переменные {q.id}_n и {q.id}_files.
       </p>
     </div>
   );
@@ -71,7 +71,7 @@ export function HotspotBody({ q, set }: { q: HotspotQuestion; set: (p: Patch) =>
       <ImageField label="Картинка, на которой отмечают области" value={q.image || undefined} onChange={(image) => set({ image: image ?? '' })} />
       {q.image ? (
         <>
-          <p className="muted small" style={{ margin: 0 }}>Обведите мышью область на картинке — появится вариант ответа. Области невидимы для респондента, если не включить «Показывать границы».</p>
+          <p className="muted small" style={{ margin: 0 }}>Обведите мышью область на картинке – появится вариант ответа. Области невидимы для респондента, если не включить «Показывать границы».</p>
           <div ref={box} className="hotspot-editor" onPointerDown={(e) => {
             if ((e.target as HTMLElement).dataset.area) return;
             const p = pt(e);
@@ -96,7 +96,7 @@ export function HotspotBody({ q, set }: { q: HotspotQuestion; set: (p: Patch) =>
             {rect && <div className="hotspot-edit-area drawing" style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }} />}
           </div>
         </>
-      ) : <p className="muted small" style={{ margin: 0 }}>Укажите адрес картинки — затем на ней можно будет отметить области.</p>}
+      ) : <p className="muted small" style={{ margin: 0 }}>Укажите адрес картинки – затем на ней можно будет отметить области.</p>}
       {q.options.length > 0 && (
         <div className="stack" style={{ gap: 6 }}>
           {q.options.map((o) => (
@@ -136,9 +136,9 @@ export function MaxDiffBody({ q, set, listButton }: { q: MaxDiffQuestion; set: (
         <label className="field"><span>Подпись «худший»</span><input className="input" placeholder="Наименее важно" value={q.worstLabel ?? ''} onChange={(e) => set({ worstLabel: e.target.value || undefined })} /></label>
       </div>
       <p className="muted small" style={{ margin: 0 }}>
-        {items.length >= 3 ? <>Респондент увидит {sets} наборов по {perSet}; каждый вариант — примерно {per} раза. </> : null}
+        {items.length >= 3 ? <>Респондент увидит {sets} наборов по {perSet}; каждый вариант – примерно {per} раза. </> : null}
         Дизайн свой у каждого респондента и сбалансирован: варианты показываются поровну, пары и позиции в наборе не повторяются без нужды,
-        один вариант не идёт в двух наборах подряд. После начала сбора не меняйте список — дизайн строится по нему.
+        один вариант не идёт в двух наборах подряд. После начала сбора не меняйте список – дизайн строится по нему.
         Выгрузка: выборы по наборам ({q.id}_s1_best…) и файл дизайна (Данные → «Дизайн MaxDiff / конджойнта»).
       </p>
     </div>
@@ -161,7 +161,7 @@ export function ConjointBody({ q, set }: { q: ConjointQuestion; set: (p: Patch) 
         {q.attributes.map((a, i) => (
           <div key={i} className="conjoint-attr">
             <div className="row" style={{ gap: 6 }}>
-              <input className="input mono" style={{ width: 90 }} title="ID атрибута — в выгрузке дизайна" value={a.id}
+              <input className="input mono" style={{ width: 90 }} title="ID атрибута – в выгрузке дизайна" value={a.id}
                 onChange={(e) => updateAttr(i, { id: e.target.value.replace(/[^A-Za-z0-9_]/g, '') })} />
               <input className="input grow" placeholder="Атрибут, например «Сервис» или «Цена»" value={a.text} onChange={(e) => updateAttr(i, { text: e.target.value })} />
               <button className="icon-btn" title="Удалить атрибут" onClick={() => setAttrs(q.attributes.filter((_, k) => k !== i))}>✕</button>
@@ -169,22 +169,22 @@ export function ConjointBody({ q, set }: { q: ConjointQuestion; set: (p: Patch) 
             <button type="button" className="list-btn" onClick={() => setEditing(i)}>
               <span className="list-btn-title">Уровни<span className="tab-count">{a.levels.length}</span></span>
               <span className="list-btn-summary">
-                {a.levels.slice(0, 6).map((l) => `${l.image ? '🖼 ' : ''}${l.text || '—'}`).join(' · ')}{a.levels.length > 6 ? ' …' : ''}
+                {a.levels.slice(0, 6).map((l) => `${l.image ? '🖼 ' : ''}${l.text || '–'}`).join(' · ')}{a.levels.length > 6 ? ' …' : ''}
               </span>
               <span className="list-btn-go">›</span>
             </button>
             <div className="row" style={{ gap: 14, flexWrap: 'wrap' }}>
-              <label className="check small" title="Показывать сверху карточки крупно — например, сервис или бренд с логотипом">
+              <label className="check small" title="Показывать сверху карточки крупно – например, сервис или бренд с логотипом">
                 <input type="checkbox" checked={!!a.header}
                   onChange={(e) => setAttrs(q.attributes.map((x, k) => compact({ ...x, header: k === i ? e.target.checked || undefined : e.target.checked ? undefined : x.header })))} />
                 Заголовок карточки
               </label>
-              <label className="check small" title={`Карточка 1 — первый уровень, карточка 2 — второй…; уровней должно быть ${alternatives}`}>
+              <label className="check small" title={`Карточка 1 – первый уровень, карточка 2 – второй…; уровней должно быть ${alternatives}`}>
                 <input type="checkbox" checked={!!a.fixed} onChange={(e) => updateAttr(i, { fixed: e.target.checked || undefined })} />
                 Закреплён за карточкой
               </label>
               {a.fixed && a.levels.filter((l) => !l.hidden).length !== alternatives && (
-                <span className="small" style={{ color: 'var(--danger)' }}>нужно {alternatives} уровня — по числу карточек</span>
+                <span className="small" style={{ color: 'var(--danger)' }}>нужно {alternatives} уровня – по числу карточек</span>
               )}
             </div>
             {editing === i && (
@@ -205,15 +205,15 @@ export function ConjointBody({ q, set }: { q: ConjointQuestion; set: (p: Patch) 
         <NumField label="Заданий" width={110} placeholder="8" value={q.tasks} onChange={(v) => set({ tasks: v })} />
         <NumField label="Карточек в задании" width={160} placeholder="3" value={q.alternatives} onChange={(v) => set({ alternatives: v })} />
         <label className="field grow"><span>Вариант «ничего не выберу»</span>
-          <input className="input" placeholder="нет — не показывать" value={q.none ?? ''} onChange={(e) => set({ none: e.target.value || undefined })} />
+          <input className="input" placeholder="нет – не показывать" value={q.none ?? ''} onChange={(e) => set({ none: e.target.value || undefined })} />
         </label>
         <button className="btn btn-secondary btn-sm" disabled={attrs.length < 2} title="Сгенерировать задания для 500 условных респондентов и посмотреть баланс"
           onClick={() => setCheck(conjointDesignCheck(q, 500))}>Проверить дизайн</button>
       </div>
       <p className="muted small" style={{ margin: 0 }}>
-        Картинки у уровней — в списке уровней (логотип, фото товара); текст можно скрыть. Любой атрибут можно сделать заголовком карточки
-        и/или закрепить за карточкой — остальные атрибуты тогда балансируются внутри каждой карточки. Дизайн свой у каждого респондента:
-        уровни показываются поровну (сейчас — от {minShows} раз), в задании уровни атрибута не повторяются, пока их хватает на все карточки,
+        Картинки у уровней – в списке уровней (логотип, фото товара); текст можно скрыть. Любой атрибут можно сделать заголовком карточки
+        и/или закрепить за карточкой – остальные атрибуты тогда балансируются внутри каждой карточки. Дизайн свой у каждого респондента:
+        уровни показываются поровну (сейчас – от {minShows} раз), в задании уровни атрибута не повторяются, пока их хватает на все карточки,
         сочетания уровней разных атрибутов распределяются равномерно, одинаковых карточек нет. Не меняйте атрибуты и уровни после начала сбора.
       </p>
       {check && <DesignCheckModal check={check} onClose={() => setCheck(null)} />}
@@ -227,8 +227,8 @@ function DesignCheckModal({ check, onClose }: { check: DesignCheck; onClose: () 
     <Modal onClose={onClose} title="Проверка дизайна" wide actions={<button className="btn btn-primary" onClick={onClose}>Закрыть</button>}>
       <div className="stack design-check">
         <p className="muted small" style={{ margin: 0 }}>
-          Задания сгенерированы для {check.respondents} условных респондентов так же, как для настоящих. Разброс сочетаний —
-          (максимум − минимум) / ожидаемое; при 500 респондентах 10–20% — обычный случайный разброс, с ростом выборки он сужается.
+          Задания сгенерированы для {check.respondents} условных респондентов так же, как для настоящих. Разброс сочетаний –
+          (максимум − минимум) / ожидаемое; при 500 респондентах 10–20% – обычный случайный разброс, с ростом выборки он сужается.
         </p>
         <div className="row small" style={{ gap: 16, flexWrap: 'wrap' }}>
           <span className={`dc-${check.duplicates ? 'warn' : 'ok'}`}>Одинаковых карточек в задании: {check.duplicates}</span>

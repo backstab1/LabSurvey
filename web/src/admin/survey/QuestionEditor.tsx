@@ -100,7 +100,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
         <Menu items={[
           { label: 'Предпросмотр с этого вопроса', onClick: onPreview },
           { label: 'Дублировать', onClick: onDuplicate },
-          { label: 'Копировать (JSON)', onClick: () => copyText(JSON.stringify(q, null, 2), `${q.id} скопирован — вставьте через «+» в любой анкете`) },
+          { label: 'Копировать (JSON)', onClick: () => copyText(JSON.stringify(q, null, 2), `${q.id} скопирован – вставьте через «+» в любой анкете`) },
           { label: 'Удалить вопрос', onClick: onDelete, danger: true },
         ]} />
         <button className="btn btn-primary btn-sm" onClick={onClose}>Готово</button>
@@ -168,7 +168,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
 
             {q.type !== 'hidden' && (
               <div className="field"><span>Условие показа</span>
-                <ConditionField def={def} value={q.showIf} self={q.id} suggest={prevId} placeholder="пусто — показывать всегда"
+                <ConditionField def={def} value={q.showIf} self={q.id} suggest={prevId} placeholder="пусто – показывать всегда"
                   onChange={(c) => set({ showIf: c })} />
               </div>
             )}
@@ -192,7 +192,7 @@ export function QuestionDialog({ def, q, prevId, position, onChange, onClose, on
 
         {current === 'scripts' && (
           <div className="stack">
-            <p className="muted small" style={{ margin: 0 }}>JavaScript в браузере респондента, объект <code>sl</code> — см. docs/survey-format.md → «Скрипты». Обычно хватает действий.</p>
+            <p className="muted small" style={{ margin: 0 }}>JavaScript в браузере респондента, объект <code>sl</code> – см. docs/survey-format.md → «Скрипты». Обычно хватает действий.</p>
             <div className="block-title">Перед показом</div>
             <ScriptsEditor level="question" only={['beforeShow']} value={q.scripts} onChange={(sc) => set({ scripts: sc })} />
             <div className="block-title">Во время показа</div>
@@ -371,8 +371,8 @@ function HiddenBody({ q, set }: { q: Extract<Question, { type: 'hidden' }>; set:
           onChange={(e) => set({ calc: e.target.value || undefined, valueType: e.target.value ? 'number' : q.valueType })} />
         {calcError ? <span className="field-error">{calcError}</span> : (
           <span className="field-help">
-            Пересчитывается после каждого ответа. Ответ на вопрос — его ID (Q5), + − * / и скобки, сравнения &gt; &lt; == дают 1 или 0.
-            Функции: {Object.entries(CALC_FUNCTIONS).map(([f, d]) => `${f}() — ${d}`).join('; ')}. Нет ответа — 0.
+            Пересчитывается после каждого ответа. Ответ на вопрос – его ID (Q5), + − * / и скобки, сравнения &gt; &lt; == дают 1 или 0.
+            Функции: {Object.entries(CALC_FUNCTIONS).map(([f, d]) => `${f}() – ${d}`).join('; ')}. Нет ответа – 0.
           </span>
         )}
       </label>
@@ -386,7 +386,7 @@ function HiddenBody({ q, set }: { q: Extract<Question, { type: 'hidden' }>; set:
         </div>
       )}
       <p className="muted small" style={{ margin: 0 }}>
-        {q.calc ? 'Значение — число, попадает в выгрузку и доступно в условиях, квотах и подстановках.'
+        {q.calc ? 'Значение – число, попадает в выгрузку и доступно в условиях, квотах и подстановках.'
           : <>Или задайте действием «Записать в переменную» либо скриптом: <code>sl.set("{q.id}", …)</code>. Переменная попадает в выгрузку и доступна в условиях.</>}
       </p>
     </div>

@@ -91,7 +91,7 @@ export function RichText({ value, onChange, multiline = true, rows = 2, placehol
           <Menu className="rich-pipe" label={<span className="mono">{'{{…}}'}</span>} title="Подставить ответ на вопрос" align="left"
             items={[
               { label: 'Подставить ответ', onClick: () => {}, group: true },
-              ...pipes.map((p) => ({ label: `${p.id}${p.text ? ` — ${p.text.length > 50 ? `${p.text.slice(0, 50)}…` : p.text}` : ''}`, onClick: () => insert(`{{${p.id}}}`) })),
+              ...pipes.map((p) => ({ label: `${p.id}${p.text ? ` – ${p.text.length > 50 ? `${p.text.slice(0, 50)}…` : p.text}` : ''}`, onClick: () => insert(`{{${p.id}}}`) })),
             ]} />
         )}
       </div>

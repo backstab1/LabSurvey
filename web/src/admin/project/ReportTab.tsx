@@ -60,7 +60,7 @@ export function ReportTab({ info }: { info: ProjectInfo }) {
         ) : (
           <>
             <div className="muted small">
-              Анкет в отчёте: <strong>{report.total}</strong>{filterJson ? <> · подгруппа: {describeCondition(def, filter)}</> : null}. Проценты — от ответивших на вопрос.
+              Анкет в отчёте: <strong>{report.total}</strong>{filterJson ? <> · подгруппа: {describeCondition(def, filter)}</> : null}. Проценты – от ответивших на вопрос.
             </div>
             {report.questions.map((q) => <QuestionBlock key={q.id} q={q} projectId={info.id} />)}
           </>
@@ -69,7 +69,7 @@ export function ReportTab({ info }: { info: ProjectInfo }) {
       {report && report.dropOff.length > 0 && (
         <div className="card stack">
           <h2>Где остановились незавершённые</h2>
-          <p className="muted small" style={{ margin: 0 }}>Не дошедшие до конца и завершившие досрочно — по вопросу, на котором остановились.</p>
+          <p className="muted small" style={{ margin: 0 }}>Не дошедшие до конца и завершившие досрочно – по вопросу, на котором остановились.</p>
           <Bars rows={report.dropOff.map((d) => ({ label: `${d.id} · ${d.text}`, count: d.count, pct: 0 }))} counts />
         </div>
       )}
@@ -101,7 +101,7 @@ function QuestionBlock({ q, projectId }: { q: QuestionReport; projectId: string 
           {q.stats.max !== undefined && <span>Макс <strong>{q.stats.max}</strong></span>}
         </div>
       )}
-      {q.rows && <Bars rows={q.rows} note={q.type === 'multi' || q.type === 'hotspot' ? 'Можно было выбрать несколько — сумма больше 100%' : undefined} />}
+      {q.rows && <Bars rows={q.rows} note={q.type === 'multi' || q.type === 'hotspot' ? 'Можно было выбрать несколько – сумма больше 100%' : undefined} />}
       {q.means && (
         <table className="table report-table">
           <thead><tr><th>Вариант</th><th>Среднее</th></tr></thead>
@@ -119,12 +119,12 @@ function QuestionBlock({ q, projectId }: { q: QuestionReport; projectId: string 
         </div>
       )}
       {(q.type === 'maxdiff' || q.type === 'conjoint') && (
-        <p className="muted small" style={{ margin: 0 }}>Анализ — по выгрузке (выборы по наборам) и файлу дизайна во вкладке «Данные».</p>
+        <p className="muted small" style={{ margin: 0 }}>Анализ – по выгрузке (выборы по наборам) и файлу дизайна во вкладке «Данные».</p>
       )}
       {q.ranks && (
         <table className="table report-table">
           <thead><tr><th>Вариант</th><th>Средний ранг</th><th>На 1-м месте</th><th>Ранжировали</th></tr></thead>
-          <tbody>{q.ranks.map((r) => <tr key={r.label}><td>{r.label}</td><td>{r.n ? r.mean : '—'}</td><td>{r.first}</td><td>{r.n}</td></tr>)}</tbody>
+          <tbody>{q.ranks.map((r) => <tr key={r.label}><td>{r.label}</td><td>{r.n ? r.mean : '–'}</td><td>{r.first}</td><td>{r.n}</td></tr>)}</tbody>
         </table>
       )}
       {q.matrix && (
@@ -137,7 +137,7 @@ function QuestionBlock({ q, projectId }: { q: QuestionReport; projectId: string 
                   <td>{row.label}</td>
                   {row.cells.map((c) => (
                     <td key={c.code} className="heat" style={{ background: `color-mix(in srgb, var(--accent) ${Math.round(c.pct * 0.6)}%, transparent)` }}>
-                      {row.n ? `${c.pct}%` : '—'}
+                      {row.n ? `${c.pct}%` : '–'}
                     </td>
                   ))}
                   <td className="muted">{row.n}</td>

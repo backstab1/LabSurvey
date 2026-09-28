@@ -78,7 +78,7 @@ export function LogicTab({ def, onOpen }: { def: Survey; onOpen: (id: string) =>
       <div className="logic-stats">
         <Stat value={stats.questions} label="вопросов" />
         <Stat
-          value={stats.minPath === null ? '—' : stats.minPath === stats.maxPath ? `${stats.minPath}` : `${stats.minPath}–${stats.maxPath}`}
+          value={stats.minPath === null ? '–' : stats.minPath === stats.maxPath ? `${stats.minPath}` : `${stats.minPath}–${stats.maxPath}`}
           label={stats.minPath === null ? 'завершить нельзя' : `вопросов на пути до конца · ≈ ${minutesRange(stats.minPath, stats.maxPath ?? stats.minPath)} мин`} />
         <Stat value={stats.conditional} label="показываются по условию" />
         <Stat value={stats.jumps} label="переходов" />
@@ -98,7 +98,7 @@ export function LogicTab({ def, onOpen }: { def: Survey; onOpen: (id: string) =>
       <div className="row logic-toolbar">
         <Segmented value={filter} onChange={setFilter}
           options={[{ value: 'all', label: 'Все вопросы' }, { value: 'logic', label: 'Только с логикой' }]} />
-        <span className="muted small">Линии слева — переходы. Наведите на вопрос, чтобы выделить его связи; клик открывает вопрос.</span>
+        <span className="muted small">Линии слева – переходы. Наведите на вопрос, чтобы выделить его связи; клик открывает вопрос.</span>
       </div>
 
       <div className="logic-map" ref={mapRef} style={{ ['--gutter' as string]: `${gutter}px` }}>

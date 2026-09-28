@@ -17,9 +17,9 @@ export const telegramConfigured = () => !!config.telegramBotToken;
 
 function message(title: string, e: NotifyEvent): string {
   switch (e.kind) {
-    case 'completed': return `«${title}»: завершено анкет — ${e.count}`;
+    case 'completed': return `«${title}»: завершено анкет – ${e.count}`;
     case 'quota_full': return `«${title}»: квота «${e.quota.title || e.quota.id}» набрана (${e.quota.limit})`;
-    case 'limit_reached': return `«${title}»: набран лимит ${e.limit} анкет — сбор для новых респондентов закрыт`;
+    case 'limit_reached': return `«${title}»: набран лимит ${e.limit} анкет – сбор для новых респондентов закрыт`;
     case 'test': return `«${title}»: тестовое уведомление SurveyLAB`;
   }
 }

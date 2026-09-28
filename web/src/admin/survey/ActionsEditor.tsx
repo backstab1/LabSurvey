@@ -109,7 +109,7 @@ export function ActionsEditor({ def, q, phase, value, onChange, onCreateVar }: {
         <button type="button" className="btn btn-secondary btn-sm" disabled={!kinds.length}
           onClick={() => insert(list.length, { do: phase === 'after' ? 'goTo' : kinds[0][0] })}>+ Добавить</button>
       </div>
-      {list.length === 0 ? <p className="empty-rules">{phase === 'before' ? 'Действий нет — вопрос показывается как есть.' : 'Действий нет — дальше следующий вопрос.'}</p> : (
+      {list.length === 0 ? <p className="empty-rules">{phase === 'before' ? 'Действий нет – вопрос показывается как есть.' : 'Действий нет – дальше следующий вопрос.'}</p> : (
         <div className="list-table">
           <div className="list-head atable-head"><span>Условие</span><span>Действие</span><span /></div>
           {list.map((a, i) => (
@@ -131,11 +131,11 @@ export function ActionsEditor({ def, q, phase, value, onChange, onCreateVar }: {
 /** Параметр действия одной строкой: «Q5», «коды 1, 2», «H1 = 3» */
 function paramSummary(a: Action): string {
   switch (a.do) {
-    case 'goTo': return a.target ?? '— куда? —';
-    case 'skipQuestion': return a.target ?? '— какой? —';
+    case 'goTo': return a.target ?? '– куда? –';
+    case 'skipQuestion': return a.target ?? '– какой? –';
     case 'markAnswered': return `${a.target ?? '?'} = ${Array.isArray(a.value) ? a.value.join(', ') : a.value ?? ''}`;
     case 'setValue': return `${a.target ?? '?'} = ${a.value ?? ''}`;
-    case 'hideOptions': case 'showOnlyOptions': return a.codes?.length ? a.codes.join(', ') : '— какие? —';
+    case 'hideOptions': case 'showOnlyOptions': return a.codes?.length ? a.codes.join(', ') : '– какие? –';
     case 'hideOptionsFrom': return `${a.filter === 'notSelected' ? 'невыбранные' : 'выбранные'} в ${a.question ?? '?'}`;
     case 'skipIfFewer': return `< ${a.n ?? 2}`;
     case 'answer': return a.value === undefined ? '' : Array.isArray(a.value) ? a.value.join(', ') : String(a.value);
@@ -171,7 +171,7 @@ function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, to
       <div className="list-editor action-editor">
         <div className="action-field"><span className="action-field-label">Условие</span>
           <ConditionField def={def} value={a.if} self={q.id} suggest={q.type !== 'info' && q.type !== 'hidden' ? q.id : undefined}
-            placeholder="пусто — выполнять всегда" onChange={(c) => set({ if: c })} />
+            placeholder="пусто – выполнять всегда" onChange={(c) => set({ if: c })} />
         </div>
         <div className="action-field"><span className="action-field-label">Действие</span>
           <div className="stack" style={{ gap: 8 }}>
@@ -187,7 +187,7 @@ function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, to
           <Segmented value={a.filter ?? 'selected'} onChange={(filter) => set({ filter: filter === 'selected' ? undefined : filter })}
             options={[{ value: 'selected', label: 'выбранные в' }, { value: 'notSelected', label: 'не выбранные в' }]} />
           <select className="input" value={a.question ?? ''} onChange={(e) => set({ question: e.target.value || undefined })}>
-            <option value="">— вопрос —</option>
+            <option value="">– вопрос –</option>
             {questions.slice(0, Math.max(0, selfIdx)).filter((x) => OPTION_TYPES.includes(x.type))
               .map((x) => <option key={x.id} value={x.id}>{x.id} · {x.text.slice(0, 40)}</option>)}
           </select>
@@ -225,7 +225,7 @@ function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, to
             if (e.target.value === '__new') set({ target: onCreateVar() });
             else set({ target: e.target.value || undefined });
           }}>
-            <option value="">— переменная —</option>
+            <option value="">– переменная –</option>
             {hiddenVars.map((h) => <option key={h.id} value={h.id}>{h.id}{h.text ? ` · ${h.text}` : ''}</option>)}
             <option value="__new">+ новая скрытая переменная</option>
           </select>
@@ -237,7 +237,7 @@ function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, to
       {a.do === 'goTo' && (
         <div className="action-params">
           <select className="input" value={a.target ?? ''} onChange={(e) => set({ target: e.target.value || undefined })}>
-            <option value="">— куда —</option>
+            <option value="">– куда –</option>
             {def.blocks.map((b, bi) => {
               const later = b.questions.filter((x) => questions.indexOf(x) > selfIdx && x.type !== 'hidden');
               if (!later.length) return null;
@@ -256,7 +256,7 @@ function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, to
       {(a.do === 'skipQuestion' || a.do === 'markAnswered') && (
         <div className="action-params">
           <select className="input" value={a.target ?? ''} onChange={(e) => set({ target: e.target.value || undefined })}>
-            <option value="">— какой вопрос —</option>
+            <option value="">– какой вопрос –</option>
             {questions.slice(selfIdx + 1).filter((x) => x.type !== 'hidden' && x.type !== 'info')
               .map((x) => <option key={x.id} value={x.id}>{x.id} · {x.text.slice(0, 50)}</option>)}
             {a.target && !questions.slice(selfIdx + 1).some((x) => x.id === a.target) && <option value={a.target}>{a.target} (не дальше этого вопроса)</option>}
@@ -264,7 +264,7 @@ function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, to
           {a.do === 'markAnswered' && (
             <>
               <span className="muted small">ответ</span>
-              <input className="input" placeholder="код; для нескольких — через запятую; можно {{Q1}}"
+              <input className="input" placeholder="код; для нескольких – через запятую; можно {{Q1}}"
                 value={a.value === undefined ? '' : Array.isArray(a.value) ? a.value.join(', ') : String(a.value)}
                 onChange={(e) => set({ value: e.target.value === '' ? undefined : e.target.value })} />
             </>
@@ -273,7 +273,7 @@ function ActionRow({ def, q, a, kinds, open, onToggle, onChange, onCreateVar, to
       )}
       {(a.do === 'end' || a.do === 'screenout') && (
         <div className="action-params ending-params">
-          <input className="input" placeholder="Своё сообщение (необязательно, иначе — из настроек)" value={a.message ?? ''}
+          <input className="input" placeholder="Своё сообщение (необязательно, иначе – из настроек)" value={a.message ?? ''}
             onChange={(e) => set({ message: e.target.value || undefined })} />
           <input className="input mono" placeholder="или адрес перехода: https://…?pid={{param.pid}}" value={a.redirect ?? ''}
             onChange={(e) => set({ redirect: e.target.value.trim() || undefined })} />

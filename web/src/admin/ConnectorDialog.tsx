@@ -3,7 +3,7 @@ import { api, useApi } from '../api.ts';
 import { Modal, toast, copyText } from './common.tsx';
 import type { Connection } from '../../../shared/api.ts';
 
-const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '–');
 
 /** Подключение Claude / ChatGPT к SurveyLAB (MCP-коннектор) и отзыв доступа */
 export function ConnectorDialog({ onClose }: { onClose: () => void }) {
@@ -16,7 +16,7 @@ export function ConnectorDialog({ onClose }: { onClose: () => void }) {
     <Modal onClose={onClose} title="ИИ-коннектор" actions={<button className="btn btn-primary" onClick={onClose}>Готово</button>}>
       <div className="stack">
         <p style={{ margin: 0 }}>
-          Подключите SurveyLAB к Claude или ChatGPT — и создавайте анкеты прямо в чате: опишите задачу, ИИ соберёт анкету, проверит её
+          Подключите SurveyLAB к Claude или ChatGPT – и создавайте анкеты прямо в чате: опишите задачу, ИИ соберёт анкету, проверит её
           и сохранит черновиком. Публикуете и запускаете вы сами.
         </p>
         <div className="field">
@@ -37,7 +37,7 @@ export function ConnectorDialog({ onClose }: { onClose: () => void }) {
             <strong>Claude</strong>
             <ol className="small" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
               <li>Настройки → Коннекторы → «Добавить свой коннектор».</li>
-              <li>Название — SurveyLAB, адрес — из поля выше.</li>
+              <li>Название – SurveyLAB, адрес – из поля выше.</li>
               <li>«Подключить» → войдите в SurveyLAB → «Разрешить».</li>
             </ol>
           </div>
@@ -45,7 +45,7 @@ export function ConnectorDialog({ onClose }: { onClose: () => void }) {
             <strong>ChatGPT</strong>
             <ol className="small" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
               <li>Настройки → Приложения и коннекторы → включите режим разработчика → «Создать».</li>
-              <li>Адрес — из поля выше, аутентификация — OAuth.</li>
+              <li>Адрес – из поля выше, аутентификация – OAuth.</li>
               <li>Войдите в SurveyLAB → «Разрешить».</li>
             </ol>
           </div>

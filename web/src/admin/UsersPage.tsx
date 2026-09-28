@@ -51,13 +51,13 @@ function ClientProjects({ user, all, onClose, onSave }: {
         <button className="btn btn-secondary" onClick={onClose}>Отмена</button>
         <button className="btn btn-primary" onClick={() => onSave(value)}>Сохранить</button>
       </>}>
-      <p className="muted small" style={{ marginTop: 0 }}>Заказчик видит сводку, отчёт и данные выбранных проектов — без анкет, настроек и панелей.</p>
+      <p className="muted small" style={{ marginTop: 0 }}>Заказчик видит сводку, отчёт и данные выбранных проектов – без анкет, настроек и панелей.</p>
       <ProjectPicker all={all} value={value} onChange={setValue} />
     </Modal>
   );
 }
 
-const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '–');
 
 /** Управление доступом команды (только для администратора) */
 export function UsersPage({ me }: { me: string }) {
@@ -84,7 +84,7 @@ export function UsersPage({ me }: { me: string }) {
       </div>
       <p className="muted small">
         Главный администратор задаётся в .env (ADMIN_LOGIN / ADMIN_PASSWORD) и здесь не показывается.
-        Роли: {(Object.keys(ROLE_LABELS) as Role[]).map((r) => `${ROLE_LABELS[r].toLowerCase()} — ${ROLE_HINTS[r]}`).join('; ')}.
+        Роли: {(Object.keys(ROLE_LABELS) as Role[]).map((r) => `${ROLE_LABELS[r].toLowerCase()} – ${ROLE_HINTS[r]}`).join('; ')}.
       </p>
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         {!list ? <p className="muted" style={{ padding: 20 }}>Загрузка…</p> : list.length === 0 ? (
@@ -156,7 +156,7 @@ function AddUser({ all, onClose, onDone }: { all: ProjectOption[] | null; onClos
         </label>
         <label className="field"><span>Роль</span>
           <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
-            {(Object.keys(ROLE_LABELS) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]} — {ROLE_HINTS[r]}</option>)}
+            {(Object.keys(ROLE_LABELS) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]} – {ROLE_HINTS[r]}</option>)}
           </select>
         </label>
         {form.role === 'client' && (

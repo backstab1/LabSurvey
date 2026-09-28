@@ -129,13 +129,13 @@ test('OAuth flow, MCP tools, refresh rotation, revoke', async () => {
   const list = JSON.parse(textOf(await client.callTool({ name: 'list_surveys', arguments: { query: 'от ии' } })));
   assert.equal(list.length, 1);
   const got = JSON.parse(textOf(await client.callTool({ name: 'get_survey', arguments: { id: c.id } })));
-  const edited = { ...got.definition, title: 'От ИИ — правка' };
+  const edited = { ...got.definition, title: 'От ИИ – правка' };
   const stale = await client.callTool({ name: 'update_survey', arguments: { id: c.id, updatedAt: '2000-01-01T00:00:00.000Z', definition: edited } });
   assert.equal(stale.isError, true);
   const upd = await client.callTool({ name: 'update_survey', arguments: { id: c.id, updatedAt: got.updatedAt, definition: edited } });
   assert.ok(!upd.isError, textOf(upd));
   const again = JSON.parse(textOf(await client.callTool({ name: 'get_survey', arguments: { id: c.id } })));
-  assert.equal(again.definition.title, 'От ИИ — правка');
+  assert.equal(again.definition.title, 'От ИИ – правка');
   assert.equal(again.publishedVersion, null);
   await client.close();
 

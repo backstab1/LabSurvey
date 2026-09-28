@@ -7,7 +7,7 @@
 <meta name="description" content="Документация SurveyLAB: как собрать анкету, типы вопросов, логика, циклы, формулы, скрипты с примерами, проекты, квоты, панели, данные и выгрузки.">
 <link rel="icon" href="/surveylab-logo.svg">
 <style>
-/* Оформление — как в админке SurveyLAB (web/src/styles.css, web/src/admin/admin.css) */
+/* Оформление – как в админке SurveyLAB (web/src/styles.css, web/src/admin/admin.css) */
 :root {
   --bg: #f5f6f8; --surface: #ffffff; --text: #1c1f24; --muted: #6b7280; --border: #dde1e6;
   --accent: #2f6fed; --accent-soft: #e8f0fe; --accent-ink: #2553b8;
@@ -27,7 +27,7 @@ button, input { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
 
-/* ---------- Шапка — как в админке ---------- */
+/* ---------- Шапка – как в админке ---------- */
 .topbar { position: sticky; top: 0; z-index: 20; height: var(--top-h); display: flex; align-items: center; gap: 16px; padding: 0 20px;
   background: var(--surface); border-bottom: 1px solid var(--border); }
 .topbar .logo { display: flex; flex-shrink: 0; }
@@ -66,7 +66,7 @@ button, input { font: inherit; color: inherit; }
   .scrim { position: fixed; inset: var(--top-h) 0 0 0; background: rgba(0,0,0,.25); z-index: 25; }
 }
 
-/* ---------- Контент: разделы — карточки, как в админке ---------- */
+/* ---------- Контент: разделы – карточки, как в админке ---------- */
 main { padding: 20px 20px 80px; min-width: 0; }
 .doc { max-width: 880px; }
 .hero-doc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
@@ -94,7 +94,7 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border)
 .ui { font-weight: 600; white-space: nowrap; }
 .muted { color: var(--muted); }
 
-/* Код — светлый, как поля скриптов и JSON в конструкторе */
+/* Код – светлый, как поля скриптов и JSON в конструкторе */
 .pre { position: relative; margin: 12px 0; }
 pre { margin: 0; background: #f6f8fa; color: #24292f; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; overflow-x: auto;
   font: 13px/1.6 var(--mono); tab-size: 2; }
@@ -187,7 +187,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <div class="hero-doc">
   <div class="eyebrow">Руководство для команды и заказчиков</div>
   <h1>Документация SurveyLAB</h1>
-  <p>Как собрать анкету, настроить логику, запустить сбор и получить данные. Сначала описано, как сделать что-то мышкой в конструкторе, ниже — как то же выглядит в JSON и скриптах.</p>
+  <p>Как собрать анкету, настроить логику, запустить сбор и получить данные. Сначала описано, как сделать что-то мышкой в конструкторе, ниже – как то же выглядит в JSON и скриптах.</p>
   <div class="paths">
     <a class="path" href="#quickstart"><b>Первая анкета за 10 минут</b><span>От шаблона до ссылки для респондентов</span></a>
     <a class="path" href="#types"><b>Типы вопросов</b><span>18 типов: что выбрать и как настроить</span></a>
@@ -201,12 +201,12 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <section class="doc-sec" id="concepts" data-group="Начало" data-title="Как устроен SurveyLAB">
 <p class="part">Начало</p>
 <h2>Как устроен SurveyLAB</h2>
-<p class="lead">В SurveyLAB два главных объекта: <b>анкета</b> и <b>проект</b>. Анкета — это сценарий, то есть вопросы и логика. Проект — это запуск анкеты: ссылка, сроки, квоты, панели и собранные данные. Модель такая же, как в Survey Studio.</p>
+<p class="lead">В SurveyLAB два главных объекта: <b>анкета</b> и <b>проект</b>. Анкета – это сценарий, то есть вопросы и логика. Проект – это запуск анкеты: ссылка, сроки, квоты, панели и собранные данные. Модель такая же, как в Survey Studio.</p>
 <div class="tbl"><table>
 <tr><th></th><th>Анкета</th><th>Проект</th></tr>
 <tr><td>Что внутри</td><td>Блоки и вопросы, условия, действия, циклы, формулы, скрипты, оформление, сообщения и редиректы</td><td>Одна анкета, статус, сроки и лимит, доступ и защита, квоты, панели, персональные ссылки, данные, отчёт, таблицы</td></tr>
 <tr><td>Где</td><td>Раздел <span class="ui">Анкеты</span></td><td>Раздел <span class="ui">Проекты</span></td></tr>
-<tr><td>Ссылка</td><td>Предпросмотр и тестовая ссылка на черновик</td><td><code>/s/&lt;ID проекта&gt;</code> — ссылка для респондентов</td></tr>
+<tr><td>Ссылка</td><td>Предпросмотр и тестовая ссылка на черновик</td><td><code>/s/&lt;ID проекта&gt;</code> – ссылка для респондентов</td></tr>
 <tr><td>Сколько</td><td colspan="2">Одну анкету можно запустить в нескольких проектах: волны, разные панели, разные заказчики. У проекта всегда ровно одна анкета.</td></tr>
 </table></div>
 
@@ -218,7 +218,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
   <li><b>Один вопрос на экране.</b> Респондент видит вопросы по одному, поэтому анкета хорошо проходится с телефона. Блоки нужны для порядка, заголовков, перемешивания и циклов.</li>
   <li><b>Вся логика задаётся на вопросе:</b> условие показа и действия перед показом или после ответа. Отдельных «страниц» и «переходов страниц» нет.</li>
   <li><b>Черновик и опубликованная версия.</b> Правки сохраняются в черновик автоматически, респонденты их не видят. Изменения попадают к респондентам только после кнопки <span class="ui">Опубликовать</span>.</li>
-  <li><b>Сервер — источник истины.</b> Сервер сам проверяет каждый ответ и сам решает, какой вопрос показать дальше. Скрипты в браузере не могут записать некорректные данные.</li>
+  <li><b>Сервер – источник истины.</b> Сервер сам проверяет каждый ответ и сам решает, какой вопрос показать дальше. Скрипты в браузере не могут записать некорректные данные.</li>
   <li><b>ID вопроса = имя переменной</b> в Excel и SPSS. Давайте короткие ID: <code>S1</code>, <code>Q5</code>, <code>D2</code>.</li>
 </ul>
 
@@ -242,7 +242,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
   <li><b>Проверьте.</b> <span class="ui">Предпросмотр</span> проходит анкету как респондент, с панелью отладки. Вкладка <span class="ui">Логика</span> показывает карту переходов и находит недостижимые вопросы.</li>
   <li><b>Опубликуйте.</b> Кнопка <span class="ui">Опубликовать</span> доступна, когда в анкете нет ошибок.</li>
   <li><b>Запустите проект.</b> Меню <span class="ui">⋯</span> → <span class="ui">Запустить в новом проекте</span>. В проекте задайте сроки, квоты и панели, затем нажмите <span class="ui">Начать сбор данных</span> и скопируйте ссылку.</li>
-  <li><b>Смотрите данные.</b> <span class="ui">Сводка</span> показывает ход поля, <span class="ui">Отчёт</span> — распределения, <span class="ui">Таблицы</span> — кросс-таблицы, <span class="ui">Данные</span> — ответы и выгрузку в Excel, SPSS, CSV и Google Sheets.</li>
+  <li><b>Смотрите данные.</b> <span class="ui">Сводка</span> показывает ход поля, <span class="ui">Отчёт</span> – распределения, <span class="ui">Таблицы</span> – кросс-таблицы, <span class="ui">Данные</span> – ответы и выгрузку в Excel, SPSS, CSV и Google Sheets.</li>
 </ol>
 <div class="note tip"><p>Прежде чем отдавать ссылку, нажмите в проекте <span class="ui">Данные</span> → <span class="ui">Заполнить тестовыми</span>. Боты пройдут анкету по всем веткам логики со случайными ответами, и вы увидите, как выглядит отчёт и выгрузка. Потом эти ответы удаляются кнопкой <span class="ui">Удалить тестовые</span>.</p></div>
 </section>
@@ -252,7 +252,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <section class="doc-sec" id="builder" data-group="Анкета" data-title="Конструктор">
 <p class="part">Анкета</p>
 <h2>Конструктор</h2>
-<p class="lead">Анкета — это лента карточек, сгруппированных по блокам. На карточке видны ID, тип, текст и значки логики: условие показа, действия, скрипты.</p>
+<p class="lead">Анкета – это лента карточек, сгруппированных по блокам. На карточке видны ID, тип, текст и значки логики: условие показа, действия, скрипты.</p>
 
 <h3>Вкладки анкеты</h3>
 <div class="tbl"><table>
@@ -267,10 +267,10 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <h3>Окно вопроса</h3>
 <p>Клик по карточке открывает окно с вкладками:</p>
 <ul>
-  <li><span class="ui">Основное</span> — тип, текст, подсказка, обязательность, варианты (строки, столбцы), условие показа.</li>
-  <li><span class="ui">Действия</span> — списки <b>перед показом</b> и <b>после ответа</b> (см. <a href="#actions">Действия</a>).</li>
-  <li><span class="ui">Скрипты</span> — JavaScript-хуки вопроса (см. <a href="#scripts">Скрипты</a>).</li>
-  <li><span class="ui">Настройки</span> — всё остальное, свёрнуто: порядок вариантов, колонки, автопереход, проверки, вид, предзаполнение, контроль качества, комментарий для команды.</li>
+  <li><span class="ui">Основное</span> – тип, текст, подсказка, обязательность, варианты (строки, столбцы), условие показа.</li>
+  <li><span class="ui">Действия</span> – списки <b>перед показом</b> и <b>после ответа</b> (см. <a href="#actions">Действия</a>).</li>
+  <li><span class="ui">Скрипты</span> – JavaScript-хуки вопроса (см. <a href="#scripts">Скрипты</a>).</li>
+  <li><span class="ui">Настройки</span> – всё остальное, свёрнуто: порядок вариантов, колонки, автопереход, проверки, вид, предзаполнение, контроль качества, комментарий для команды.</li>
 </ul>
 <p>Большие списки вариантов редактируются в отдельном окне списка. Enter создаёт следующий вариант, Backspace в пустом варианте удаляет его, стрелки переходят между вариантами. Вставка из буфера списком (по строке на вариант) создаёт сразу много вариантов. <span class="ui">Другое</span> и <span class="ui">Затрудняюсь</span> добавляются одной кнопкой.</p>
 
@@ -287,12 +287,12 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <h3>Сохранение, публикация, версии</h3>
 <ul>
   <li>Черновик сохраняется автоматически, состояние видно в шапке. <kbd>Ctrl</kbd>+<kbd>S</kbd> сохраняет сразу.</li>
-  <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> — отменить, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> или <kbd>Ctrl</kbd>+<kbd>Y</kbd> — повторить.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> – отменить, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> или <kbd>Ctrl</kbd>+<kbd>Y</kbd> – повторить.</li>
   <li><span class="ui">Опубликовать</span> недоступна, пока в анкете есть ошибки. Если анкета уже собирает ответы, SurveyLAB попросит подтверждение: незавершённые респонденты продолжат по новой версии. Номер версии пишется в выгрузку (<code>version</code>).</li>
   <li>Меню <span class="ui">⋯</span> → <span class="ui">История версий</span>: все опубликованные версии и кто их опубликовал; любую можно вернуть в черновик.</li>
-  <li>Меню <span class="ui">⋯</span> → <span class="ui">Печатная версия анкеты</span>: вся анкета с логикой человеческим языком — для согласования с заказчиком.</li>
+  <li>Меню <span class="ui">⋯</span> → <span class="ui">Печатная версия анкеты</span>: вся анкета с логикой человеческим языком – для согласования с заказчиком.</li>
 </ul>
-<div class="note warn"><p>После начала сбора не меняйте коды вариантов и не удаляйте варианты — это ломает сопоставимость данных. Ненужный вариант лучше <b>скрыть</b> (настройка варианта «скрыт»): код останется в выгрузке.</p></div>
+<div class="note warn"><p>После начала сбора не меняйте коды вариантов и не удаляйте варианты – это ломает сопоставимость данных. Ненужный вариант лучше <b>скрыть</b> (настройка варианта «скрыт»): код останется в выгрузке.</p></div>
 </section>
 
 <section class="doc-sec" id="blocks" data-group="Анкета" data-title="Блоки и порядок вопросов">
@@ -300,9 +300,9 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <h2>Блоки и порядок вопросов</h2>
 <p>Блок группирует вопросы: скринер, основной блок, демография. У блока есть:</p>
 <ul>
-  <li><b>Заголовок</b> — необязательный, показывается респонденту над вопросами блока. Подстановки работают.</li>
+  <li><b>Заголовок</b> – необязательный, показывается респонденту над вопросами блока. Подстановки работают.</li>
   <li><b>Порядок вопросов</b>: по порядку, случайный или ротация. Порядок свой у каждого респондента и не меняется, если он вернётся назад. Вопрос с флагом <b>закрепить</b> остаётся на своём месте.</li>
-  <li><b>Цикл</b> — блок повторяется для каждого выбранного варианта, строки или числа (см. <a href="#loops">Циклы</a>).</li>
+  <li><b>Цикл</b> – блок повторяется для каждого выбранного варианта, строки или числа (см. <a href="#loops">Циклы</a>).</li>
 </ul>
 <p>Меню блока позволяет свернуть или развернуть блоки, добавить блок, переместить его, объединить с предыдущим, вынести из цикла.</p>
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "B_main", "title": "Об использовании", "order": "random", "questions": [
@@ -343,7 +343,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <div class="tbl"><table>
 <tr><th>В конструкторе</th><th>JSON</th><th>Что делает</th></tr>
 <tr><td>Текст, подсказка</td><td><code>text</code>, <code>hint</code></td><td>Текст вопроса и подсказка под ним. Работают форматирование и подстановки</td></tr>
-<tr><td>Обязательный</td><td><code>required</code></td><td>По умолчанию вопрос обязателен; <code>false</code> — можно пропустить</td></tr>
+<tr><td>Обязательный</td><td><code>required</code></td><td>По умолчанию вопрос обязателен; <code>false</code> – можно пропустить</td></tr>
 <tr><td>Своё сообщение</td><td><code>requiredMessage</code></td><td>Текст вместо «Ответьте на вопрос»</td></tr>
 <tr><td>Условие показа</td><td><code>showIf</code></td><td>Когда показывать вопрос (<a href="#conditions">Условия</a>)</td></tr>
 <tr><td>Действия</td><td><code>actions</code></td><td>Перед показом и после ответа (<a href="#actions">Действия</a>)</td></tr>
@@ -361,15 +361,15 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
   { "code": 2, "text": "Женский" }
 ] }</code></pre></div>
 <ul>
-  <li><b>Порядок</b> <code>order</code>: <code>random</code> — перемешать, <code>rotate</code> — ротация. «Другое» и эксклюзивные варианты остаются внизу; вариант с <code>fixed</code> — на своём месте.</li>
+  <li><b>Порядок</b> <code>order</code>: <code>random</code> – перемешать, <code>rotate</code> – ротация. «Другое» и эксклюзивные варианты остаются внизу; вариант с <code>fixed</code> – на своём месте.</li>
   <li><b>Колонки</b> <code>columnCount</code>: 2 или 3 (на телефоне всегда одна колонка).</li>
-  <li><b>Автопереход</b> <code>autoNext</code> — дальше сразу после выбора (кроме «Другое»).</li>
-  <li><b>Поиск</b> <code>search</code> — строка поиска над длинным списком; <code>hideMarker</code> — без кружков, выбор подсвечивается.</li>
-  <li><b>Поле «Другое» видно всегда</b> <code>showOtherAlways</code> — ввод текста сам отмечает вариант.</li>
-  <li><b>Картинки</b> у вариантов (<code>image</code>) — варианты показываются карточками.</li>
-  <li><b>Перенос</b> вариантов из другого вопроса — <code>optionsFrom</code> (<a href="#carry">Перенос</a>).</li>
+  <li><b>Автопереход</b> <code>autoNext</code> – дальше сразу после выбора (кроме «Другое»).</li>
+  <li><b>Поиск</b> <code>search</code> – строка поиска над длинным списком; <code>hideMarker</code> – без кружков, выбор подсвечивается.</li>
+  <li><b>Поле «Другое» видно всегда</b> <code>showOtherAlways</code> – ввод текста сам отмечает вариант.</li>
+  <li><b>Картинки</b> у вариантов (<code>image</code>) – варианты показываются карточками.</li>
+  <li><b>Перенос</b> вариантов из другого вопроса – <code>optionsFrom</code> (<a href="#carry">Перенос</a>).</li>
 </ul>
-<p class="muted">Выгрузка: <code>S2</code> — код с метками значений; <code>S2_97_other</code> — текст «Другое».</p>
+<p class="muted">Выгрузка: <code>S2</code> – код с метками значений; <code>S2_97_other</code> – текст «Другое».</p>
 </div></details>
 
 <details class="type" id="t-multi"><summary><b>Несколько ответов</b> <code>multi</code> <span class="sum-hint">любое число вариантов</span></summary><div class="body">
@@ -377,14 +377,14 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <ul>
   <li><b>Эксклюзивный</b> вариант <code>exclusive</code> снимает все остальные («Ничего из перечисленного», «Затрудняюсь»).</li>
   <li><b>Сколько можно выбрать</b>: <code>minSelected</code>, <code>maxSelected</code>.</li>
-  <li><b>Эксклюзивность внутри группы</b> <code>groupExclusive</code> — выбор снимает остальные варианты своей группы.</li>
+  <li><b>Эксклюзивность внутри группы</b> <code>groupExclusive</code> – выбор снимает остальные варианты своей группы.</li>
 </ul>
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "Q1", "type": "multi", "text": "Какие марки кофе вы знаете?", "order": "random", "options": [
   { "code": 1, "text": "Jacobs" }, { "code": 2, "text": "Nescafé" }, { "code": 3, "text": "Черная карта" },
   { "code": 97, "text": "Другое", "other": true },
   { "code": 99, "text": "Ни одной", "exclusive": true }
 ] }</code></pre></div>
-<p class="muted">Выгрузка: <code>Q1_1</code>, <code>Q1_2</code>, … — 0/1; <code>Q1_97_other</code> — текст.</p>
+<p class="muted">Выгрузка: <code>Q1_1</code>, <code>Q1_2</code>, … – 0/1; <code>Q1_97_other</code> – текст.</p>
 </div></details>
 
 <details class="type" id="t-dropdown"><summary><b>Выпадающий список</b> <code>dropdown</code> <span class="sum-hint">для длинных списков</span></summary><div class="body">
@@ -392,12 +392,12 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 </div></details>
 
 <details class="type" id="t-ranking"><summary><b>Ранжирование</b> <code>ranking</code> <span class="sum-hint">расставить по местам</span></summary><div class="body">
-<p>Респондент нажимает варианты по порядку (1 — самое важное) и может менять порядок стрелками. <code>rankCount</code> — сколько мест заполнить (по умолчанию все).</p>
+<p>Респондент нажимает варианты по порядку (1 – самое важное) и может менять порядок стрелками. <code>rankCount</code> – сколько мест заполнить (по умолчанию все).</p>
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "Q7", "type": "ranking", "text": "Выберите 3 самых важных фактора", "rankCount": 3, "options": [
   { "code": 1, "text": "Цена" }, { "code": 2, "text": "Вкус" }, { "code": 3, "text": "Сервис" }, { "code": 4, "text": "Интерьер" }
 ] }</code></pre></div>
-<p>Ответ — массив кодов по местам. В условиях работает как <code>multi</code>: <code>contains</code> — вариант попал в ранжирование.</p>
-<p class="muted">Выгрузка: <code>Q7_&lt;код&gt;</code> — место варианта (пусто — не попал в топ).</p>
+<p>Ответ – массив кодов по местам. В условиях работает как <code>multi</code>: <code>contains</code> – вариант попал в ранжирование.</p>
+<p class="muted">Выгрузка: <code>Q7_&lt;код&gt;</code> – место варианта (пусто – не попал в топ).</p>
 </div></details>
 
 <details class="type" id="t-text"><summary><b>Открытый ответ</b> <code>text</code> <span class="sum-hint">текст, e-mail, время</span></summary><div class="body">
@@ -406,7 +406,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <tr><td><code>multiline</code>, <code>rows</code></td><td>Большое поле и его высота в строках (2–20)</td></tr>
 <tr><td><code>minLength</code>, <code>maxLength</code></td><td>Длина ответа, символов</td></tr>
 <tr><td><code>pattern</code>, <code>patternMessage</code></td><td>Регулярное выражение для всего ответа и текст ошибки</td></tr>
-<tr><td><code>inputType</code></td><td><code>email</code> — проверка e-mail, <code>time</code> — время ЧЧ:ММ</td></tr>
+<tr><td><code>inputType</code></td><td><code>email</code> – проверка e-mail, <code>time</code> – время ЧЧ:ММ</td></tr>
 <tr><td><code>placeholder</code></td><td>Подсказка внутри поля</td></tr>
 <tr><td><code>noPaste</code></td><td>Запретить вставку из буфера</td></tr>
 </table></div>
@@ -416,12 +416,12 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 </div></details>
 
 <details class="type" id="t-number"><summary><b>Число</b> <code>number</code> <span class="sum-hint">с диапазоном и единицей</span></summary><div class="body">
-<p><code>min</code>, <code>max</code>; <code>decimals</code> — знаков после запятой (по умолчанию 0 — только целые); <code>suffix</code> — единица справа от поля («лет», «₽»).</p>
+<p><code>min</code>, <code>max</code>; <code>decimals</code> – знаков после запятой (по умолчанию 0 – только целые); <code>suffix</code> – единица справа от поля («лет», «₽»).</p>
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "S1", "type": "number", "text": "Сколько вам полных лет?", "min": 14, "max": 99, "suffix": "лет" }</code></pre></div>
 </div></details>
 
 <details class="type" id="t-scale"><summary><b>Шкала / NPS</b> <code>scale</code> <span class="sum-hint">кнопки, звёзды, смайлики</span></summary><div class="body">
-<p>До 21 точки от <code>from</code> до <code>to</code>. <code>labels</code> — подписи точек. <code>extraOptions</code> — варианты вне шкалы («Затрудняюсь», код вне диапазона). <code>display</code>: <code>buttons</code>, <code>stars</code>, <code>smileys</code>.</p>
+<p>До 21 точки от <code>from</code> до <code>to</code>. <code>labels</code> – подписи точек. <code>extraOptions</code> – варианты вне шкалы («Затрудняюсь», код вне диапазона). <code>display</code>: <code>buttons</code>, <code>stars</code>, <code>smileys</code>.</p>
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "NPS", "type": "scale", "text": "Порекомендуете ли вы нас друзьям?", "from": 0, "to": 10,
   "labels": { "0": "Точно нет", "10": "Точно да" },
   "extraOptions": [{ "code": 99, "text": "Затрудняюсь ответить" }] }</code></pre></div>
@@ -434,23 +434,23 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
   "columns": [ { "code": 1, "text": "Плохо" }, { "code": 2, "text": "Нормально" }, { "code": 3, "text": "Хорошо" } ] }</code></pre></div>
 <div class="tbl"><table>
 <tr><th>Настройка</th><th>Что делает</th></tr>
-<tr><td><code>mode</code></td><td><code>single</code> — один ответ в строке, <code>multi</code> — несколько</td></tr>
-<tr><td><code>requiredRows</code></td><td><code>"all"</code> (по умолчанию), <code>"none"</code> или число N — минимум заполненных строк</td></tr>
+<tr><td><code>mode</code></td><td><code>single</code> – один ответ в строке, <code>multi</code> – несколько</td></tr>
+<tr><td><code>requiredRows</code></td><td><code>"all"</code> (по умолчанию), <code>"none"</code> или число N – минимум заполненных строк</td></tr>
 <tr><td><code>rowOrder</code>, <code>rowsFrom</code></td><td>Порядок строк; перенос строк из другого вопроса</td></tr>
 <tr><td><code>transpose</code></td><td>Перевернуть таблицу</td></tr>
 <tr><td><code>verticalHeaders</code></td><td>Вертикальные заголовки столбцов</td></tr>
 <tr><td><code>progressiveRows</code></td><td>Строки появляются по мере ответа</td></tr>
 <tr><td><code>carousel</code></td><td>По одной строке на экране</td></tr>
-<tr><td><code>straightline</code></td><td><code>flag</code> / <code>screenout</code> — одинаковый ответ во всех строках (<a href="#quality">Качество</a>)</td></tr>
+<tr><td><code>straightline</code></td><td><code>flag</code> / <code>screenout</code> – одинаковый ответ во всех строках (<a href="#quality">Качество</a>)</td></tr>
 <tr><td>столбец <code>shared</code></td><td>Один вариант под таблицей, отмечает все строки («Ничего не пробовал»)</td></tr>
 <tr><td>строка <code>group</code></td><td>Подзаголовок над группой строк</td></tr>
 </table></div>
 <p>На телефоне матрица автоматически показывается карточками. В условиях у матрицы обязательно указывается строка: <code>Q5[2] = 3</code>.</p>
-<p class="muted">Выгрузка: single — <code>Q5_1</code>, <code>Q5_2</code> (код столбца); multi — <code>Q5_&lt;строка&gt;_&lt;столбец&gt;</code> (0/1).</p>
+<p class="muted">Выгрузка: single – <code>Q5_1</code>, <code>Q5_2</code> (код столбца); multi – <code>Q5_&lt;строка&gt;_&lt;столбец&gt;</code> (0/1).</p>
 </div></details>
 
 <details class="type" id="t-date"><summary><b>Дата</b> <code>date</code></summary><div class="body">
-<p>Значение <code>YYYY-MM-DD</code>; <code>min</code>, <code>max</code> — в том же формате. В условиях даты сравниваются операторами <code>&gt;</code>, <code>&lt;</code>.</p>
+<p>Значение <code>YYYY-MM-DD</code>; <code>min</code>, <code>max</code> – в том же формате. В условиях даты сравниваются операторами <code>&gt;</code>, <code>&lt;</code>.</p>
 </div></details>
 
 <details class="type" id="t-phone"><summary><b>Телефон</b> <code>phone</code></summary><div class="body">
@@ -464,8 +464,8 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <details class="type" id="t-hidden"><summary><b>Скрытая переменная</b> <code>hidden</code> <span class="sum-hint">не видна респонденту</span></summary><div class="body">
 <p>Хранит значение, которое попадает в данные, условия, квоты и подстановки. Откуда берётся значение:</p>
 <ul>
-  <li><code>fromParam</code> — из параметра ссылки (<code>?pid=123</code>);</li>
-  <li><code>calc</code> — формула, пересчитывается после каждого ответа (<a href="#calc">Вычисления</a>);</li>
+  <li><code>fromParam</code> – из параметра ссылки (<code>?pid=123</code>);</li>
+  <li><code>calc</code> – формула, пересчитывается после каждого ответа (<a href="#calc">Вычисления</a>);</li>
   <li>действие <code>setValue</code> или скрипт <code>sl.set()</code>.</li>
 </ul>
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "H_pid", "type": "hidden", "text": "ID панелиста", "fromParam": "pid", "valueType": "string" }
@@ -476,19 +476,19 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <details class="type" id="t-slider"><summary><b>Слайдер</b> <code>slider</code></summary><div class="body">
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "Q10", "type": "slider", "text": "Сколько вы готовы заплатить?", "min": 0, "max": 500, "step": 10,
   "unit": "₽", "minLabel": "Бесплатно", "maxLabel": "500 ₽ и больше" }</code></pre></div>
-<p><code>start</code> — положение до ответа (по умолчанию середина); подписи <code>minLabel</code>, <code>midLabel</code>, <code>maxLabel</code>. Ответ засчитывается, только если респондент сдвинул ползунок или нажал на него. В условиях — как число.</p>
+<p><code>start</code> – положение до ответа (по умолчанию середина); подписи <code>minLabel</code>, <code>midLabel</code>, <code>maxLabel</code>. Ответ засчитывается, только если респондент сдвинул ползунок или нажал на него. В условиях – как число.</p>
 </div></details>
 
 <details class="type" id="t-sum"><summary><b>Распределение суммы</b> <code>sum</code></summary><div class="body">
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "Q11", "type": "sum", "text": "Распределите 100% по важности", "total": 100, "unit": "%",
   "options": [{ "code": 1, "text": "Вкус" }, { "code": 2, "text": "Цена" }, { "code": 3, "text": "Бренд" }] }</code></pre></div>
-<p><code>mode</code>: <code>exact</code> — сумма ровно <code>total</code> (по умолчанию), <code>max</code> — не больше. В условиях — по строке: <code>Q11[2] &gt;= 50</code>.</p>
-<p class="muted">Выгрузка: <code>Q11_1</code>, <code>Q11_2</code>, … (пусто — 0).</p>
+<p><code>mode</code>: <code>exact</code> – сумма ровно <code>total</code> (по умолчанию), <code>max</code> – не больше. В условиях – по строке: <code>Q11[2] &gt;= 50</code>.</p>
+<p class="muted">Выгрузка: <code>Q11_1</code>, <code>Q11_2</code>, … (пусто – 0).</p>
 </div></details>
 
 <details class="type" id="t-file"><summary><b>Загрузка файла</b> <code>file</code></summary><div class="body">
-<p><code>accept</code>: <code>image</code> (фото: JPG, PNG, WEBP, GIF, HEIC — по умолчанию) или <code>any</code> (ещё PDF, Word, Excel, PowerPoint). <code>maxFiles</code> — до 10, <code>maxSizeMb</code> — до 20. Тип проверяется по содержимому файла, а не по расширению.</p>
-<p class="muted">Файлы видны команде в ответе и отчёте. Выгрузка: <code>Q12_n</code> — сколько файлов, <code>Q12_files</code> — ссылки на файлы.</p>
+<p><code>accept</code>: <code>image</code> (фото: JPG, PNG, WEBP, GIF, HEIC – по умолчанию) или <code>any</code> (ещё PDF, Word, Excel, PowerPoint). <code>maxFiles</code> – до 10, <code>maxSizeMb</code> – до 20. Тип проверяется по содержимому файла, а не по расширению.</p>
+<p class="muted">Файлы видны команде в ответе и отчёте. Выгрузка: <code>Q12_n</code> – сколько файлов, <code>Q12_files</code> – ссылки на файлы.</p>
 </div></details>
 
 <details class="type" id="t-hotspot"><summary><b>Клик по картинке</b> <code>hotspot</code></summary><div class="body">
@@ -498,7 +498,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
     { "code": 1, "text": "Логотип", "area": { "x": 10, "y": 5, "w": 40, "h": 20 } },
     { "code": 2, "text": "Цена", "area": { "x": 60, "y": 70, "w": 30, "h": 20 } }
   ] }</code></pre></div>
-<p>По умолчанию границы областей не видны; <code>showAreas: true</code> — показать. Ответ и условия — как у <code>multi</code>.</p>
+<p>По умолчанию границы областей не видны; <code>showAreas: true</code> – показать. Ответ и условия – как у <code>multi</code>.</p>
 </div></details>
 
 <details class="type" id="t-maxdiff"><summary><b>MaxDiff</b> <code>maxdiff</code> <span class="sum-hint">best–worst</span></summary><div class="body">
@@ -507,12 +507,12 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
   "bestLabel": "Самое важное", "worstLabel": "Наименее важное",
   "options": [{ "code": 1, "text": "Вкус" }, { "code": 2, "text": "Цена" }, { "code": 3, "text": "Бренд" },
               { "code": 4, "text": "Упаковка" }, { "code": 5, "text": "Состав" }] }</code></pre></div>
-<p class="muted">Выгрузка: <code>Q14_s1_best</code>, <code>Q14_s1_worst</code>, …; файл дизайна — во вкладке «Данные» проекта.</p>
+<p class="muted">Выгрузка: <code>Q14_s1_best</code>, <code>Q14_s1_worst</code>, …; файл дизайна – во вкладке «Данные» проекта.</p>
 <div class="note warn"><p>Не меняйте список вариантов после начала сбора.</p></div>
 </div></details>
 
 <details class="type" id="t-conjoint"><summary><b>Конджойнт</b> <code>conjoint</code> <span class="sum-hint">выбор из карточек, CBC</span></summary><div class="body">
-<p>В каждом из <code>tasks</code> заданий (по умолчанию 8) показываются <code>alternatives</code> карточек (3, до 5), у каждой — уровень каждого атрибута. <code>none</code> — вариант «ничего не выберу».</p>
+<p>В каждом из <code>tasks</code> заданий (по умолчанию 8) показываются <code>alternatives</code> карточек (3, до 5), у каждой – уровень каждого атрибута. <code>none</code> – вариант «ничего не выберу».</p>
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "Q15", "type": "conjoint", "text": "Какой вариант вы бы купили?", "tasks": 8, "alternatives": 3, "none": "Ни один",
   "attributes": [
     { "id": "SRV", "text": "Сервис", "header": true, "levels": [
@@ -520,12 +520,12 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
     { "id": "PRICE", "text": "Цена", "levels": [{ "code": 1, "text": "199 ₽" }, { "code": 2, "text": "249 ₽" }, { "code": 3, "text": "299 ₽" }] }
   ] }</code></pre></div>
 <ul>
-  <li><code>image</code> у уровня — картинка (логотип, фото); <code>hideText</code> — только картинка.</li>
-  <li><code>header: true</code> — атрибут крупно сверху карточки (бренд, сервис). Только один атрибут.</li>
-  <li><code>fixed: true</code> — атрибут закреплён за карточкой: карточка 1 — первый уровень, карточка 2 — второй и так далее.</li>
+  <li><code>image</code> у уровня – картинка (логотип, фото); <code>hideText</code> – только картинка.</li>
+  <li><code>header: true</code> – атрибут крупно сверху карточки (бренд, сервис). Только один атрибут.</li>
+  <li><code>fixed: true</code> – атрибут закреплён за карточкой: карточка 1 – первый уровень, карточка 2 – второй и так далее.</li>
   <li>Кнопка <span class="ui">Проверить дизайн</span> генерирует задания для 500 условных респондентов и показывает частоты уровней, пары и повторы.</li>
 </ul>
-<p class="muted">Выгрузка: <code>Q15_t1</code>, … — номер выбранной карточки (0 — «ничего») + файл дизайна.</p>
+<p class="muted">Выгрузка: <code>Q15_t1</code>, … – номер выбранной карточки (0 – «ничего») + файл дизайна.</p>
 </div></details>
 </section>
 
@@ -533,7 +533,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <p class="part">Анкета</p>
 <h2>Варианты ответа</h2>
 <h3>Коды</h3>
-<p>У каждого варианта есть <b>код</b> — целое число, уникальное в списке. Именно код попадает в данные, условия и квоты. Принятые коды: <b>97</b> — «Другое», <b>98</b> — «Отказ», <b>99</b> — «Затрудняюсь ответить».</p>
+<p>У каждого варианта есть <b>код</b> – целое число, уникальное в списке. Именно код попадает в данные, условия и квоты. Принятые коды: <b>97</b> – «Другое», <b>98</b> – «Отказ», <b>99</b> – «Затрудняюсь ответить».</p>
 
 <h3>Настройки варианта</h3>
 <p>Открываются кликом по варианту в окне списка.</p>
@@ -543,9 +543,9 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <tr><td>Тип открытого значения</td><td><code>otherType</code></td><td><code>number</code>, <code>date</code>, <code>time</code>; по умолчанию текст. Плюс <code>otherMultiline</code>, <code>otherDecimals</code>, <code>otherOptional</code></td></tr>
 <tr><td>Эксклюзивный</td><td><code>exclusive</code></td><td>multi: снимает все остальные</td></tr>
 <tr><td>Закрепить</td><td><code>fixed</code></td><td>Не перемешивается при случайном порядке и ротации</td></tr>
-<tr><td>Всегда последним</td><td><code>bottom</code></td><td>В конце списка; в колонках — отдельной строкой</td></tr>
+<tr><td>Всегда последним</td><td><code>bottom</code></td><td>В конце списка; в колонках – отдельной строкой</td></tr>
 <tr><td>Скрыть</td><td><code>hidden</code></td><td>Не показывать, но оставить код в выгрузке</td></tr>
-<tr><td>Заголовок группы</td><td><code>group</code></td><td>Невыбираемый подзаголовок; перемешивание идёт внутри групп. <code>groupHidden</code> — не показывать сам заголовок</td></tr>
+<tr><td>Заголовок группы</td><td><code>group</code></td><td>Невыбираемый подзаголовок; перемешивание идёт внутри групп. <code>groupHidden</code> – не показывать сам заголовок</td></tr>
 <tr><td>Картинка</td><td><code>image</code>, <code>hideText</code></td><td>Вариант-карточка; можно без текста</td></tr>
 <tr><td>Баллы</td><td><code>score</code></td><td>Для формул: <code>score(Q1)</code></td></tr>
 <tr><td>Всегда показывать</td><td><code>alwaysShow</code></td><td>Действия «скрыть варианты» на него не действуют</td></tr>
@@ -571,10 +571,10 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <p>Работают в тексте вопроса, подсказке, вариантах, заголовке блока, сообщениях завершения и редиректах.</p>
 <div class="tbl"><table>
 <tr><th>Подстановка</th><th>Что подставится</th></tr>
-<tr><td><code>{{Q2}}</code></td><td>Текст ответа на Q2. multi — через запятую, «Другое» — вписанный текст</td></tr>
+<tr><td><code>{{Q2}}</code></td><td>Текст ответа на Q2. multi – через запятую, «Другое» – вписанный текст</td></tr>
 <tr><td><code>{{Q5.2}}</code></td><td>Ответ в строке 2 матрицы Q5</td></tr>
 <tr><td><code>{{param.city}}</code></td><td>Параметр ссылки <code>?city=…</code></td></tr>
-<tr><td><code>{{loop}}</code>, <code>{{loop.code}}</code></td><td>Текст и код текущего повтора цикла; <code>{{loop1}}</code> — внешнего уровня</td></tr>
+<tr><td><code>{{loop}}</code>, <code>{{loop.code}}</code></td><td>Текст и код текущего повтора цикла; <code>{{loop1}}</code> – внешнего уровня</td></tr>
 <tr><td><code>{{resp_id}}</code></td><td>ID ответа (в редиректах)</td></tr>
 </table></div>
 <div class="pre"><span class="lang">текст вопроса</span><pre><code>Почему вы поставили **{{NPS}}** из 10 бренду «{{Q3}}»?</code></pre></div>
@@ -590,17 +590,17 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <h3>Синтаксис формул</h3>
 <div class="tbl"><table>
 <tr><th>Формула</th><th>Смысл</th></tr>
-<tr><td><code>Q1 = 2</code></td><td>В Q1 выбран код 2 (для multi — код 2 среди выбранных)</td></tr>
+<tr><td><code>Q1 = 2</code></td><td>В Q1 выбран код 2 (для multi – код 2 среди выбранных)</td></tr>
 <tr><td><code>Q1 != 2</code></td><td>Не равно / не выбран</td></tr>
-<tr><td><code>S1 &gt;= 18</code></td><td>Больше или равно; также <code>&gt;</code>, <code>&lt;</code>, <code>&lt;=</code> — числа, коды, даты</td></tr>
-<tr><td><code>Q2 in (1, 2, 3)</code></td><td>Значение из списка; <code>not in</code> — не из списка</td></tr>
-<tr><td><code>Q3 contains 5</code></td><td>multi: выбран код 5; <code>not contains</code> — не выбран</td></tr>
+<tr><td><code>S1 &gt;= 18</code></td><td>Больше или равно; также <code>&gt;</code>, <code>&lt;</code>, <code>&lt;=</code> – числа, коды, даты</td></tr>
+<tr><td><code>Q2 in (1, 2, 3)</code></td><td>Значение из списка; <code>not in</code> – не из списка</td></tr>
+<tr><td><code>Q3 contains 5</code></td><td>multi: выбран код 5; <code>not contains</code> – не выбран</td></tr>
 <tr><td><code>Q3 contains any (1, 5)</code></td><td>multi: выбран хотя бы один</td></tr>
 <tr><td><code>Q3 contains all (1, 5)</code></td><td>multi: выбраны все</td></tr>
-<tr><td><code>answered(Q4)</code></td><td>Есть ответ; <code>not answered(Q4)</code> — нет ответа</td></tr>
+<tr><td><code>answered(Q4)</code></td><td>Есть ответ; <code>not answered(Q4)</code> – нет ответа</td></tr>
 <tr><td><code>Q5[2] &gt; 3</code></td><td>Строка 2 матрицы Q5 (или строка распределения суммы)</td></tr>
 <tr><td><code>param.src = "vk"</code></td><td>Параметр ссылки <code>?src=vk</code></td></tr>
-<tr><td><code>LOOP = 2</code></td><td>Код текущего повтора цикла; <code>LOOP1</code> — внешнего</td></tr>
+<tr><td><code>LOOP = 2</code></td><td>Код текущего повтора цикла; <code>LOOP1</code> – внешнего</td></tr>
 <tr><td><code>and</code>, <code>or</code>, <code>not</code>, скобки</td><td>Соединение условий; можно по-русски: <code>и</code>, <code>или</code>, <code>не</code></td></tr>
 </table></div>
 <div class="pre"><span class="lang">формула</span><pre><code>S1 &gt;= 18 and S1 &lt;= 45 and (S3 in (1, 2) or param.src = "panel")</code></pre></div>
@@ -620,7 +620,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <tr><td><code>answered</code> / <code>notAnswered</code></td><td><code>answered(Q)</code> / <code>not answered(Q)</code></td></tr>
 </table></div>
 <div class="note info">
-<p>Если на вопрос нет ответа, все операторы кроме «нет ответа» дают «ложь». То есть <code>Q1 != 2</code> для пропущенного Q1 не выполнится — добавьте <code>or not answered(Q1)</code>, если нужно.</p>
+<p>Если на вопрос нет ответа, все операторы кроме «нет ответа» дают «ложь». То есть <code>Q1 != 2</code> для пропущенного Q1 не выполнится – добавьте <code>or not answered(Q1)</code>, если нужно.</p>
 <p>Вопрос, у которого не осталось видимых вариантов, пропускается автоматически.</p>
 </div>
 </section>
@@ -628,7 +628,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <section class="doc-sec" id="actions" data-group="Логика" data-title="Действия">
 <p class="part">Логика</p>
 <h2>Действия</h2>
-<p class="lead">Действия — это логика без программирования. У вопроса два списка: <b>перед показом</b> и <b>после ответа</b>. Действия выполняются сверху вниз. У каждого может быть условие: без условия действие выполняется всегда.</p>
+<p class="lead">Действия – это логика без программирования. У вопроса два списка: <b>перед показом</b> и <b>после ответа</b>. Действия выполняются сверху вниз. У каждого может быть условие: без условия действие выполняется всегда.</p>
 <p>В окне вопроса откройте вкладку <span class="ui">Действия</span>, нажмите <span class="ui">+ Добавить</span>, введите условие (формулой или конструктором) и выберите действие в списке с поиском.</p>
 
 <h3>Перед показом</h3>
@@ -639,7 +639,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <tr><td>Показать только варианты</td><td><code>showOnlyOptions</code> + <code>codes</code></td><td>Оставить только эти коды</td></tr>
 <tr><td>Скрыть варианты по другому вопросу</td><td><code>hideOptionsFrom</code> + <code>question</code>, <code>filter</code></td><td>«Не показывать то, что уже выбрали в Q1» (<code>selected</code>) или «показать только выбранное» (<code>notSelected</code>)</td></tr>
 <tr><td>Пропустить, если вариантов меньше</td><td><code>skipIfFewer</code> + <code>n</code></td><td>Не спрашивать «какая главная», если марка одна</td></tr>
-<tr><td>Отметить ответ и не показывать</td><td><code>answer</code> (+ <code>value</code>)</td><td>Без <code>value</code> — единственный оставшийся вариант. Так вопрос «какая главная» отвечается автоматически при одной марке</td></tr>
+<tr><td>Отметить ответ и не показывать</td><td><code>answer</code> (+ <code>value</code>)</td><td>Без <code>value</code> – единственный оставшийся вариант. Так вопрос «какая главная» отвечается автоматически при одной марке</td></tr>
 <tr><td>Записать в переменную</td><td><code>setValue</code> + <code>target</code>, <code>value</code></td><td>Записать значение в скрытую переменную; в <code>value</code> можно <code>{{Q1}}</code></td></tr>
 </table></div>
 
@@ -650,7 +650,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <tr><td>Пропустить вопрос</td><td><code>skipQuestion</code> + <code>target</code></td><td>Не показывать один из следующих вопросов</td></tr>
 <tr><td>Пометить вопрос как отвеченный</td><td><code>markAnswered</code> + <code>target</code>, <code>value</code></td><td>Записать ответ в следующий вопрос и не показывать его. Для multi коды через запятую</td></tr>
 <tr><td>Завершить анкету</td><td><code>end</code> (+ <code>message</code>, <code>redirect</code>)</td><td>Статус «Завершён». Можно своё сообщение или редирект для этой ветки</td></tr>
-<tr><td>Отсеять (скринаут)</td><td><code>screenout</code> (+ <code>message</code>, <code>redirect</code>)</td><td>Статус «Отсеян». Разные причины — разные сообщения</td></tr>
+<tr><td>Отсеять (скринаут)</td><td><code>screenout</code> (+ <code>message</code>, <code>redirect</code>)</td><td>Статус «Отсеян». Разные причины – разные сообщения</td></tr>
 <tr><td>Записать в переменную</td><td><code>setValue</code></td><td>Как перед показом</td></tr>
 <tr><td>Показать ошибку</td><td><code>error</code> + <code>message</code></td><td>Не пускать дальше: «Сумма не может быть больше 100»</td></tr>
 </table></div>
@@ -672,16 +672,16 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <h2>Рецепты логики</h2>
 <p class="lead">Типовые задачи из ТЗ и как их сделать.</p>
 
-<h3>«Младше 18 — завершить»</h3>
+<h3>«Младше 18 – завершить»</h3>
 <p>Вопрос S1 (число) → <span class="ui">Действия</span> → после ответа: условие <code>S1 &lt; 18</code>, действие <span class="ui">Отсеять</span>.</p>
 
-<h3>«Если в Q1 код 2 — задать Q3»</h3>
+<h3>«Если в Q1 код 2 – задать Q3»</h3>
 <p>У Q3 во вкладке <span class="ui">Основное</span> → условие показа <code>Q1 = 2</code>.</p>
 
 <h3>«Задать по выбранным в Q1» (знание → потребление)</h3>
-<p>У Q2 включите перенос вариантов из Q1 с фильтром «выбранные» (<code>optionsFrom</code>). Можно добавить свои варианты, например 99 «Ни один» — они встанут в конец.</p>
+<p>У Q2 включите перенос вариантов из Q1 с фильтром «выбранные» (<code>optionsFrom</code>). Можно добавить свои варианты, например 99 «Ни один» – они встанут в конец.</p>
 
-<h3>«Главная марка» — не спрашивать, если выбрана одна</h3>
+<h3>«Главная марка» – не спрашивать, если выбрана одна</h3>
 <p>Q3 переносит варианты из Q2. Перед показом: действие <span class="ui">Отметить ответ и не показывать</span> без значения. Если вариант остался один, он запишется автоматически.</p>
 
 <h3>«Не показывать уже выбранные»</h3>
@@ -691,10 +691,10 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <p>После ответа: <code>Q10 = 1</code> → <span class="ui">Завершить анкету</span> с сообщением «Спасибо, покупатель!»; <code>Q10 = 2</code> → <span class="ui">Завершить анкету</span> с редиректом на другой адрес. Сообщение и редирект из действия важнее общих из настроек.</p>
 
 <h3>Проверка связи двух ответов</h3>
-<p>«Детей не больше, чем всего человек в семье». Условие сравнивает ответ с числом, а не с другим ответом. Поэтому если граница известна заранее, используйте действие <span class="ui">Показать ошибку</span> (<code>Q7 &gt; 10</code>), а если граница — другой ответ, нужен скрипт <code>validate</code> в одну строку: см. <a href="#script-examples">пример 1</a>.</p>
+<p>«Детей не больше, чем всего человек в семье». Условие сравнивает ответ с числом, а не с другим ответом. Поэтому если граница известна заранее, используйте действие <span class="ui">Показать ошибку</span> (<code>Q7 &gt; 10</code>), а если граница – другой ответ, нужен скрипт <code>validate</code> в одну строку: см. <a href="#script-examples">пример 1</a>.</p>
 
 <h3>Квотный скринер</h3>
-<p>Поставьте квотные вопросы (пол, возраст, регион) в начало анкеты, а квоты — в проект. Респондент, попавший в набранную ячейку, завершит опрос со статусом «Сверх квоты» сразу после ответа.</p>
+<p>Поставьте квотные вопросы (пол, возраст, регион) в начало анкеты, а квоты – в проект. Респондент, попавший в набранную ячейку, завершит опрос со статусом «Сверх квоты» сразу после ответа.</p>
 
 <h3>Разные вопросы для разных источников</h3>
 <p>Условие показа по параметру ссылки: <code>param.src = "vk"</code>. Параметры записываются в каждый ответ.</p>
@@ -708,9 +708,9 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
   "optionsFrom": { "question": "Q1", "filter": "selected" },
   "options": [ { "code": 99, "text": "Ни одну из них" } ] }</code></pre></div>
 <ul>
-  <li><code>filter</code>: <code>selected</code> — выбранные, <code>notSelected</code> — невыбранные, <code>all</code> — все.</li>
-  <li>Источник — <code>single</code>, <code>multi</code>, <code>dropdown</code> или <code>matrix</code> (строки с ответом).</li>
-  <li>Для строк матрицы — <code>rowsFrom</code> с теми же полями.</li>
+  <li><code>filter</code>: <code>selected</code> – выбранные, <code>notSelected</code> – невыбранные, <code>all</code> – все.</li>
+  <li>Источник – <code>single</code>, <code>multi</code>, <code>dropdown</code> или <code>matrix</code> (строки с ответом).</li>
+  <li>Для строк матрицы – <code>rowsFrom</code> с теми же полями.</li>
 </ul>
 </section>
 
@@ -725,8 +725,8 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <tr><td><code>filter</code></td><td><code>selected</code> (по умолчанию), <code>notSelected</code>, <code>all</code></td></tr>
 <tr><td><code>columns</code></td><td>Для матрицы: только строки, где отмечен один из этих столбцов</td></tr>
 <tr><td><code>items</code></td><td>Свой список вместо вопроса: ролики, концепции</td></tr>
-<tr><td><code>order</code></td><td><code>random</code> / <code>rotate</code> — порядок повторов</td></tr>
-<tr><td><code>max</code></td><td>Не больше N повторов (с <code>random</code> — случайные N)</td></tr>
+<tr><td><code>order</code></td><td><code>random</code> / <code>rotate</code> – порядок повторов</td></tr>
+<tr><td><code>max</code></td><td>Не больше N повторов (с <code>random</code> – случайные N)</td></tr>
 </table></div>
 <div class="pre"><span class="lang">json</span><pre><code>{ "id": "L_cat", "title": "Про {{loop}}", "loop": { "question": "CAT", "max": 3, "order": "random" }, "questions": [
   { "id": "FREQ", "type": "single", "text": "Как часто вы покупаете {{loop}}?", "options": [ … ] },
@@ -737,9 +737,9 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 ] }</code></pre></div>
 <h3>Как это работает</h3>
 <ul>
-  <li><b>Копии вопросов</b> получают ID по коду элемента: <code>FREQ_1</code>, <code>FREQ_2</code>; во вложенном цикле — <code>RATE_1_2</code> (сначала внешний код). Это и есть переменные в выгрузке.</li>
-  <li><b>Внутри повтора</b> ссылки на вопросы того же цикла относятся к текущему повтору: <code>{{FREQ}}</code> — ответ про текущую категорию.</li>
-  <li><b>Условие по элементу</b>: <code>LOOP = 2</code> — вопрос только про чай.</li>
+  <li><b>Копии вопросов</b> получают ID по коду элемента: <code>FREQ_1</code>, <code>FREQ_2</code>; во вложенном цикле – <code>RATE_1_2</code> (сначала внешний код). Это и есть переменные в выгрузке.</li>
+  <li><b>Внутри повтора</b> ссылки на вопросы того же цикла относятся к текущему повтору: <code>{{FREQ}}</code> – ответ про текущую категорию.</li>
+  <li><b>Условие по элементу</b>: <code>LOOP = 2</code> – вопрос только про чай.</li>
   <li><b>После цикла</b> на конкретный повтор ссылаются по ID копии: <code>FREQ_1 = 1</code>, <code>{{FREQ_2}}</code>.</li>
   <li><b>Вложенный блок</b> задаётся полем <code>parent</code>: он повторяется внутри каждого повтора внешнего цикла.</li>
   <li><code>goTo</code> за пределы цикла завершает оставшиеся повторы.</li>
@@ -753,10 +753,10 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <p>Скрытая переменная с формулой <code>calc</code> пересчитывается после каждого ответа. Так в анкете считаются индексы, сегменты и проверки.</p>
 <div class="tbl"><table>
 <tr><th>Элемент</th><th>Смысл</th></tr>
-<tr><td><code>Q5</code></td><td>Ответ-число или код варианта; нет ответа — 0</td></tr>
+<tr><td><code>Q5</code></td><td>Ответ-число или код варианта; нет ответа – 0</td></tr>
 <tr><td><code>+ - * /</code>, скобки</td><td>Арифметика</td></tr>
 <tr><td><code>&gt; &lt; &gt;= &lt;= == !=</code></td><td>Сравнения, дают 1 или 0</td></tr>
-<tr><td><code>score(Q)</code></td><td>Сумма баллов выбранных вариантов (у матрицы — баллы столбцов, у шкалы — значение)</td></tr>
+<tr><td><code>score(Q)</code></td><td>Сумма баллов выбранных вариантов (у матрицы – баллы столбцов, у шкалы – значение)</td></tr>
 <tr><td><code>count(Q)</code></td><td>Сколько вариантов выбрано</td></tr>
 <tr><td><code>answered(Q)</code></td><td>1, если есть ответ</td></tr>
 <tr><td><code>sum</code>, <code>avg</code>, <code>min</code>, <code>max</code></td><td>По списку аргументов</td></tr>
@@ -777,7 +777,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
   <li><b>В условиях:</b> <code>param.src = "vk"</code>.</li>
   <li><b>В подстановках:</b> <code>{{param.city}}</code>.</li>
   <li><b>В скрытую переменную:</b> <code>"fromParam": "pid"</code>.</li>
-  <li><b>Предзаполнение ответа:</b> настройка вопроса <span class="ui">Взять из параметра ссылки</span> (<code>prefillParam</code>). <code>?age=35</code> заполнит возраст; для вариантов передаётся код, для multi — коды через запятую. С <code>prefillSkip</code> вопрос с пришедшим ответом не показывается.</li>
+  <li><b>Предзаполнение ответа:</b> настройка вопроса <span class="ui">Взять из параметра ссылки</span> (<code>prefillParam</code>). <code>?age=35</code> заполнит возраст; для вариантов передаётся код, для multi – коды через запятую. С <code>prefillSkip</code> вопрос с пришедшим ответом не показывается.</li>
   <li><b>В квотах и отчётах:</b> условия и подгруппы по параметрам.</li>
 </ul>
 </section>
@@ -787,42 +787,42 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <section class="doc-sec" id="scripts" data-group="Скрипты" data-title="Скрипты: как устроены">
 <p class="part">Скрипты</p>
 <h2>Скрипты: как устроены</h2>
-<p class="lead">Скрипты — запасной вариант для того, чего не умеют действия и формулы. Скрипт — это тело JavaScript-функции, которой передаётся объект <code>sl</code>. Выполняется в браузере респондента.</p>
+<p class="lead">Скрипты – запасной вариант для того, чего не умеют действия и формулы. Скрипт – это тело JavaScript-функции, которой передаётся объект <code>sl</code>. Выполняется в браузере респондента.</p>
 <div class="note tip"><p>Сначала проверьте, нельзя ли обойтись без кода: условие показа, действие, формула <code>calc</code> или настройка вопроса. Логика без кода видна на карте логики, в печатной версии и работает на сервере.</p></div>
 
 <h3>Где писать</h3>
 <ul>
-  <li><b>Глобальный скрипт</b> — <span class="ui">Настройки анкеты</span> → <span class="ui">Глобальный скрипт</span> (<code>init</code>).</li>
-  <li><b>Скрипты вопроса</b> — окно вопроса → вкладка <span class="ui">Скрипты</span>.</li>
-  <li><b>Скрипт варианта</b> — настройки варианта → <span class="ui">Скрипт</span>.</li>
+  <li><b>Глобальный скрипт</b> – <span class="ui">Настройки анкеты</span> → <span class="ui">Глобальный скрипт</span> (<code>init</code>).</li>
+  <li><b>Скрипты вопроса</b> – окно вопроса → вкладка <span class="ui">Скрипты</span>.</li>
+  <li><b>Скрипт варианта</b> – настройки варианта → <span class="ui">Скрипт</span>.</li>
 </ul>
 <p>Синтаксические ошибки подсвечиваются прямо под полем.</p>
 
 <h3>Хуки</h3>
 <div class="tbl"><table>
 <tr><th>Хук</th><th>Где</th><th>Когда выполняется</th><th>Возвращает</th></tr>
-<tr><td><code>init</code></td><td>анкета</td><td>Один раз на каждом экране, раньше всех остальных скриптов</td><td>—</td></tr>
-<tr><td><code>beforeShow</code></td><td>вопрос</td><td>Перед показом, до отрисовки: DOM ещё нет, но значения из <code>sl.set</code> успеют попасть на экран</td><td>—</td></tr>
-<tr><td><code>onShow</code></td><td>вопрос</td><td>Когда вопрос показан: <code>sl.el</code> уже в DOM</td><td>—</td></tr>
-<tr><td><code>onChange</code></td><td>вопрос</td><td>При каждом изменении ответа</td><td>—</td></tr>
-<tr><td><code>validate</code></td><td>вопрос</td><td>При нажатии «Далее», после встроенных проверок и действий «Показать ошибку»</td><td>строка — текст ошибки</td></tr>
-<tr><td><code>script</code></td><td>вариант</td><td>При «Далее», если этот вариант выбран</td><td>строка — текст ошибки</td></tr>
+<tr><td><code>init</code></td><td>анкета</td><td>Один раз на каждом экране, раньше всех остальных скриптов</td><td>–</td></tr>
+<tr><td><code>beforeShow</code></td><td>вопрос</td><td>Перед показом, до отрисовки: DOM ещё нет, но значения из <code>sl.set</code> успеют попасть на экран</td><td>–</td></tr>
+<tr><td><code>onShow</code></td><td>вопрос</td><td>Когда вопрос показан: <code>sl.el</code> уже в DOM</td><td>–</td></tr>
+<tr><td><code>onChange</code></td><td>вопрос</td><td>При каждом изменении ответа</td><td>–</td></tr>
+<tr><td><code>validate</code></td><td>вопрос</td><td>При нажатии «Далее», после встроенных проверок и действий «Показать ошибку»</td><td>строка – текст ошибки</td></tr>
+<tr><td><code>script</code></td><td>вариант</td><td>При «Далее», если этот вариант выбран</td><td>строка – текст ошибки</td></tr>
 </table></div>
 <p>Порядок проверок при «Далее»: встроенная проверка ответа → действие «Показать ошибку» → скрипт варианта → <code>validate</code> → отправка на сервер, где ответ проверяется ещё раз.</p>
 
 <h3 id="sl-api">Объект <code>sl</code></h3>
 <div class="tbl"><table>
 <tr><th>Свойство / метод</th><th>Что это</th></tr>
-<tr><td><code>sl.get(id)</code></td><td>Значение ответа на вопрос или скрытой переменной (формат — <a href="#answer-values">ниже</a>). <code>undefined</code>, если ответа нет</td></tr>
-<tr><td><code>sl.text(id)</code></td><td>Текст ответа — то же, что подставляет <code>{{ID}}</code></td></tr>
-<tr><td><code>sl.set(id, value)</code></td><td>Записать значение: в скрытую переменную (любое число или строку) или в вопрос текущего экрана. <code>undefined</code> — стереть</td></tr>
-<tr><td><code>sl.value</code></td><td>Текущий ответ вопроса (в <code>onChange</code>, <code>validate</code>); в скрипте варианта — открытое значение варианта</td></tr>
+<tr><td><code>sl.get(id)</code></td><td>Значение ответа на вопрос или скрытой переменной (формат – <a href="#answer-values">ниже</a>). <code>undefined</code>, если ответа нет</td></tr>
+<tr><td><code>sl.text(id)</code></td><td>Текст ответа – то же, что подставляет <code>{{ID}}</code></td></tr>
+<tr><td><code>sl.set(id, value)</code></td><td>Записать значение: в скрытую переменную (любое число или строку) или в вопрос текущего экрана. <code>undefined</code> – стереть</td></tr>
+<tr><td><code>sl.value</code></td><td>Текущий ответ вопроса (в <code>onChange</code>, <code>validate</code>); в скрипте варианта – открытое значение варианта</td></tr>
 <tr><td><code>sl.option</code></td><td>Код варианта (в скрипте варианта)</td></tr>
 <tr><td><code>sl.question</code></td><td>ID текущего вопроса</td></tr>
-<tr><td><code>sl.answers</code></td><td>Копия всех ответов: <code>{ Q1: { v: 2 }, Q3: { v: [1, 97], o: { "97": "текст" } } }</code>. <code>o</code> — открытые значения «Другое»</td></tr>
+<tr><td><code>sl.answers</code></td><td>Копия всех ответов: <code>{ Q1: { v: 2 }, Q3: { v: [1, 97], o: { "97": "текст" } } }</code>. <code>o</code> – открытые значения «Другое»</td></tr>
 <tr><td><code>sl.params</code></td><td>Параметры ссылки: <code>sl.params.src</code></td></tr>
 <tr><td><code>sl.respondentId</code></td><td>ID респондента (стабилен при перезагрузке)</td></tr>
-<tr><td><code>sl.preview</code></td><td><code>true</code> в предпросмотре — удобно для отладки</td></tr>
+<tr><td><code>sl.preview</code></td><td><code>true</code> в предпросмотре – удобно для отладки</td></tr>
 <tr><td><code>sl.el</code></td><td>DOM-элемент вопроса (<code>#q-ID</code>) в <code>onShow</code> и <code>onChange</code></td></tr>
 <tr><td><code>sl.shared</code></td><td>Общий объект на всю сессию: <code>init</code> кладёт сюда функции, вопросы их вызывают</td></tr>
 </table></div>
@@ -845,7 +845,7 @@ mark { background: #fff1a8; color: inherit; border-radius: 3px; }
 <h3>Отладка</h3>
 <ul>
   <li>В предпросмотре ошибка скрипта показывается сразу окном. У респондента скрипт с ошибкой просто пропускается, опрос не ломается, ошибка пишется в консоль браузера (F12).</li>
-  <li><code>console.log(sl.answers)</code> — посмотреть все ответы. Удобно вместе с <code>if (sl.preview)</code>.</li>
+  <li><code>console.log(sl.answers)</code> – посмотреть все ответы. Удобно вместе с <code>if (sl.preview)</code>.</li>
   <li>Панель отладки в предпросмотре показывает ответы, переменные и параметры.</li>
 </ul>
 
@@ -875,7 +875,7 @@ const top = Math.max(...Object.values(v));
 if (top &gt; 70) return 'Одному пункту можно отдать не больше 70%';</code></pre></div>
 
 <h3>3. Возраст из года рождения в скрытую переменную</h3>
-<p>Хук <code>onChange</code> у D1 «Год рождения» (число). <code>H_age</code> — скрытая переменная:</p>
+<p>Хук <code>onChange</code> у D1 «Год рождения» (число). <code>H_age</code> – скрытая переменная:</p>
 <div class="pre"><span class="lang">onChange · D1</span><pre><code>const year = sl.value;
 sl.set('H_age', year ? new Date().getFullYear() - year : undefined);</code></pre></div>
 <p class="muted">Без скрипта то же делает формула: <code>"calc": "2026 - D1"</code>.</p>
@@ -927,7 +927,7 @@ if (!hint) {
 hint.textContent = sl.value &gt;= 9 ? 'Спасибо! Что понравилось больше всего?' : '';</code></pre></div>
 
 <h3>10. Значение из параметра ссылки с обработкой</h3>
-<p>Панель передаёт <code>?age_group=25-34</code>, а нужно число — нижняя граница:</p>
+<p>Панель передаёт <code>?age_group=25-34</code>, а нужно число – нижняя граница:</p>
 <div class="pre"><span class="lang">init · анкета</span><pre><code>const g = sl.params.age_group;
 if (g &amp;&amp; sl.get('H_agemin') == null) {
   sl.set('H_agemin', parseInt(g, 10));
@@ -941,7 +941,7 @@ if (g &amp;&amp; sl.get('H_agemin') == null) {
 <h3>12. Запретить одинаковые ответы в нескольких текстовых полях</h3>
 <div class="pre"><span class="lang">validate · Q9b</span><pre><code>const a = (sl.get('Q9a') || '').trim().toLowerCase();
 if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
-  return 'Этот ответ совпадает с предыдущим — назовите другую причину';
+  return 'Этот ответ совпадает с предыдущим – назовите другую причину';
 }</code></pre></div>
 </section>
 
@@ -978,7 +978,7 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <tr><td>Enter нажимает «Далее»</td><td><code>enterSubmits</code></td><td>вкл.</td></tr>
 <tr><td>Автопереход по умолчанию</td><td><code>autoNext</code></td><td>выкл.</td></tr>
 <tr><td>Запрет вставки по умолчанию</td><td><code>noPaste</code></td><td>выкл.</td></tr>
-<tr><td>Ограничение времени, минут</td><td><code>timeLimitMin</code>, <code>timeoutMessage</code></td><td>—</td></tr>
+<tr><td>Ограничение времени, минут</td><td><code>timeLimitMin</code>, <code>timeoutMessage</code></td><td>–</td></tr>
 </table></div>
 <h3>Оформление</h3>
 <p>Логотип (<code>logoUrl</code>), основной цвет (<code>accentColor</code>), текст подвала (<code>footerText</code>), надписи на кнопках (<code>nextLabel</code>, <code>backLabel</code>, <code>submitLabel</code>, <code>earlyFinishLabel</code>).</p>
@@ -990,7 +990,7 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <tr><td>Отсеян</td><td><code>screenoutMessage</code></td><td><code>redirectScreenout</code></td></tr>
 <tr><td>Досрочно</td><td><code>earlyFinishMessage</code></td><td><code>redirectEarlyFinish</code></td></tr>
 <tr><td>Сверх квоты</td><td><code>overquotaMessage</code></td><td><code>redirectOverquota</code></td></tr>
-<tr><td>Сбор закрыт</td><td><code>closedMessage</code></td><td>—</td></tr>
+<tr><td>Сбор закрыт</td><td><code>closedMessage</code></td><td>–</td></tr>
 </table></div>
 <div class="pre"><span class="lang">редирект для панели</span><pre><code>https://panel.example.ru/complete?uid={{param.uid}}&amp;status=1</code></pre></div>
 <p>Подстановки в редиректах кодируются для URL автоматически. Редиректы панели (в проекте) важнее редиректов анкеты, а редирект из действия важнее обоих.</p>
@@ -999,7 +999,7 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <section class="doc-sec" id="images" data-group="Настройки и проверка" data-title="Изображения">
 <p class="part">Настройки и проверка</p>
 <h2>Изображения</h2>
-<p>Вкладка <span class="ui">Изображения</span> — библиотека картинок анкеты. Картинку загружают один раз, а потом выбирают из списка в вариантах, уровнях конджойнта, клике по картинке, логотипе и тексте вопроса. Можно загрузить файл или добавить ссылку <code>https://…</code>.</p>
+<p>Вкладка <span class="ui">Изображения</span> – библиотека картинок анкеты. Картинку загружают один раз, а потом выбирают из списка в вариантах, уровнях конджойнта, клике по картинке, логотипе и тексте вопроса. Можно загрузить файл или добавить ссылку <code>https://…</code>.</p>
 </section>
 
 <section class="doc-sec" id="quality" data-group="Настройки и проверка" data-title="Качество ответов">
@@ -1010,24 +1010,24 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <tr><td>Ловушка для ботов</td><td>Работает всегда</td><td>Скрытое поле, которое заполняют только боты; флаг <code>bot</code></td></tr>
 <tr><td>Контрольный вопрос</td><td>Настройки вопроса → <span class="ui">Контрольный вопрос</span></td><td>Неверный ответ: пометка (<code>flag</code>) или отсев (<code>screenout</code>)</td></tr>
 <tr><td>Прямолинейные ответы</td><td>Матрица → <span class="ui">Одинаковый ответ во всех строках</span></td><td>Один столбец во всех строках (от 3 строк): пометка или отсев</td></tr>
-<tr><td>Спидеры</td><td>Проект → минимальная длительность</td><td>Быстрее N секунд — переменная <code>speeder</code></td></tr>
+<tr><td>Спидеры</td><td>Проект → минимальная длительность</td><td>Быстрее N секунд – переменная <code>speeder</code></td></tr>
 <tr><td>Дубли</td><td>Проект → доступ и защита</td><td>Один ответ на ID панелиста, лимит анкет с одного IP</td></tr>
 </table></div>
 <div class="pre"><span class="lang">json · контрольный вопрос</span><pre><code>{ "id": "Q9", "type": "single", "text": "Чтобы показать, что вы внимательны, выберите «Скорее согласен»",
   "attention": { "correct": { "q": "Q9", "op": "eq", "value": 4 }, "onFail": "flag" }, "options": [ … ] }</code></pre></div>
-<p>Помеченные анкеты видны в «Данных» как подозрительные; в выгрузке — <code>suspect</code> и <code>quality_flags</code>. Их можно забраковать все разом.</p>
+<p>Помеченные анкеты видны в «Данных» как подозрительные; в выгрузке – <code>suspect</code> и <code>quality_flags</code>. Их можно забраковать все разом.</p>
 </section>
 
 <section class="doc-sec" id="testing" data-group="Настройки и проверка" data-title="Проверка перед запуском">
 <p class="part">Настройки и проверка</p>
 <h2>Проверка перед запуском</h2>
 <div class="cards">
-  <div class="card"><b>Проверка анкеты</b><span>Ошибки (ссылки на несуществующие вопросы, повторяющиеся коды) блокируют публикацию, предупреждения — нет</span></div>
+  <div class="card"><b>Проверка анкеты</b><span>Ошибки (ссылки на несуществующие вопросы, повторяющиеся коды) блокируют публикацию, предупреждения – нет</span></div>
   <div class="card"><b>Карта логики</b><span>Вкладка «Логика»: все переходы линиями, недостижимые вопросы, пути без завершения, длина анкеты</span></div>
   <div class="card"><b>Предпросмотр</b><span>С начала, с блока или с любого вопроса; панель отладки: ответы, переменные, формулы, квоты</span></div>
   <div class="card"><b>Тестовое заполнение</b><span>Проект → «Данные» → «Заполнить тестовыми»: боты проходят все ветки</span></div>
-  <div class="card"><b>Тестовая ссылка</b><span>Ссылка на черновик без входа в админку — для заказчика и коллег</span></div>
-  <div class="card"><b>Печатная версия</b><span>Вся анкета с логикой словами — для согласования</span></div>
+  <div class="card"><b>Тестовая ссылка</b><span>Ссылка на черновик без входа в админку – для заказчика и коллег</span></div>
+  <div class="card"><b>Печатная версия</b><span>Вся анкета с логикой словами – для согласования</span></div>
 </div>
 <h3>Чек-лист перед стартом</h3>
 <ul>
@@ -1081,14 +1081,14 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <section class="doc-sec" id="quotas" data-group="Проект и сбор" data-title="Квоты">
 <p class="part">Проект и сбор</p>
 <h2>Квоты</h2>
-<p>Квота — это условие и лимит. Считаются только <b>завершённые</b> анкеты, подходящие под условие. Условие — такое же, как условие показа: по ответам, переменным и параметрам ссылки.</p>
+<p>Квота – это условие и лимит. Считаются только <b>завершённые</b> анкеты, подходящие под условие. Условие – такое же, как условие показа: по ответам, переменным и параметрам ссылки.</p>
 <div class="pre"><span class="lang">json</span><pre><code>"quotas": [
   { "id": "QT_m", "title": "Мужчины", "if": { "q": "S2", "op": "eq", "value": 1 }, "limit": 150 },
   { "id": "QT_msk_vk", "title": "Москва из VK", "if": { "all": [
       { "q": "S3", "op": "eq", "value": 1 }, { "param": "src", "op": "eq", "value": "vk" } ] }, "limit": 50 }
 ]</code></pre></div>
 <ul>
-  <li>Квоты проверяются после каждого ответа (и сразу при старте — для условий по параметрам). Попавший в набранную ячейку получает статус «Сверх квоты» (<code>status = 4</code>), видит своё сообщение или уходит по редиректу.</li>
+  <li>Квоты проверяются после каждого ответа (и сразу при старте – для условий по параметрам). Попавший в набранную ячейку получает статус «Сверх квоты» (<code>status = 4</code>), видит своё сообщение или уходит по редиректу.</li>
   <li>Отсев важнее квоты.</li>
   <li><code>limit: 0</code> закрывает ячейку сразу.</li>
   <li>Тестовые ответы считаются отдельно от настоящих.</li>
@@ -1115,14 +1115,14 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <section class="doc-sec" id="panels" data-group="Проект и сбор" data-title="Панели">
 <p class="part">Проект и сбор</p>
 <h2>Панели</h2>
-<p>Панель — источник респондентов со своей ссылкой (<code>/s/&lt;проект&gt;?panel=код</code>). У панели можно задать:</p>
+<p>Панель – источник респондентов со своей ссылкой (<code>/s/&lt;проект&gt;?panel=код</code>). У панели можно задать:</p>
 <ul>
-  <li><b>Параметр с ID респондента</b> (<code>uid</code>, <code>pid</code>) — один ответ на ID, без него ссылка не откроется.</li>
-  <li><b>Макрос панели для ID</b> (<code>[%RID%]</code>, <code>{uid}</code>) — SurveyLAB соберёт готовую ссылку для панели.</li>
+  <li><b>Параметр с ID респондента</b> (<code>uid</code>, <code>pid</code>) – один ответ на ID, без него ссылка не откроется.</li>
+  <li><b>Макрос панели для ID</b> (<code>[%RID%]</code>, <code>{uid}</code>) – SurveyLAB соберёт готовую ссылку для панели.</li>
   <li><b>Лимит</b> завершённых анкет от панели и <b>остановку приёма</b>.</li>
   <li><b>Редиректы по статусам</b>: завершил, отсеян, сверх квоты, досрочно. Подстановки: <code>{{param.uid}}</code>, <code>{{resp_id}}</code>, <code>{{Q1}}</code>.</li>
 </ul>
-<p>На «Сводке» — воронка по панелям: начали, завершили, отсеяны, конверсия, инцидентность, медиана времени. В выгрузке — фильтр по панели.</p>
+<p>На «Сводке» – воронка по панелям: начали, завершили, отсеяны, конверсия, инцидентность, медиана времени. В выгрузке – фильтр по панели.</p>
 </section>
 
 <section class="doc-sec" id="invitees" data-group="Проект и сбор" data-title="Персональные ссылки">
@@ -1133,8 +1133,8 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
   <li>один ответ на человека, продолжение с любого устройства;</li>
   <li>столбцы списка становятся параметрами ответа: <code>{{param.name}}</code> в тексте, условия, квоты, выгрузка;</li>
   <li>статусы: не открывал / начал / завершил / отсеян;</li>
-  <li><span class="ui">Разослать по e-mail</span> — приглашения и напоминания прямо из SurveyLAB (<a href="#mailing">подробнее</a>); <span class="ui">Скачать ссылки (CSV)</span> — для своей рассылки;</li>
-  <li><span class="ui">Только по персональным ссылкам</span> — общая ссылка перестаёт работать.</li>
+  <li><span class="ui">Разослать по e-mail</span> – приглашения и напоминания прямо из SurveyLAB (<a href="#mailing">подробнее</a>); <span class="ui">Скачать ссылки (CSV)</span> – для своей рассылки;</li>
+  <li><span class="ui">Только по персональным ссылкам</span> – общая ссылка перестаёт работать.</li>
 </ul>
 </section>
 
@@ -1145,14 +1145,14 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <ol class="steps">
   <li><b>Загрузите список</b> со столбцом e-mail (вместе с именем, отделом и другими нужными полями).</li>
   <li>Нажмите <span class="ui">Разослать по e-mail</span>. Столбец с адресами определится сам, его можно поменять.</li>
-  <li><b>Выберите, кому:</b> <span class="ui">Кому ещё не отправляли</span> — первая рассылка и досылка новым людям; <span class="ui">Напоминание: кто не завершил</span> — тем, кто не открывал или бросил анкету; <span class="ui">Всем в списке</span>.</li>
-  <li><b>Напишите письмо.</b> Кнопки под текстом вставляют ссылку и столбцы списка. Справа — как письмо увидит первый получатель.</li>
+  <li><b>Выберите, кому:</b> <span class="ui">Кому ещё не отправляли</span> – первая рассылка и досылка новым людям; <span class="ui">Напоминание: кто не завершил</span> – тем, кто не открывал или бросил анкету; <span class="ui">Всем в списке</span>.</li>
+  <li><b>Напишите письмо.</b> Кнопки под текстом вставляют ссылку и столбцы списка. Справа – как письмо увидит первый получатель.</li>
   <li><b>Отправьте тест себе</b>, проверьте письмо и ссылку, потом нажмите <span class="ui">Отправить N писем</span>.</li>
 </ol>
 <h3>Подстановки в письме</h3>
 <div class="tbl"><table>
 <tr><th>Подстановка</th><th>Что подставится</th></tr>
-<tr><td><code>{{link}}</code></td><td>Персональная ссылка на опрос — <b>обязательна</b>. Если она стоит отдельной строкой, в письме будет кнопка «Пройти опрос»</td></tr>
+<tr><td><code>{{link}}</code></td><td>Персональная ссылка на опрос – <b>обязательна</b>. Если она стоит отдельной строкой, в письме будет кнопка «Пройти опрос»</td></tr>
 <tr><td><code>{{param.name}}</code></td><td>Любой столбец списка: имя, отдел, город</td></tr>
 <tr><td><code>{{inv_id}}</code></td><td>ID человека из списка</td></tr>
 <tr><td><code>**текст**</code></td><td>Жирный</td></tr>
@@ -1183,7 +1183,7 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <h3>Вкладка «Данные»</h3>
 <ul>
   <li>Счётчики по статусам и последние ответы: клик открывает анкету респондента целиком.</li>
-  <li><b>Брак</b>: отметьте ответ как брак — он не считается в квотах, лимите и по умолчанию не выгружается. Подозрительные можно забраковать все разом.</li>
+  <li><b>Брак</b>: отметьте ответ как брак – он не считается в квотах, лимите и по умолчанию не выгружается. Подозрительные можно забраковать все разом.</li>
   <li><b>Тестовые ответы</b> скрыты по умолчанию; <span class="ui">Удалить тестовые</span> очищает их.</li>
 </ul>
 <h3>Форматы выгрузки</h3>
@@ -1201,8 +1201,8 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <tr><th>Тип</th><th>Переменные</th></tr>
 <tr><td>single, dropdown</td><td><code>Q1</code> + <code>Q1_97_other</code></td></tr>
 <tr><td>multi, hotspot</td><td><code>Q1_1</code>, <code>Q1_2</code>… (0/1) + <code>Q1_97_other</code></td></tr>
-<tr><td>ranking</td><td><code>Q7_1</code>, <code>Q7_2</code>… — место</td></tr>
-<tr><td>matrix single</td><td><code>Q5_1</code>, <code>Q5_2</code>… — код столбца</td></tr>
+<tr><td>ranking</td><td><code>Q7_1</code>, <code>Q7_2</code>… – место</td></tr>
+<tr><td>matrix single</td><td><code>Q5_1</code>, <code>Q5_2</code>… – код столбца</td></tr>
 <tr><td>matrix multi</td><td><code>Q5_1_2</code> (строка_столбец, 0/1)</td></tr>
 <tr><td>scale, number, slider, text, phone, date, hidden</td><td><code>Q1</code></td></tr>
 <tr><td>sum</td><td><code>Q11_1</code>, <code>Q11_2</code>…</td></tr>
@@ -1227,11 +1227,11 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <p class="part">Данные</p>
 <h2>Отчёт и таблицы</h2>
 <h3>Отчёт</h3>
-<p>Распределения по каждому вопросу, NPS, средние и медианы, матрицы тепловой картой, ответы «Другое», файлы, где бросают анкету. <span class="ui">Подгруппа</span> — отчёт по условию (по ответам или параметрам). <span class="ui">Печать / PDF</span> — для отправки заказчику.</p>
+<p>Распределения по каждому вопросу, NPS, средние и медианы, матрицы тепловой картой, ответы «Другое», файлы, где бросают анкету. <span class="ui">Подгруппа</span> – отчёт по условию (по ответам или параметрам). <span class="ui">Печать / PDF</span> – для отправки заказчику.</p>
 <h3>Таблицы (кросс-таблицы)</h3>
 <ol class="steps">
-  <li><b>Строки — что считаем:</b> выберите вопросы.</li>
-  <li><b>Шапка — в каких разрезах:</b> вопросы, строки матрицы, параметры ссылки.</li>
+  <li><b>Строки – что считаем:</b> выберите вопросы.</li>
+  <li><b>Шапка – в каких разрезах:</b> вопросы, строки матрицы, параметры ссылки.</li>
   <li><b>Показатели:</b> % по столбцу или строке, количество, база, средние.</li>
   <li><b>Значимость:</b> различия отмечаются буквами столбцов на уровне 90, 95 или 99%.</li>
   <li><span class="ui">Сохранить набор</span>, чтобы вернуться к таблицам, или выгрузить в Excel.</li>
@@ -1307,13 +1307,13 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 <h3>Кнопка «Опубликовать» неактивна</h3>
 <p>В анкете есть ошибки, они показаны в конструкторе. Или черновик совпадает с опубликованной версией.</p>
 <h3>Вопрос не показывается в предпросмотре</h3>
-<p>Проверьте условие показа и действия «Пропустить» у него и выше. У вопроса с переносом вариантов могло не остаться вариантов — тогда он пропускается автоматически. Панель отладки покажет ответы и переменные.</p>
+<p>Проверьте условие показа и действия «Пропустить» у него и выше. У вопроса с переносом вариантов могло не остаться вариантов – тогда он пропускается автоматически. Панель отладки покажет ответы и переменные.</p>
 <h3>Как удалить вариант, если сбор уже идёт?</h3>
-<p>Не удаляйте — отметьте <b>Скрыть</b>. Код останется в данных, новые респонденты его не увидят.</p>
+<p>Не удаляйте – отметьте <b>Скрыть</b>. Код останется в данных, новые респонденты его не увидят.</p>
 <h3>Как перезапустить опрос для новой волны?</h3>
 <p>Меню проекта → <span class="ui">Копировать проект (новая волна)</span>.</p>
 <h3>Респондент говорит, что не может пройти второй раз</h3>
-<p>Так задумано: по умолчанию одно устройство — один ответ. Включите <span class="ui">Разрешить пройти опрос повторно</span> в настройках сбора, если это нужно.</p>
+<p>Так задумано: по умолчанию одно устройство – один ответ. Включите <span class="ui">Разрешить пройти опрос повторно</span> в настройках сбора, если это нужно.</p>
 <h3>Скрипт не срабатывает</h3>
 <p>Откройте предпросмотр: ошибка скрипта покажется окном. Проверьте хук: <code>validate</code> должен <b>вернуть</b> строку (<code>return '…'</code>), а <code>sl.el</code> есть только в <code>onShow</code> и <code>onChange</code>.</p>
 
@@ -1340,7 +1340,7 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
 </table></div>
 </section>
 
-<p class="foot">SurveyLAB · документация обновляется вместе с сервисом. Нашли неточность — напишите команде.</p>
+<p class="foot">SurveyLAB · документация обновляется вместе с сервисом. Нашли неточность – напишите команде.</p>
 </div>
 </main>
 </div>
@@ -1432,7 +1432,7 @@ if (a &amp;&amp; a === (sl.value || '').trim().toLowerCase()) {
   window.addEventListener('scroll', spy, { passive: true });
   spy();
 
-  // Переход по ссылке на тип вопроса или вложенный элемент — раскрыть details
+  // Переход по ссылке на тип вопроса или вложенный элемент – раскрыть details
   const openTarget = () => {
     const id = decodeURIComponent(location.hash.slice(1));
     if (!id) return;

@@ -22,7 +22,7 @@ const SAVE_TEXT: Record<SaveState, string> = {
   saved: 'Черновик сохранён',
   pending: 'Изменения…',
   saving: 'Сохранение…',
-  error: 'Не сохранено — повторите',
+  error: 'Не сохранено – повторите',
 };
 
 export function Editor({ id }: { id: string }) {
@@ -53,7 +53,7 @@ export function Editor({ id }: { id: string }) {
   const [loadError, setLoadError] = useState('');
   useEffect(() => {
     reload().then((r) => { setDef(r.draft); latest.current = r.draft; })
-      .catch((e) => setLoadError(e instanceof ApiError && e.status === 404 ? 'Анкета не найдена — возможно, её удалили.' : (e as Error).message));
+      .catch((e) => setLoadError(e instanceof ApiError && e.status === 404 ? 'Анкета не найдена – возможно, её удалили.' : (e as Error).message));
   }, [reload]);
 
   // Автосохранение черновика через секунду после последней правки
@@ -150,7 +150,7 @@ export function Editor({ id }: { id: string }) {
   // Название во вкладке браузера — чтобы различать несколько открытых анкет
   const docTitle = def?.title;
   useEffect(() => {
-    document.title = docTitle ? `${docTitle} — SurveyLAB` : 'SurveyLAB';
+    document.title = docTitle ? `${docTitle} – SurveyLAB` : 'SurveyLAB';
     return () => { document.title = 'SurveyLAB'; };
   }, [docTitle]);
 
@@ -222,7 +222,7 @@ export function Editor({ id }: { id: string }) {
           },
           !readOnly && {
             label: 'Удалить анкету', danger: true, onClick: async () => {
-              if (info.projects.length) return toast('Анкета используется в проектах — сначала удалите их или выберите в них другую анкету');
+              if (info.projects.length) return toast('Анкета используется в проектах – сначала удалите их или выберите в них другую анкету');
               if (!window.confirm('Удалить анкету? Это нельзя отменить.')) return;
               await api('DELETE', `/api/admin/surveys/${id}`);
               navigate('/admin/surveys');
@@ -239,7 +239,7 @@ export function Editor({ id }: { id: string }) {
           ))}
         </div>
         {!info.projects.length && !readOnly && (
-          <button className="link-chip" title="Проект — запуск анкеты: сбор, квоты, данные и отчёт" onClick={() => setNewProject(true)}>+ Запустить в проекте</button>
+          <button className="link-chip" title="Проект – запуск анкеты: сбор, квоты, данные и отчёт" onClick={() => setNewProject(true)}>+ Запустить в проекте</button>
         )}
         {(errs > 0 || warns > 0) && (
           <button className={`issues-chip${errs ? ' err' : ''}`} onClick={() => setShowIssues(!showIssues)}>
@@ -264,7 +264,7 @@ export function Editor({ id }: { id: string }) {
       {newProject && <NewProjectModal surveyId={id} onClose={() => setNewProject(false)} />}
       {showVersions && (
         <VersionsModal id={id} current={info.version} onClose={() => setShowVersions(false)}
-          onRestore={(v, restored) => { update(restored); setShowVersions(false); changeTab('builder'); toast(`Черновик заменён версией ${v}. Отменить — Ctrl+Z`); }} />
+          onRestore={(v, restored) => { update(restored); setShowVersions(false); changeTab('builder'); toast(`Черновик заменён версией ${v}. Отменить – Ctrl+Z`); }} />
       )}
     </div>
   );

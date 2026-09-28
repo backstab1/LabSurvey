@@ -68,7 +68,7 @@ export function CollectionSettings({ info, readOnly, reload }: { info: ProjectIn
           </div>
           <label className="check">
             <input type="checkbox" checked={!!st.allowRetake} onChange={(e) => set({ allowRetake: e.target.checked || undefined })} />
-            <span>Разрешить пройти опрос повторно<small className="muted"> — на финальном экране появится кнопка «Пройти ещё раз»</small></span>
+            <span>Разрешить пройти опрос повторно<small className="muted"> – на финальном экране появится кнопка «Пройти ещё раз»</small></span>
           </label>
         </fieldset>
       </div>
@@ -83,7 +83,7 @@ export function CollectionSettings({ info, readOnly, reload }: { info: ProjectIn
           </div>
         </div>
         <div className="field">
-          <span>Тестовая ссылка — черновик анкеты без входа в админку, ответы помечаются как тестовые</span>
+          <span>Тестовая ссылка – черновик анкеты без входа в админку, ответы помечаются как тестовые</span>
           <div className="row" style={{ gap: 8 }}>
             <input className="input mono" readOnly value={testLink} onFocus={(e) => e.target.select()} />
             <button className="btn btn-secondary btn-sm" onClick={() => copyText(testLink, 'Тестовая ссылка скопирована')}>Копировать</button>

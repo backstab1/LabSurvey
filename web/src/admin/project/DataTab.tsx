@@ -122,19 +122,19 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
             <label className="check"><input type="checkbox" checked={opts.rejected} onChange={(e) => setOpts({ ...opts, rejected: e.target.checked })} />Включая брак</label>
           )}
         </div>
-        {!statuses.length && <div className="warn-box">Отметьте хотя бы один статус — иначе выгружать нечего.</div>}
+        {!statuses.length && <div className="warn-box">Отметьте хотя бы один статус – иначе выгружать нечего.</div>}
         <div className={`row${statuses.length ? '' : ' links-disabled'}`}>
           <a className="btn btn-primary" href={exportUrl('xlsx')}>Excel (.xlsx)</a>
           <a className="btn btn-primary" href={exportUrl('sav')}>SPSS (.sav)</a>
           <a className="btn btn-secondary" href={exportUrl('csv')}>CSV</a>
           {!client && <a className="btn btn-secondary" href={`/api/admin/surveys/${info.survey.id}/export.json`}>Анкета (.json)</a>}
           {allQuestions(info.published ?? info.draft).filter((q) => q.type === 'maxdiff' || q.type === 'conjoint').map((q) => (
-            <a key={q.id} className="btn btn-secondary" title="Что показано каждому респонденту и что он выбрал — по строке на вариант / карточку"
+            <a key={q.id} className="btn btn-secondary" title="Что показано каждому респонденту и что он выбрал – по строке на вариант / карточку"
               href={`/api/admin/projects/${info.id}/design.csv?q=${q.id}&statuses=${statuses.join(',')}`}>Дизайн {q.id} (CSV)</a>
           ))}
         </div>
         <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-          Excel содержит листы «Коды», «Метки» и «Кодбук». Время — по часовому поясу сервера выгрузки (по умолчанию Москва).
+          Excel содержит листы «Коды», «Метки» и «Кодбук». Время – по часовому поясу сервера выгрузки (по умолчанию Москва).
         </p>
       </div>
 
@@ -144,7 +144,7 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
           {!client && <label className="check small"><input type="checkbox" checked={showTest} onChange={(e) => setShowTest(e.target.checked)} />показывать тестовые</label>}
         </div>
         {!recent ? <p className="muted">Загрузка…</p> : recent.length === 0 ? <p className="muted">Ответов пока нет</p> : !shownRecent.length ? (
-          <p className="muted">{opts.panel ? 'По выбранной панели ответов нет' : 'Пока только тестовые ответы — включите «показывать тестовые»'}</p>
+          <p className="muted">{opts.panel ? 'По выбранной панели ответов нет' : 'Пока только тестовые ответы – включите «показывать тестовые»'}</p>
         ) : (
           <table className="table">
             <thead><tr><th>ID</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Время</th><th>Ответов</th><th>Параметры</th></tr></thead>
@@ -156,10 +156,10 @@ export function DataTab({ info, reload }: { info: ProjectInfo; reload: () => Pro
                     {STATUS_LABELS[r.status]} {r.isTest && <span className="badge test">тест</span>}{r.rejected && <span className="badge closed">брак</span>}
                     {!!r.flags?.length && <span className="badge suspect" title={r.flags.map(flagLabel).join('\n')}>подозрительная</span>}
                   </td>
-                  <td>{fmtDate(r.startedAt, '—')}</td>
-                  <td>{fmtDate(r.completedAt, '—')}</td>
+                  <td>{fmtDate(r.startedAt, '–')}</td>
+                  <td>{fmtDate(r.completedAt, '–')}</td>
                   <td>
-                    {r.durationSec !== null ? `${Math.floor(r.durationSec / 60)}:${String(r.durationSec % 60).padStart(2, '0')}` : '—'}
+                    {r.durationSec !== null ? `${Math.floor(r.durationSec / 60)}:${String(r.durationSec % 60).padStart(2, '0')}` : '–'}
                     {minDur && r.status === 'completed' && r.durationSec !== null && r.durationSec < minDur
                       ? <span className="badge test" style={{ marginLeft: 6 }} title={`Быстрее ${minDur} сек`}>спидер</span> : null}
                   </td>

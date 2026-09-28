@@ -47,7 +47,7 @@ function ImportModal({ projectId, onClose, onDone }: { projectId: string; onClos
     </>}>
       <div className="stack">
         <p className="muted small" style={{ margin: 0 }}>
-          Скопируйте таблицу из Excel вместе с заголовками и вставьте сюда — или выберите файл CSV. Каждая строка — человек, у него будет своя ссылка.
+          Скопируйте таблицу из Excel вместе с заголовками и вставьте сюда – или выберите файл CSV. Каждая строка – человек, у него будет своя ссылка.
           Столбцы (имя, отдел, e-mail…) станут параметрами ответа: их можно подставить в текст (<code>{'{{param.name}}'}</code>), использовать в квотах и условиях, они попадут в выгрузку.
         </p>
         <div className="row" style={{ gap: 8 }}>
@@ -66,10 +66,10 @@ function ImportModal({ projectId, onClose, onDone }: { projectId: string; onClos
           <>
             <label className="field"><span>Столбец с ID человека</span>
               <select className="input" style={{ width: 'auto' }} value={idIndex} onChange={(e) => setIdCol(Number(e.target.value))}>
-                <option value={-1}>нет ID — только ссылки</option>
+                <option value={-1}>нет ID – только ссылки</option>
                 {headers.map((h, i) => <option key={i} value={i}>{h || `столбец ${i + 1}`}</option>)}
               </select>
-              <span className="field-help">По ID не добавятся повторы; в выгрузке — переменная url_inv_id</span>
+              <span className="field-help">По ID не добавятся повторы; в выгрузке – переменная url_inv_id</span>
             </label>
             <div style={{ overflowX: 'auto' }}>
               <table className="table small">
@@ -121,7 +121,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
     try {
       await api('PUT', `/api/admin/projects/${info.id}`, { settings: { ...info.settings, inviteOnly: v || undefined } });
       await reload();
-      toast(v ? 'Общая ссылка отключена — только персональные' : 'Общая ссылка снова работает');
+      toast(v ? 'Общая ссылка отключена – только персональные' : 'Общая ссылка снова работает');
     } catch (e) { toast((e as Error).message); }
   };
 
@@ -132,7 +132,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
     const csv = '﻿' + [head, ...rows].map((r) => r.map((x) => esc(String(x))).join(';')).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `${info.title.slice(0, 60)} — ссылки.csv`;
+    a.download = `${info.title.slice(0, 60)} – ссылки.csv`;
     a.click();
   };
 
@@ -149,13 +149,13 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
           {!readOnly && <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>+ Добавить людей</button>}
         </div>
         <p className="muted small" style={{ margin: 0 }}>
-          У каждого человека из списка — своя ссылка: пройти по ней можно один раз, начатую анкету — продолжить с любого устройства.
-          Разошлите приглашения прямо отсюда — кнопка «Разослать по e-mail» (с напоминаниями тем, кто не завершил), или скачайте ссылки в CSV для своей рассылки.
+          У каждого человека из списка – своя ссылка: пройти по ней можно один раз, начатую анкету – продолжить с любого устройства.
+          Разошлите приглашения прямо отсюда – кнопка «Разослать по e-mail» (с напоминаниями тем, кто не завершил), или скачайте ссылки в CSV для своей рассылки.
         </p>
         {!readOnly && (
           <label className="check">
             <input type="checkbox" checked={!!info.settings.inviteOnly} onChange={(e) => setInviteOnly(e.target.checked)} />
-            <span>Только по персональным ссылкам<small className="muted"> — общая ссылка проекта перестанет работать</small></span>
+            <span>Только по персональным ссылкам<small className="muted"> – общая ссылка проекта перестанет работать</small></span>
           </label>
         )}
         {total > 0 && (
@@ -177,7 +177,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
       {mail && <MailingsHistory projectId={info.id} status={mail} readOnly={readOnly} onChange={loadMail} />}
 
       {list === null ? <p className="muted">Загрузка…</p> : total === 0 ? (
-        <div className="card"><p className="muted" style={{ margin: 0 }}>Список пуст. Добавьте людей — вставкой из Excel или файлом CSV.</p></div>
+        <div className="card"><p className="muted" style={{ margin: 0 }}>Список пуст. Добавьте людей – вставкой из Excel или файлом CSV.</p></div>
       ) : (
         <div className="card" style={{ padding: 0 }}>
           <div className="row list-filters" style={{ padding: '12px 12px 0' }}>
@@ -204,7 +204,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
                   const st = stateOf(p);
                   return (
                     <tr key={p.id} className={p.rejected ? 'muted' : ''}>
-                      <td className="mono small">{p.extId ?? <span className="muted">—</span>}</td>
+                      <td className="mono small">{p.extId ?? <span className="muted">–</span>}</td>
                       {columns.slice(0, 3).map((c) => <td key={c}>{p.fields[c] ?? ''}</td>)}
                       <td><span className={`badge inv-${st}`}>{STATE_LABELS[st]}</span>{p.rejected && <span className="badge closed">брак</span>}</td>
                       <td className="wide-only muted small">{fmtDate(p.completedAt ?? p.openedAt)}</td>
@@ -217,7 +217,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
                               if (!window.confirm('Выдать новую ссылку? Старая перестанет работать.')) return;
                               await api('POST', `/api/admin/projects/${info.id}/invitees/${p.id}/reissue`);
                               await load();
-                              toast('Новая ссылка готова — скопируйте её');
+                              toast('Новая ссылка готова – скопируйте её');
                             }}>новая</button>
                             <button className="btn-link small" style={{ color: 'var(--danger)' }} onClick={async () => {
                               if (!window.confirm('Удалить человека из списка? Его ссылка перестанет работать, ответ останется.')) return;
@@ -232,7 +232,7 @@ export function InviteesTab({ info, readOnly, reload }: { info: ProjectInfo; rea
                 })}
               </tbody>
             </table>
-            {shown.length > 500 && <p className="muted small" style={{ padding: '0 12px' }}>Показаны первые 500 из {shown.length} — уточните поиск. В CSV — весь список.</p>}
+            {shown.length > 500 && <p className="muted small" style={{ padding: '0 12px' }}>Показаны первые 500 из {shown.length} – уточните поиск. В CSV – весь список.</p>}
           </div>
         </div>
       )}

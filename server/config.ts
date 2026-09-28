@@ -56,5 +56,5 @@ export const config = {
 };
 
 if (!config.adminPassword) {
-  console.warn('⚠ ADMIN_PASSWORD не задан — вход в админку невозможен. Укажите его в .env');
+  console.warn('⚠ ADMIN_PASSWORD не задан – вход в админку невозможен. Укажите его в .env');
 }

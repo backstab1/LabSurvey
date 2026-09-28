@@ -13,7 +13,7 @@ export function PrintView({ id }: { id: string }) {
   const [def, setDef] = useState<Survey | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
-    api<{ draft: Survey }>('GET', `/api/admin/surveys/${id}`).then((r) => { setDef(r.draft); document.title = `${r.draft.title} — печатная версия`; })
+    api<{ draft: Survey }>('GET', `/api/admin/surveys/${id}`).then((r) => { setDef(r.draft); document.title = `${r.draft.title} – печатная версия`; })
       .catch((e) => setError((e as Error).message));
   }, [id]);
   if (error) return <div className="container error-box">{error}</div>;
@@ -35,7 +35,7 @@ export function PrintView({ id }: { id: string }) {
           <h2>{b.title || 'Блок'} <span className="print-id">{b.id}</span></h2>
           {b.loop && <div className="print-note">{describeLoop(def, b).replace('↻ цикл', 'ЦИКЛ:').toUpperCase()}{b.parent ? ` (ВНУТРИ ЦИКЛА ${b.parent})` : ''}</div>}
           {!b.loop && b.parent && <div className="print-note">ПОВТОРЯЕТСЯ ВНУТРИ ЦИКЛА {b.parent}</div>}
-          {b.order && <div className="print-note">{b.order === 'random' ? 'ВОПРОСЫ БЛОКА В СЛУЧАЙНОМ ПОРЯДКЕ' : 'РОТАЦИЯ ВОПРОСОВ БЛОКА'}{b.questions.some((q) => q.fixed) ? ' (закреплённые — на местах)' : ''}</div>}
+          {b.order && <div className="print-note">{b.order === 'random' ? 'ВОПРОСЫ БЛОКА В СЛУЧАЙНОМ ПОРЯДКЕ' : 'РОТАЦИЯ ВОПРОСОВ БЛОКА'}{b.questions.some((q) => q.fixed) ? ' (закреплённые – на местах)' : ''}</div>}
           {b.questions.map((q) => (
             <PrintQuestion key={q.id} def={def} q={q} n={q.type === 'hidden' ? null : ++n} />
           ))}
@@ -136,7 +136,7 @@ function PrintQuestion({ def, q, n }: { def: Survey; q: Question; n: number | nu
       {q.type === 'scale' && (
         <div className="print-scale">
           Шкала {q.from}–{q.to}
-          {Object.entries(q.labels ?? {}).map(([k, v]) => <span key={k}> · {k} — {v}</span>)}
+          {Object.entries(q.labels ?? {}).map(([k, v]) => <span key={k}> · {k} – {v}</span>)}
           {q.extraOptions?.length ? <OptionList list={q.extraOptions} /> : null}
         </div>
       )}

@@ -36,7 +36,7 @@ after(async () => { await browser?.close(); await app.close(); });
 /** Браузер запускается в before — поэтому проверяем его внутри теста */
 function needBrowser(t: { skip: (msg: string) => void }): boolean {
   if (browser) return true;
-  t.skip('Нет Edge или Chrome — пропускаем тесты интерфейса');
+  t.skip('Нет Edge или Chrome – пропускаем тесты интерфейса');
   return false;
 }
 
@@ -111,7 +111,7 @@ test('builder: add a question, type options with the keyboard, see it in JSON, u
   const dialog = page.locator('.qdialog');
   await dialog.getByPlaceholder(/Введите вопрос/).fill('Какие соцсети вы используете?');
   // Условие показа — формулой; ссылка на первый вопрос анкеты
-  await dialog.getByPlaceholder('пусто — показывать всегда').fill('answered(Q1) and not Q1 = 99');
+  await dialog.getByPlaceholder('пусто – показывать всегда').fill('answered(Q1) and not Q1 = 99');
   // Варианты — в отдельном окне списка
   await dialog.locator('.list-btn', { hasText: 'Список ответов' }).click();
   const list = page.locator('.list-modal');

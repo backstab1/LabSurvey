@@ -11,7 +11,7 @@ import type { BackupsInfo } from '../../../shared/api.ts';
 
 const ROLES: Role[] = ['admin', 'editor', 'viewer', 'client'];
 const ROLE_ERROR = 'Роль: admin, editor, viewer или client';
-const PASSWORD_ERROR = 'Пароль — не короче 8 символов';
+const PASSWORD_ERROR = 'Пароль – не короче 8 символов';
 const PROJECTS_ERROR = 'projects: ожидается список ID проектов';
 
 /** Проекты заказчика: только существующие; null — не список */

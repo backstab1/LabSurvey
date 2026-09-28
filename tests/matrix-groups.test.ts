@@ -36,7 +36,7 @@ test('matrix row groups: valid, shuffled inside groups, headers not answerable o
 
   const ctx = { survey, answers: {}, params: {}, seed: 'x' };
   assert.equal(validateAnswer(ctx, m, { v: { 1: 1, 2: 1, 3: 2, 4: 2, 5: 1 } }), null);
-  assert.ok(validateAnswer(ctx, m, { v: { 1: 1, 2: 1, 3: 2, 4: 2, 5: 1, 100: 1 } }), 'ответ в заголовке группы — ошибка');
+  assert.ok(validateAnswer(ctx, m, { v: { 1: 1, 2: 1, 3: 2, 4: 2, 5: 1, 100: 1 } }), 'ответ в заголовке группы – ошибка');
 
   const names = buildVariables(survey, []).map((v) => v.name);
   assert.ok(names.includes('M1_1') && names.includes('M1_5'));

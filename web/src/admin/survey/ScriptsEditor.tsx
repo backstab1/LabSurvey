@@ -5,9 +5,9 @@ const HOOKS = {
   ],
   question: [
     ['beforeShow', 'Перед показом', 'До отрисовки вопроса, DOM ещё нет. Подготовьте значения: sl.set("H1", …).'],
-    ['onShow', 'При показе вопроса', 'sl.el — DOM-элемент вопроса.'],
-    ['onChange', 'При изменении ответа', 'sl.value — новое значение. Можно sl.set("H1", ...).'],
-    ['validate', 'Доп. проверка', 'Вернуть строку — это текст ошибки. Пример: if (sl.value > sl.get("S1")) return "Больше возраста";'],
+    ['onShow', 'При показе вопроса', 'sl.el – DOM-элемент вопроса.'],
+    ['onChange', 'При изменении ответа', 'sl.value – новое значение. Можно sl.set("H1", ...).'],
+    ['validate', 'Доп. проверка', 'Вернуть строку – это текст ошибки. Пример: if (sl.value > sl.get("S1")) return "Больше возраста";'],
   ],
 } as const;
 
@@ -28,7 +28,7 @@ export function ScriptsEditor({ level, value, onChange, only }: {
   return (
     <div className="stack">
       <p className="muted small" style={{ margin: 0 }}>
-        Объект <code>sl</code>, форматы ответов и готовые примеры — в <a href="/docs.html#scripts" target="_blank" rel="noopener">документации по скриптам</a>.
+        Объект <code>sl</code>, форматы ответов и готовые примеры – в <a href="/docs.html#scripts" target="_blank" rel="noopener">документации по скриптам</a>.
       </p>
       {HOOKS[level].filter(([key]) => !only || only.includes(key)).map(([key, label, help]) => {
         let syntaxError = '';
@@ -38,7 +38,7 @@ export function ScriptsEditor({ level, value, onChange, only }: {
         }
         return (
           <label key={key} className="field">
-            <span>{label} <code>{key}</code> — {help}</span>
+            <span>{label} <code>{key}</code> – {help}</span>
             <textarea className="input" spellCheck={false} rows={code ? Math.min(12, code.split('\n').length + 1) : 2}
               style={{ fontFamily: 'var(--mono)', fontSize: 13 }} value={code} placeholder="// JavaScript, объект sl"
               onChange={(e) => set(key, e.target.value)} />

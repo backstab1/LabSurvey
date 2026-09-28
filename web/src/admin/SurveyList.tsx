@@ -66,7 +66,7 @@ export function SurveyList() {
                 <tr key={r.id} className="clickable" onClick={() => navigate(`/admin/s/${r.id}`)}>
                   <td><strong>{r.title}</strong></td>
                   <td>{r.archived ? <span className="badge">В архиве</span> : <span className={`badge ${ps.cls}`}>{ps.text}</span>}</td>
-                  <td>{r.projects || <span className="muted">—</span>}</td>
+                  <td>{r.projects || <span className="muted">–</span>}</td>
                   <td className="muted wide-only">{new Date(r.updatedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</td>
                   <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
                     <Menu items={[
@@ -137,7 +137,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal onClose={onClose} title="Импорт анкеты из JSON">
       <div className="stack">
-        <p className="muted" style={{ margin: 0 }}>Вставьте JSON или выберите файл. Формат — вкладка JSON → «Скопировать инструкцию для ИИ».</p>
+        <p className="muted" style={{ margin: 0 }}>Вставьте JSON или выберите файл. Формат – вкладка JSON → «Скопировать инструкцию для ИИ».</p>
         <input type="file" accept=".json,application/json" onChange={async (e) => {
           const f = e.target.files?.[0];
           if (f) setText(await f.text());
@@ -168,8 +168,8 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
               ? `Копия делается автоматически каждые ${data.everyHours} ч, хранятся последние ${data.keep}.`
               : 'Автоматические копии выключены (BACKUP_HOURS=0 в .env).'}
             {data.database === 'postgres'
-              ? <>{' '}Копия — выгрузка всех таблиц PostgreSQL (.json.gz): анкеты, проекты, ответы, пользователи. Восстановление — в пустую базу: <code>npm run db:copy -- --from копия.json.gz --to postgres://…</code></>
-              : ' Копия — полный файл базы SQLite: все анкеты и ответы. Для восстановления остановите сервис и замените им data/surveylab.db.'}
+              ? <>{' '}Копия – выгрузка всех таблиц PostgreSQL (.json.gz): анкеты, проекты, ответы, пользователи. Восстановление – в пустую базу: <code>npm run db:copy -- --from копия.json.gz --to postgres://…</code></>
+              : ' Копия – полный файл базы SQLite: все анкеты и ответы. Для восстановления остановите сервис и замените им data/surveylab.db.'}
           </p>
         )}
         {!data ? <p className="muted">Загрузка…</p> : data.list.length === 0 ? <p className="muted">Копий пока нет.</p> : (

@@ -58,7 +58,7 @@ export function JsonTab({ def, onChange }: { def: Survey; onChange: (d: Survey) 
           a.download = `${def.title || 'survey'}.json`;
           a.click();
         }}>Скачать JSON</button>
-        <button className="btn btn-secondary btn-sm" title="Документация формата + задание — вставьте в любой ИИ вместе с текстом анкеты"
+        <button className="btn btn-secondary btn-sm" title="Документация формата + задание – вставьте в любой ИИ вместе с текстом анкеты"
           onClick={() => copyText(aiPrompt, 'Инструкция для ИИ скопирована')}>
           Скопировать инструкцию для ИИ
         </button>

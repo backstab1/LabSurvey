@@ -18,7 +18,7 @@ async function open(target: string, mustExist: boolean): Promise<Sql> {
   if (isPg(target)) return openSql({ url: target, sqliteFile: '' });
   const file = resolve(target);
   if (mustExist && !existsSync(file)) throw new Error(`Нет файла ${file}`);
-  if (!mustExist && existsSync(file)) throw new Error(`Файл ${file} уже есть — укажите новый`);
+  if (!mustExist && existsSync(file)) throw new Error(`Файл ${file} уже есть – укажите новый`);
   return openSql({ sqliteFile: file });
 }
 
@@ -39,7 +39,7 @@ export async function copyDatabase(from: string, to: string, log: (s: string) =>
   log(`Строк: ${total} (${TABLES.map((t) => `${t} ${dump.tables[t]?.length ?? 0}`).join(', ')})`);
 
   if (isDumpFile(to)) {
-    if (existsSync(resolve(to))) throw new Error(`Файл ${to} уже есть — укажите новый`);
+    if (existsSync(resolve(to))) throw new Error(`Файл ${to} уже есть – укажите новый`);
     await writeDumpFile(dump, resolve(to));
     log(`Записано в ${to}`);
     return Object.fromEntries(TABLES.map((t) => [t, dump.tables[t]?.length ?? 0]));

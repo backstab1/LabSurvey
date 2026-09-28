@@ -40,8 +40,8 @@ export function ResponseModal({ editable, surveyId, rid, onClose, onDeleted, onC
       <div className="stack">
         <div className="row small muted">
           <span>{STATUS_LABELS[r.status]}{r.isTest ? ' · тест' : ''}</span>
-          <span>Начало: {fmtDate(r.startedAt, '—')}</span>
-          <span>Окончание: {fmtDate(r.completedAt, '—')}</span>
+          <span>Начало: {fmtDate(r.startedAt, '–')}</span>
+          <span>Окончание: {fmtDate(r.completedAt, '–')}</span>
           {r.durationSec !== null && <span>Время: {Math.floor(r.durationSec / 60)} мин {r.durationSec % 60} с</span>}
           {Object.entries(r.params).map(([k, v]) => <span key={k} className="mono">{k}={v}</span>)}
         </div>
@@ -54,7 +54,7 @@ export function ResponseModal({ editable, surveyId, rid, onClose, onDeleted, onC
                   <td className="mono" style={{ width: 70, verticalAlign: 'top' }}>{q.id}</td>
                   <td style={{ verticalAlign: 'top' }}>
                     <div className="muted small">{rich(pipe(q.text, ctx))}</div>
-                    <div>{answerText(ctx, q) || '—'}</div>
+                    <div>{answerText(ctx, q) || '–'}</div>
                     {q.type === 'file' && typeof r.answers[q.id]?.v === 'string' && (
                       <div className="report-files">
                         {String(r.answers[q.id].v).split(',').map((id) => {

@@ -42,7 +42,7 @@ function checkScripts(scripts: unknown, level: keyof typeof SCRIPT_KEYS, where: 
     if (!allowed.includes(k)) err(where, `scripts.${k}: неизвестный хук, допустимы ${allowed.join(', ')}`);
     else if (typeof code !== 'string') err(where, `scripts.${k}: ожидается строка с JS-кодом`);
     else {
-      try { new Function('sl', code); } catch (e) { err(where, `scripts.${k}: синтаксическая ошибка — ${(e as Error).message}`); }
+      try { new Function('sl', code); } catch (e) { err(where, `scripts.${k}: синтаксическая ошибка – ${(e as Error).message}`); }
     }
   }
 }
@@ -122,7 +122,7 @@ export function validateSurvey(input: unknown): ValidationResult {
     });
   });
   for (const id of blockStart.keys()) {
-    if (qIndex.has(id)) err(id, 'ID блока совпадает с ID вопроса — переходы станут неоднозначными');
+    if (qIndex.has(id)) err(id, 'ID блока совпадает с ID вопроса – переходы станут неоднозначными');
   }
   checkRandomBlocks(s, err, warn);
 
@@ -157,7 +157,7 @@ export function validateSurvey(input: unknown): ValidationResult {
     }
     if (current && ref.q.type !== 'hidden') {
       const later = ref.page > current.page || (ref.page === current.page && (!samePageOk || ref.pos >= current.pos));
-      if (later) warn(where, `Ссылка на вопрос «${id}», который идёт позже — на момент показа ответа ещё не будет`);
+      if (later) warn(where, `Ссылка на вопрос «${id}», который идёт позже – на момент показа ответа ещё не будет`);
     }
     return ref.q;
   };
@@ -187,11 +187,11 @@ export function validateSurvey(input: unknown): ValidationResult {
     } else {
       const ref = checkRef(where, c.q, current, samePageOk);
       if (ref) {
-        if (ref.type === 'info') err(where, `«${c.q}» — информационный блок, у него нет ответа`);
+        if (ref.type === 'info') err(where, `«${c.q}» – информационный блок, у него нет ответа`);
         if (c.row !== undefined) {
-          if (ref.type !== 'matrix') err(where, `row можно указывать только для матрицы, а «${c.q}» — ${ref.type}`);
+          if (ref.type !== 'matrix') err(where, `row можно указывать только для матрицы, а «${c.q}» – ${ref.type}`);
         } else if (ref.type === 'matrix' && c.op !== 'answered' && c.op !== 'notAnswered') {
-          err(where, `Для матрицы «${c.q}» укажите row — код строки`);
+          err(where, `Для матрицы «${c.q}» укажите row – код строки`);
         }
       }
     }
@@ -211,7 +211,7 @@ export function validateSurvey(input: unknown): ValidationResult {
       if (q.showIf) checkCondition(q.showIf, `${q.id} → условие показа`, info, true);
       const att = (q as { attention?: unknown }).attention;
       if (att !== undefined) {
-        if (!isObj(att) || att.correct === undefined) err(q.id, 'attention: укажите correct — условие правильного ответа');
+        if (!isObj(att) || att.correct === undefined) err(q.id, 'attention: укажите correct – условие правильного ответа');
         else {
           checkCondition(att.correct as Condition, `${q.id} → контрольный вопрос`, null, true);
           if (att.onFail !== undefined && att.onFail !== 'flag' && att.onFail !== 'screenout') err(q.id, 'attention.onFail: flag или screenout');
@@ -230,7 +230,7 @@ export function validateSurvey(input: unknown): ValidationResult {
         else {
           const src = checkRef(`${q.id} → перенос вариантов`, from.question, info, true);
           if (src && !OPTION_TYPES.includes(src.type)) {
-            err(q.id, `Перенос возможен только из вопросов с вариантами, а «${src.id}» — ${src.type}`);
+            err(q.id, `Перенос возможен только из вопросов с вариантами, а «${src.id}» – ${src.type}`);
           }
           if (!['selected', 'notSelected', 'all'].includes(from.filter)) {
             err(q.id, 'filter переноса: selected, notSelected или all');
@@ -246,7 +246,7 @@ export function validateSurvey(input: unknown): ValidationResult {
           try {
             for (const id of calcRefs(parseCalc(calc))) if (!qIndex.has(id)) err(`${q.id} → формула`, `Нет вопроса «${id}»`);
           } catch (e) { err(`${q.id} → формула`, (e as Error).message); }
-          if ((q as { fromParam?: string }).fromParam) warn(q.id, 'У переменной и формула, и параметр ссылки — формула перезапишет значение');
+          if ((q as { fromParam?: string }).fromParam) warn(q.id, 'У переменной и формула, и параметр ссылки – формула перезапишет значение');
         }
       }
       checkActions(q as Question, info, info.pos);
@@ -256,8 +256,8 @@ export function validateSurvey(input: unknown): ValidationResult {
   if (s.images !== undefined) {
     if (!Array.isArray(s.images)) err('images', 'Ожидается массив {url, name}');
     else s.images.forEach((im, i) => {
-      if (!isObj(im) || typeof im.url !== 'string' || !/^(https?:\/\/|\/)\S+$/i.test(im.url)) err('images', `[${i + 1}]: url — адрес картинки https://… или /media/…`);
-      else if (typeof im.name !== 'string') err('images', `[${i + 1}]: name — строка`);
+      if (!isObj(im) || typeof im.url !== 'string' || !/^(https?:\/\/|\/)\S+$/i.test(im.url)) err('images', `[${i + 1}]: url – адрес картинки https://… или /media/…`);
+      else if (typeof im.name !== 'string') err('images', `[${i + 1}]: name – строка`);
     });
   }
 
@@ -317,7 +317,7 @@ export function validateSurvey(input: unknown): ValidationResult {
           case 'setValue': {
             const t = typeof a.target === 'string' ? qIndex.get(a.target) : undefined;
             if (!t) err(where, 'target: укажите скрытую переменную');
-            else if (t.q.type !== 'hidden') err(where, `«${a.target}» — не скрытая переменная`);
+            else if (t.q.type !== 'hidden') err(where, `«${a.target}» – не скрытая переменная`);
             if (a.value === undefined) err(where, 'Укажите value');
             break;
           }
@@ -325,15 +325,15 @@ export function validateSurvey(input: unknown): ValidationResult {
           case 'markAnswered': {
             const t = typeof a.target === 'string' ? qIndex.get(a.target) : undefined;
             if (!t) err(where, `Нет вопроса «${a.target ?? ''}»`);
-            else if (t.q.type === 'info' || t.q.type === 'hidden') err(where, `«${a.target}» — ${t.q.type === 'info' ? 'информационный блок' : 'скрытая переменная'}, пропускать нечего`);
+            else if (t.q.type === 'info' || t.q.type === 'hidden') err(where, `«${a.target}» – ${t.q.type === 'info' ? 'информационный блок' : 'скрытая переменная'}, пропускать нечего`);
             else if (t.pos <= pi) err(where, 'Пропустить можно только вопрос, который идёт дальше');
-            if (a.do === 'markAnswered' && (a.value === undefined || a.value === '')) err(where, 'Укажите value — какой ответ записать');
+            if (a.do === 'markAnswered' && (a.value === undefined || a.value === '')) err(where, 'Укажите value – какой ответ записать');
             break;
           }
           case 'goTo': {
             const t = typeof a.target === 'string' ? qIndex.get(a.target)?.pos ?? blockStart.get(a.target) : undefined;
             if (t === undefined) err(where, `Нет вопроса или блока «${a.target}»`);
-            else if (t <= pi) warn(where, 'Переход назад — возможен бесконечный цикл');
+            else if (t <= pi) warn(where, 'Переход назад – возможен бесконечный цикл');
             break;
           }
           case 'end':
@@ -398,7 +398,7 @@ function checkLoops(
     if (b.parent !== undefined) {
       const p = typeof b.parent === 'string' ? byId.get(b.parent) : undefined;
       if (!p) return e(w, `parent: нет блока «${String(b.parent)}»`);
-      if (!p.loop) return e(w, `parent: блок «${p.id}» не цикл — вкладывать можно только в цикл`);
+      if (!p.loop) return e(w, `parent: блок «${p.id}» не цикл – вкладывать можно только в цикл`);
       if (index.get(p.id)! >= i) return e(w, 'Вложенный блок должен идти после своего цикла');
       // Между циклом и вложенным блоком — только его же вложенные блоки
       for (let k = index.get(p.id)! + 1; k < i; k++) {
@@ -415,15 +415,15 @@ function checkLoops(
     if (l.question !== undefined) {
       const src = typeof l.question === 'string' ? qIndex.get(l.question) : undefined;
       if (!src) return e(w, `loop.question: нет вопроса «${String(l.question)}»`);
-      if (!LOOP_SOURCE_TYPES.has(src.q.type)) e(w, `Источник цикла — вопрос с вариантами, матрица или число, а «${src.q.id}» — ${src.q.type}`);
+      if (!LOOP_SOURCE_TYPES.has(src.q.type)) e(w, `Источник цикла – вопрос с вариантами, матрица или число, а «${src.q.id}» – ${src.q.type}`);
       const srcBlock = blocks.find((x) => x.questions.some((q) => q.id === l.question));
       // Источник во вложенном блоке годится, если этот цикл вложен в тот же цикл (или в сам блок-источник) и идёт после него
       const inChain = !!srcBlock && srcBlock.id !== b.id && (isDescendant(b, srcBlock.id)
         || (!!srcBlock.parent && isDescendant(b, srcBlock.parent) && index.get(srcBlock.id)! < i));
       if (srcBlock?.id === b.id) e(w, 'Источник цикла не может быть внутри самого цикла');
-      else if (srcBlock?.parent && !inChain) e(w, `Источник «${l.question}» — внутри другого цикла; вложите этот блок в тот цикл`);
+      else if (srcBlock?.parent && !inChain) e(w, `Источник «${l.question}» – внутри другого цикла; вложите этот блок в тот цикл`);
       else if (src.pos >= (blockStart.get(b.id) ?? Infinity)) e(w, `Источник «${l.question}» должен идти раньше цикла`);
-      if (src.q.type === 'number' && !l.max) warn(w, `Цикл по числу: не больше ${20} повторов — задайте max, если нужно другое`);
+      if (src.q.type === 'number' && !l.max) warn(w, `Цикл по числу: не больше ${20} повторов – задайте max, если нужно другое`);
       if (l.columns !== undefined && (src.q.type !== 'matrix' || !Array.isArray(l.columns) || !l.columns.every(isInt))) e(w, 'loop.columns: коды столбцов, только для матрицы');
     }
     if (l.filter !== undefined && !['selected', 'notSelected', 'all'].includes(l.filter as string)) e(w, 'loop.filter: selected, notSelected или all');
@@ -445,7 +445,7 @@ function checkRandomBlocks(s: Survey, err: Sink, warn: Sink) {
     if (b.order === undefined) continue;
     if (b.order !== 'random' && b.order !== 'rotate') { err(bw, 'order блока: random или rotate'); continue; }
     const movable = b.questions.filter((q) => isObj(q) && !q.fixed && q.type !== 'hidden');
-    if (movable.length < 2) warn(bw, 'В блоке с перемешиванием меньше двух незакреплённых вопросов — перемешивать нечего');
+    if (movable.length < 2) warn(bw, 'В блоке с перемешиванием меньше двух незакреплённых вопросов – перемешивать нечего');
     // Ссылки между перемешиваемыми вопросами: ответа на «соседа» к моменту показа может ещё не быть
     const ids = new Set(movable.map((q) => q.id));
     for (const q of movable) {
@@ -455,7 +455,7 @@ function checkRandomBlocks(s: Survey, err: Sink, warn: Sink) {
         if (other === id) continue;
         const re = new RegExp(`"(q|question|target)":"${other}"|\\{\\{\\s*${other}[.}\\s]`);
         if (re.test(json)) {
-          warn(id, `Ссылается на «${other}» из того же блока с перемешиванием — порядок у респондентов разный, ответа может ещё не быть. Закрепите оба вопроса или вынесите их из блока`);
+          warn(id, `Ссылается на «${other}» из того же блока с перемешиванием – порядок у респондентов разный, ответа может ещё не быть. Закрепите оба вопроса или вынесите их из блока`);
         }
       }
     }
@@ -519,7 +519,7 @@ function validateOptions(list: unknown, where: string, name: string, err: Sink, 
     if ((o.otherType !== undefined || o.otherMultiline || o.otherOptional || o.otherDecimals) && !o.other) err(where, `${name}[${i + 1}]: настройки открытого значения без other: true`);
     if (o.script !== undefined) {
       if (typeof o.script !== 'string') err(where, `${name}[${i + 1}].script: строка с JS-кодом`);
-      else try { new Function('sl', o.script); } catch (e) { err(where, `${name}[${i + 1}].script: синтаксическая ошибка — ${(e as Error).message}`); }
+      else try { new Function('sl', o.script); } catch (e) { err(where, `${name}[${i + 1}].script: синтаксическая ошибка – ${(e as Error).message}`); }
     }
     if (o.group && (o.other || o.exclusive)) err(where, `${name}[${i + 1}]: заголовок группы не может быть «другим» или исключающим`);
     if (o.score !== undefined && (typeof o.score !== 'number' || !isFinite(o.score))) err(where, `${name}[${i + 1}].score: число`);
@@ -539,7 +539,7 @@ function validateQuestion(
   }
   if (q.prefillSkip && !q.prefillParam) warn(w, 'prefillSkip без prefillParam ничего не делает');
   if (q.prefillParam && (q.type === 'matrix' || q.type === 'ranking' || q.type === 'info' || q.type === 'hidden')) {
-    warn(w, `Предзаполнение из ссылки не работает для типа ${q.type}${q.type === 'hidden' ? ' — используйте fromParam' : ''}`);
+    warn(w, `Предзаполнение из ссылки не работает для типа ${q.type}${q.type === 'hidden' ? ' – используйте fromParam' : ''}`);
   }
   for (const k of ['requiredMessage', 'note', 'placeholder', 'suffix', 'patternMessage'] as const) {
     const v = (q as unknown as Record<string, unknown>)[k];
@@ -573,7 +573,7 @@ function validateQuestion(
       if (q.order !== undefined && q.order !== 'random' && q.order !== 'rotate') err(w, 'order: random или rotate');
       break;
     case 'scale':
-      if (!isInt(q.from) || !isInt(q.to)) err(w, 'from и to — целые числа');
+      if (!isInt(q.from) || !isInt(q.to)) err(w, 'from и to – целые числа');
       else if (q.from >= q.to) err(w, 'from должно быть меньше to');
       else if (q.to - q.from > 20) err(w, 'Шкала не может быть длиннее 21 точки');
       if (q.labels !== undefined && !isObj(q.labels)) err(w, 'labels: объект {"1": "подпись"}');
@@ -592,7 +592,7 @@ function validateQuestion(
       validateOptions(q.rows, w, 'rows', err, !!q.rowsFrom);
       validateOptions(q.columns, w, 'columns', err);
       if (q.rowOrder !== undefined && q.rowOrder !== 'random' && q.rowOrder !== 'rotate') err(w, 'rowOrder: random или rotate');
-      if (q.carousel && q.progressiveRows) warn(w, 'carousel и progressiveRows вместе не имеют смысла — будет карусель');
+      if (q.carousel && q.progressiveRows) warn(w, 'carousel и progressiveRows вместе не имеют смысла – будет карусель');
       if (Array.isArray(q.columns) && q.columns.some((c) => c?.other)) err(w, '«Другое» в матрице задаётся в строках, а не в столбцах');
       if (Array.isArray(q.rows) && q.rows.some((r) => r?.group && r.groupExclusive)) err(w, 'groupExclusive в строках матрицы не действует');
       if (q.requiredRows !== undefined && q.requiredRows !== 'all' && q.requiredRows !== 'none'
@@ -601,8 +601,8 @@ function validateQuestion(
       }
       break;
     case 'number':
-      if (q.min !== undefined && typeof q.min !== 'number') err(w, 'min — число');
-      if (q.max !== undefined && typeof q.max !== 'number') err(w, 'max — число');
+      if (q.min !== undefined && typeof q.min !== 'number') err(w, 'min – число');
+      if (q.max !== undefined && typeof q.max !== 'number') err(w, 'max – число');
       if (typeof q.min === 'number' && typeof q.max === 'number' && q.min > q.max) err(w, 'min больше max');
       if (q.decimals !== undefined && (!isInt(q.decimals) || q.decimals < 0 || q.decimals > 6)) err(w, 'decimals: от 0 до 6');
       break;
@@ -629,7 +629,7 @@ function validateQuestion(
       if (q.format !== undefined && q.format !== 'ru' && q.format !== 'international') err(w, 'format: ru или international');
       break;
     case 'slider': {
-      if (typeof q.min !== 'number' || typeof q.max !== 'number' || !isFinite(q.min) || !isFinite(q.max)) { err(w, 'min и max — числа'); break; }
+      if (typeof q.min !== 'number' || typeof q.max !== 'number' || !isFinite(q.min) || !isFinite(q.max)) { err(w, 'min и max – числа'); break; }
       if (q.min >= q.max) err(w, 'min должно быть меньше max');
       if (q.step !== undefined && (typeof q.step !== 'number' || q.step <= 0 || q.step > q.max - q.min)) err(w, 'step: положительное число не больше диапазона');
       if (q.start !== undefined && (typeof q.start !== 'number' || q.start < q.min || q.start > q.max)) err(w, 'start: число от min до max');
@@ -719,16 +719,16 @@ export function validatePanels(panels: unknown): string[] {
   panels.forEach((p: Record<string, unknown>, i) => {
     const where = `Панель ${typeof p?.id === 'string' && p.id ? p.id : i + 1}`;
     if (!p || typeof p !== 'object') return errors.push(`${where}: некорректное описание`);
-    if (typeof p.id !== 'string' || !PANEL_ID_RE.test(p.id)) errors.push(`${where}: код — латиница, цифры, _ и -, до 40 символов`);
+    if (typeof p.id !== 'string' || !PANEL_ID_RE.test(p.id)) errors.push(`${where}: код – латиница, цифры, _ и -, до 40 символов`);
     else if (seen.has(p.id.toLowerCase())) errors.push(`${where}: такой код уже есть`);
     else seen.add(p.id.toLowerCase());
     if (p.title !== undefined && typeof p.title !== 'string') errors.push(`${where}: название должно быть строкой`);
     if (p.idParam !== undefined) {
-      if (typeof p.idParam !== 'string' || !/^[\w.-]{1,50}$/.test(p.idParam)) errors.push(`${where}: параметр ID — латиница, цифры, _ . -`);
+      if (typeof p.idParam !== 'string' || !/^[\w.-]{1,50}$/.test(p.idParam)) errors.push(`${where}: параметр ID – латиница, цифры, _ . -`);
       else if (RESERVED_LINK_PARAMS.has(p.idParam)) errors.push(`${where}: параметр «${p.idParam}» занят опросом`);
     }
-    if (p.idMacro !== undefined && (typeof p.idMacro !== 'string' || p.idMacro.length > 100)) errors.push(`${where}: макрос ID — строка до 100 символов`);
-    if (p.limit !== undefined && (!Number.isInteger(p.limit) || (p.limit as number) < 1)) errors.push(`${where}: лимит — целое число от 1`);
+    if (p.idMacro !== undefined && (typeof p.idMacro !== 'string' || p.idMacro.length > 100)) errors.push(`${where}: макрос ID – строка до 100 символов`);
+    if (p.limit !== undefined && (!Number.isInteger(p.limit) || (p.limit as number) < 1)) errors.push(`${where}: лимит – целое число от 1`);
     for (const k of PANEL_URL_KEYS) {
       if (p[k] !== undefined && (typeof p[k] !== 'string' || !/^https?:\/\/\S+$/i.test(p[k] as string))) {
         errors.push(`${where}: редирект должен начинаться с http:// или https://`);

@@ -54,7 +54,7 @@ export function LoopDialog({ def, block, onSave, onClose }: {
       <div className="stack loop-dialog">
         <p className="muted small" style={{ margin: 0 }}>
           Вопросы блока повторяются для каждого элемента. Копии получают ID по коду элемента: <code>Q5</code> → <code>Q5_3</code>
-          {depth > 1 && <> (во вложенном цикле — <code>Q5_3_2</code>)</>} — так они и называются в выгрузке.
+          {depth > 1 && <> (во вложенном цикле – <code>Q5_3_2</code>)</>} – так они и называются в выгрузке.
         </p>
         <Segmented value={mode} onChange={(v) => setSpec(v === 'items'
           ? compact({ ...spec, question: undefined, filter: undefined, columns: undefined, items: [{ code: 1, text: '' }] })
@@ -72,7 +72,7 @@ export function LoopDialog({ def, block, onSave, onClose }: {
                 </select>
               </label>
               {src?.type === 'number' ? (
-                <p className="muted small" style={{ margin: 0 }}>Повторов — столько, сколько ответил респондент (1, 2, 3…), но не больше предела ниже.</p>
+                <p className="muted small" style={{ margin: 0 }}>Повторов – столько, сколько ответил респондент (1, 2, 3…), но не больше предела ниже.</p>
               ) : (
                 <div className="flag-line">
                   <span>{src?.type === 'matrix' ? 'Строки' : 'Варианты'}</span>
@@ -86,7 +86,7 @@ export function LoopDialog({ def, block, onSave, onClose }: {
               )}
               {src?.type === 'matrix' && (spec.filter ?? 'selected') !== 'all' && (
                 <div className="flag-line">
-                  <span>Только строки, где отмечено<small className="muted"> (пусто — любой ответ)</small></span>
+                  <span>Только строки, где отмечено<small className="muted"> (пусто – любой ответ)</small></span>
                   <div className="multi-pick">
                     {src.columns.map((c) => {
                       const on = spec.columns?.includes(c.code) ?? false;
@@ -126,9 +126,9 @@ export function LoopDialog({ def, block, onSave, onClose }: {
         <div className="loop-help">
           <div className="sub-title">В вопросах блока</div>
           <ul>
-            <li><code>{'{{loop}}'}</code> — текст текущего элемента, <code>{'{{loop.code}}'}</code> — его код{depth > 1 && <>; <code>{'{{loop1}}'}</code> — элемент внешнего цикла</>}.</li>
+            <li><code>{'{{loop}}'}</code> – текст текущего элемента, <code>{'{{loop.code}}'}</code> – его код{depth > 1 && <>; <code>{'{{loop1}}'}</code> – элемент внешнего цикла</>}.</li>
             <li>Ссылки на вопросы этого же блока (условия, подстановки, перенос) относятся к текущему повтору.</li>
-            <li>Условие «↻ повтор цикла» — показать вопрос только для некоторых элементов.</li>
+            <li>Условие «↻ повтор цикла» – показать вопрос только для некоторых элементов.</li>
             <li>После цикла на конкретный повтор ссылаются по ID копии: <code>{'{{'}{block.questions[0]?.id ?? 'Q5'}_{preview[0]?.code ?? 1}{'}}'}</code>.</li>
             <li>Вложенный цикл: блок после этого → меню блока → «Вложить в цикл».</li>
           </ul>

@@ -56,7 +56,7 @@ test('admin login and survey import', async () => {
   // Анкета в проекте — удалить её нельзя
   assert.equal((await call('DELETE', `/api/admin/surveys/${surveyId}`)).status, 400);
   await call('DELETE', `/api/admin/projects/${draftProject}`);
-  surveyId = await launch(call, surveyId, 'Демо — волна 1');
+  surveyId = await launch(call, surveyId, 'Демо – волна 1');
 });
 
 test('respondent path: one question per screen, actions, back, completion', async () => {
@@ -138,7 +138,7 @@ test('exports', async () => {
   const s = await call('GET', `/api/admin/projects/${surveyId}/export.sav`);
   assert.equal(s.raw.rawPayload.subarray(0, 4).toString(), '$FL2');
   const info = await call('GET', `/api/admin/projects/${surveyId}`);
-  assert.equal(info.json.title, 'Демо — волна 1');
+  assert.equal(info.json.title, 'Демо – волна 1');
   assert.deepEqual(info.json.counts.real, { completed: 1, screened_out: 1, in_progress: 1 });
 });
 

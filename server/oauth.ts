@@ -78,7 +78,7 @@ function page(reply: FastifyReply, title: string, body: string, status = 200) {
   reply.code(status).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store')
     .header('X-Frame-Options', 'DENY');
   return reply.send(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} — SurveyLAB</title><style>
+<title>${esc(title)} – SurveyLAB</title><style>
 body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#f4f5f7;color:#1c2330;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}
 .box{background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:28px;max-width:440px;width:calc(100% - 32px);box-sizing:border-box}
 h1{font-size:20px;margin:0 0 14px}.logo{font-weight:700;margin-bottom:18px}.logo span{color:#2f6fed}
@@ -168,7 +168,7 @@ export async function oauthRoutes(app: FastifyInstance) {
 <strong>${esc(user.login)}</strong>, ${esc(ROLE_WORDS[user.role] ?? user.role)}.</p>
 <p>Приложение сможет:</p><ul>
 <li>смотреть список анкет и их содержимое;</li>
-${canWrite ? '<li>создавать анкеты и менять их черновики.</li>' : '<li>проверять анкеты (менять не сможет — у вас доступ только на просмотр).</li>'}
+${canWrite ? '<li>создавать анкеты и менять их черновики.</li>' : '<li>проверять анкеты (менять не сможет – у вас доступ только на просмотр).</li>'}
 </ul>
 <p class="muted">Публиковать анкеты, запускать сбор и видеть ответы респондентов приложение не может. Доступ можно отозвать в SurveyLAB: меню пользователя → «ИИ-коннектор».</p>
 <form method="post" action="/oauth/authorize">${hidden(p)}<input type="hidden" name="csrf" value="${csrfFor(user.login, p)}">
@@ -223,7 +223,7 @@ ${error ? `<div class="err">${esc(error)}</div>` : ''}
 
     const session = await currentUser(req);
     const user = session ? await userByLogin(session.login) : null;
-    if (!user) return loginPage(reply, p, chk.client.name, 'Сессия истекла — войдите ещё раз');
+    if (!user) return loginPage(reply, p, chk.client.name, 'Сессия истекла – войдите ещё раз');
     const csrf = Buffer.from(String(b.csrf ?? ''));
     const want = Buffer.from(csrfFor(user.login, p));
     if (csrf.length !== want.length || !timingSafeEqual(csrf, want)) return denied(reply, 'Форма устарела. Начните подключение заново.');

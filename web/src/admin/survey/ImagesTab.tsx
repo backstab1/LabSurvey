@@ -48,7 +48,7 @@ export function ImagesTab({ def, onChange, readOnly }: { def: Survey; onChange: 
           {lib.length > 6 && <input className="input" type="search" style={{ width: 220 }} placeholder="Поиск по названию или вопросу" value={q} onChange={(e) => setQ(e.target.value)} />}
         </div>
         <p className="muted small" style={{ margin: 0 }}>
-          Загрузите картинки один раз — логотипы, фото товаров, упаковки — и выбирайте их в вопросах кнопкой «Выбрать» в поле картинки
+          Загрузите картинки один раз – логотипы, фото товаров, упаковки – и выбирайте их в вопросах кнопкой «Выбрать» в поле картинки
           (варианты ответов, уровни конджойнта, клик по картинке, логотип опроса). Картинки, уже использованные в анкете, появляются здесь сами.
         </p>
         {!readOnly && (
@@ -65,7 +65,7 @@ export function ImagesTab({ def, onChange, readOnly }: { def: Survey; onChange: 
           {shown.map((im) => (
             <div key={im.url} className="image-card">
               <a href={im.url} target="_blank" rel="noreferrer"><img src={im.url} alt={im.name} loading="lazy" /></a>
-              <input className="input" value={im.name} placeholder={im.saved ? 'Название' : 'не в библиотеке — дайте название'} readOnly={readOnly}
+              <input className="input" value={im.name} placeholder={im.saved ? 'Название' : 'не в библиотеке – дайте название'} readOnly={readOnly}
                 onChange={(e) => rename(im.url, e.target.value)} />
               <div className="muted small image-where" title={im.where.join(', ')}>
                 {im.where.length ? `используется: ${im.where.join(', ')}` : 'пока не используется'}

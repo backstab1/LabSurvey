@@ -9,7 +9,7 @@ import type { ProjectListItem, SurveyListItem } from '../../../../shared/api.ts'
 
 export /** Копия проекта для новой волны: спрашивает название и открывает копию */
 async function copyProject(id: string, title: string) {
-  const name = window.prompt('Название копии. Скопируются анкета, настройки сбора, квоты и панели — без ответов, Google Sheets и уведомлений.', `${title} (копия)`);
+  const name = window.prompt('Название копии. Скопируются анкета, настройки сбора, квоты и панели – без ответов, Google Sheets и уведомлений.', `${title} (копия)`);
   if (name === null) return;
   try {
     const r = await api<{ id: string }>('POST', `/api/admin/projects/${id}/copy`, { title: name });
@@ -48,7 +48,7 @@ export function ProjectList() {
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         {rows === null ? <p className="muted" style={{ padding: 20 }}>Загрузка…</p> : rows.length === 0 ? (
           <div style={{ padding: 20 }}>
-            <p className="muted" style={{ marginTop: 0 }}>Проектов пока нет. Проект — это запуск анкеты: статус сбора, сроки, квоты, данные и отчёты.</p>
+            <p className="muted" style={{ marginTop: 0 }}>Проектов пока нет. Проект – это запуск анкеты: статус сбора, сроки, квоты, данные и отчёты.</p>
             {editable && <button className="btn btn-primary" onClick={() => setNewOpen(true)}>Создать первый проект</button>}
           </div>
         ) : (
@@ -62,9 +62,9 @@ export function ProjectList() {
                   <td><strong>{r.title}</strong><div className="muted" style={{ fontSize: 13 }}>/s/{r.id} · анкета «{r.surveyTitle}»</div></td>
                   <td><span className={`badge status-${r.status}`}>{PROJECT_STATUS_LABELS[r.status]}</span></td>
                   <td>{r.counts.completed ?? 0}{r.maxResponses ? <span className="muted"> / {r.maxResponses}</span> : null}</td>
-                  <td className="wide-only">{r.quotas ? <>{r.quotasFull} из {r.quotas} набрано</> : <span className="muted">—</span>}</td>
+                  <td className="wide-only">{r.quotas ? <>{r.quotasFull} из {r.quotas} набрано</> : <span className="muted">–</span>}</td>
                   <td className="wide-only muted small">
-                    {r.openFrom || r.closeAt ? <>{r.openFrom ? `с ${fmtDate(r.openFrom)}` : ''} {r.closeAt ? `до ${fmtDate(r.closeAt)}` : ''}</> : '—'}
+                    {r.openFrom || r.closeAt ? <>{r.openFrom ? `с ${fmtDate(r.openFrom)}` : ''} {r.closeAt ? `до ${fmtDate(r.closeAt)}` : ''}</> : '–'}
                   </td>
                   <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
                     <Menu items={[
@@ -102,13 +102,13 @@ export function NewProjectModal({ onClose, surveyId }: { onClose: () => void; su
       }}>
         <label className="field"><span>Анкета</span>
           <select className="input" value={form.surveyId} autoFocus onChange={(e) => setForm({ ...form, surveyId: e.target.value })}>
-            <option value="">— выберите анкету —</option>
+            <option value="">– выберите анкету –</option>
             {list?.map((s) => <option key={s.id} value={s.id}>{s.title}{s.version ? ` · версия ${s.version}` : ' · не опубликована'}</option>)}
           </select>
-          {picked && !picked.version && <span className="field-help">Анкету нужно опубликовать до начала сбора — сейчас можно тестировать черновик.</span>}
+          {picked && !picked.version && <span className="field-help">Анкету нужно опубликовать до начала сбора – сейчас можно тестировать черновик.</span>}
         </label>
         <label className="field"><span>Название проекта</span>
-          <input className="input" value={form.title} placeholder={picked ? picked.title : 'Например: Кофейни — волна 1, панель А'}
+          <input className="input" value={form.title} placeholder={picked ? picked.title : 'Например: Кофейни – волна 1, панель А'}
             onChange={(e) => setForm({ ...form, title: e.target.value })} />
         </label>
         {error && <div className="error-box">{error}</div>}

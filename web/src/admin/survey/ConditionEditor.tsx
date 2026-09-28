@@ -141,7 +141,7 @@ export function ConditionEditor({ def: baseDef, value, onChange, required, sugge
       <div className="cond-foot">
         <button className="btn-link add-link" onClick={addItem}>{visual.items.length ? '+ ещё условие' : '+ условие'}</button>
         <span className="grow" />
-        <button className="btn-link json-link" title="Сложное условие с вложенными И / ИЛИ / НЕ — в виде JSON"
+        <button className="btn-link json-link" title="Сложное условие с вложенными И / ИЛИ / НЕ – в виде JSON"
           onClick={() => { setJsonText(value ? JSON.stringify(value, null, 2) : ''); setJsonMode(true); }}>{'{ }'}</button>
       </div>
     </div>

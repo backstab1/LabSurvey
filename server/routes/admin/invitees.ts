@@ -38,7 +38,7 @@ function checkTemplate(b: MailBody): { subject: string; body: string } {
   if (b.subject.length > 200) fail(400, 'Тема длиннее 200 символов');
   if (typeof b.body !== 'string' || !b.body.trim()) fail(400, 'Напишите текст письма');
   if (b.body.length > 10_000) fail(400, 'Текст письма длиннее 10 000 символов');
-  if (!hasLinkPlaceholder(b.body)) fail(400, 'В тексте нет {{link}} — без неё человек не получит свою ссылку');
+  if (!hasLinkPlaceholder(b.body)) fail(400, 'В тексте нет {{link}} – без неё человек не получит свою ссылку');
   return { subject: b.subject, body: b.body };
 }
 

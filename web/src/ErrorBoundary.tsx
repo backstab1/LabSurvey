@@ -22,7 +22,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; title?: stri
     return (
       <div className="crash" role="alert">
         <h2>{this.props.title ?? 'Что-то пошло не так'}</h2>
-        <p>Экран не удалось показать из-за ошибки. Обновите страницу; если ошибка повторяется — сообщите разработчикам текст ниже.</p>
+        <p>Экран не удалось показать из-за ошибки. Обновите страницу; если ошибка повторяется – сообщите разработчикам текст ниже.</p>
         <pre>{error.message}</pre>
         <button className="btn btn-primary" onClick={() => window.location.reload()}>Обновить страницу</button>
       </div>

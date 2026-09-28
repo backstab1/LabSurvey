@@ -111,7 +111,7 @@ export function varModels(survey: Survey, ref: VarRef, responses: ResponseRecord
       const opts = allOptions(survey, q).filter((o) => !o.group);
       const known = new Set(opts.map((o) => String(o.code)));
       return [{
-        key: q.id, title: q.type === 'ranking' ? `${title(q)} — на первом месте` : title(q), multi: q.type === 'multi',
+        key: q.id, title: q.type === 'ranking' ? `${title(q)} – на первом месте` : title(q), multi: q.type === 'multi',
         categories: opts.map((o) => ({ key: String(o.code), label: plain(o.text) })),
         cats: (r) => {
           const v = ans(r);
@@ -124,7 +124,7 @@ export function varModels(survey: Survey, ref: VarRef, responses: ResponseRecord
     }
     case 'scale': {
       const cats: Category[] = [];
-      for (let i = q.from; i <= q.to; i++) cats.push({ key: String(i), label: q.labels?.[String(i)] ? `${i} — ${plain(q.labels[String(i)])}` : String(i) });
+      for (let i = q.from; i <= q.to; i++) cats.push({ key: String(i), label: q.labels?.[String(i)] ? `${i} – ${plain(q.labels[String(i)])}` : String(i) });
       for (const o of q.extraOptions ?? []) cats.push({ key: String(o.code), label: plain(o.text) });
       const inScale = (v: unknown) => typeof v === 'number' && v >= q.from && v <= q.to;
       return [{
@@ -145,7 +145,7 @@ export function varModels(survey: Survey, ref: VarRef, responses: ResponseRecord
     }
     case 'sum':
       return q.options.filter((o) => !o.hidden).map((o) => ({
-        key: `${q.id}.${o.code}`, title: `${title(q)} — ${plain(o.text)}`, multi: false, categories: [],
+        key: `${q.id}.${o.code}`, title: `${title(q)} – ${plain(o.text)}`, multi: false, categories: [],
         cats: (r) => (ans(r) && typeof ans(r) === 'object' ? [] : null),
         num: (r) => {
           const v = ans(r);
@@ -168,7 +168,7 @@ export function varModels(survey: Survey, ref: VarRef, responses: ResponseRecord
       const picked = ref.row !== undefined ? rows.filter((x) => x.code === ref.row) : rows;
       const cols = q.columns.map((c) => ({ key: String(c.code), label: plain(c.text) }));
       return picked.map((row) => ({
-        key: `${q.id}.${row.code}`, title: `${title(q)} — ${plain(row.text)}`, multi: q.mode === 'multi', categories: cols,
+        key: `${q.id}.${row.code}`, title: `${title(q)} – ${plain(row.text)}`, multi: q.mode === 'multi', categories: cols,
         cats: (r) => {
           const v = ans(r);
           if (!v || typeof v !== 'object' || Array.isArray(v)) return null;

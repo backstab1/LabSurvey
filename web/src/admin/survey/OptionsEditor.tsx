@@ -91,7 +91,7 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, a
           <input className="opt-code" type="number" title="Код ответа" value={o.code}
             onChange={(e) => setAt(i, { code: Number(e.target.value) })} />
           {showScores && (
-            <input className="opt-score" type="number" title="Баллы варианта — для формул score(…)" placeholder="балл" value={o.score ?? ''}
+            <input className="opt-score" type="number" title="Баллы варианта – для формул score(…)" placeholder="балл" value={o.score ?? ''}
               onChange={(e) => setAt(i, { score: e.target.value === '' ? undefined : Number(e.target.value) })} />
           )}
           <input ref={(el) => { inputs.current[i] = el; }} className="opt-text" value={o.text} placeholder={placeholder}
@@ -132,10 +132,10 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, a
             <button type="button" className={`chip${o.exclusive ? ' on' : ''}`} title="Снимает остальные варианты"
               onClick={() => setAt(i, { exclusive: o.exclusive ? undefined : true })}>искл.</button>
           )}
-          {o.fixed && <button type="button" className="chip on" title="Не перемешивается — снять" onClick={() => setAt(i, { fixed: undefined })}>📌</button>}
-          {o.hidden && <button type="button" className="chip on" title="Скрыт от респондента — показать" onClick={() => setAt(i, { hidden: undefined })}>скрыт</button>}
-          {o.image && <button type="button" className="chip on" title={`Картинка: ${o.image} — изменить`} onClick={() => {
-            const url = window.prompt('Адрес картинки (пусто — убрать)', o.image);
+          {o.fixed && <button type="button" className="chip on" title="Не перемешивается – снять" onClick={() => setAt(i, { fixed: undefined })}>📌</button>}
+          {o.hidden && <button type="button" className="chip on" title="Скрыт от респондента – показать" onClick={() => setAt(i, { hidden: undefined })}>скрыт</button>}
+          {o.image && <button type="button" className="chip on" title={`Картинка: ${o.image} – изменить`} onClick={() => {
+            const url = window.prompt('Адрес картинки (пусто – убрать)', o.image);
             if (url !== null) setAt(i, { image: url.trim() || undefined });
           }}>🖼</button>}
           <span className="row-tools">
@@ -144,7 +144,7 @@ export function OptionsEditor({ options, onChange, allowOther, allowExclusive, a
                 { label: o.fixed ? 'Не закреплять' : 'Закрепить на месте при перемешивании', onClick: () => setAt(i, { fixed: o.fixed ? undefined : true }) },
                 { label: o.hidden ? 'Показывать респонденту' : 'Скрыть от респондента (код останется)', onClick: () => setAt(i, { hidden: o.hidden ? undefined : true }) },
                 { label: o.image ? 'Изменить картинку…' : 'Добавить картинку…', onClick: () => {
-                  const url = window.prompt('Адрес картинки https://… (пусто — убрать)', o.image ?? '');
+                  const url = window.prompt('Адрес картинки https://… (пусто – убрать)', o.image ?? '');
                   if (url !== null) setAt(i, { image: url.trim() || undefined });
                 } },
               ]} />

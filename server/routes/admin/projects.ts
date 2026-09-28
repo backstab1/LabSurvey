@@ -122,7 +122,7 @@ export async function projectsRoutes(app: FastifyInstance) {
       if (b.surveyId !== undefined && b.surveyId !== l.survey.id) {
         const s = await surveys.get(b.surveyId);
         if (!s) fail(400, 'Анкета не найдена');
-        if (l.project.status === 'collecting') fail(400, 'Во время сбора анкету проекта менять нельзя — сначала остановите сбор');
+        if (l.project.status === 'collecting') fail(400, 'Во время сбора анкету проекта менять нельзя – сначала остановите сбор');
         patch.surveyId = s.id;
         survey = s;
       }

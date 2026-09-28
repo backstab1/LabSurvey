@@ -24,7 +24,7 @@ const def: Survey = JSON.parse(readFileSync(new URL('../examples/full-demo.json'
 test('full demo: covers every question type, valid, routes ok, images collected', () => {
   const used = new Set(def.blocks.flatMap((b) => b.questions.map((q) => q.type)));
   const missing = (Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).filter((t) => !used.has(t));
-  assert.deepEqual(missing, [], 'в эталонной анкете должен быть каждый тип вопроса — добавьте новый тип в examples/full-demo.json');
+  assert.deepEqual(missing, [], 'в эталонной анкете должен быть каждый тип вопроса – добавьте новый тип в examples/full-demo.json');
   const v = validateSurvey(def);
   assert.ok(v.ok, JSON.stringify(v.errors));
   assert.deepEqual(v.warnings, []);

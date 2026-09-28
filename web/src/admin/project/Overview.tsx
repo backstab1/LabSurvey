@@ -27,7 +27,7 @@ export function Overview({ info, readOnly, client, setStatus, reload, onTab }: {
   const now = Date.now();
   const timing = st.openFrom && now < Date.parse(st.openFrom) ? `Сбор откроется ${fmtDate(st.openFrom)}`
     : st.closeAt && now >= Date.parse(st.closeAt) ? `Срок сбора истёк ${fmtDate(st.closeAt)}`
-      : st.maxResponses && done >= st.maxResponses ? 'Лимит анкет набран — новые респонденты не попадут в опрос' : '';
+      : st.maxResponses && done >= st.maxResponses ? 'Лимит анкет набран – новые респонденты не попадут в опрос' : '';
 
   const actions: ReactNode[] = [];
   if (!readOnly) {
@@ -58,7 +58,7 @@ export function Overview({ info, readOnly, client, setStatus, reload, onTab }: {
         <p className="muted" style={{ margin: 0 }}>{STATUS_HINTS[info.status]}</p>
         {info.status === 'collecting' && timing && <div className="warn-box">{timing}</div>}
         {info.status === 'development' && !info.survey.published && (
-          <div className="warn-box">Анкета ещё не опубликована — начать сбор нельзя. <button className="btn-link" onClick={() => navigate(`/admin/s/${info.survey.id}`)}>Открыть анкету</button></div>
+          <div className="warn-box">Анкета ещё не опубликована – начать сбор нельзя. <button className="btn-link" onClick={() => navigate(`/admin/s/${info.survey.id}`)}>Открыть анкету</button></div>
         )}
         {actions.length > 0 && <div className="row" style={{ gap: 8 }}>{actions}</div>}
         <div className="muted small">
@@ -209,7 +209,7 @@ function SourcesTable({ info }: { info: ProjectInfo }) {
       key: p.id, name: <>{p.title || p.id} <span className="muted mono small">{p.id}</span></>, c: byCode.get(p.id), limit: p.limit, closed: p.closed,
     })),
     ...info.panelCounts.filter((c) => c.panel !== null && !info.panels.some((p) => p.id === c.panel))
-      .map((c) => ({ key: `?${c.panel}`, name: <>{c.panel} <span className="muted small">— нет такой панели</span></>, c })),
+      .map((c) => ({ key: `?${c.panel}`, name: <>{c.panel} <span className="muted small">– нет такой панели</span></>, c })),
   ];
   const direct = byCode.get(null);
   if (direct || info.panels.length === 0) rows.push({ key: '-', name: <span className="muted">Прямая ссылка (без панели)</span>, c: direct });

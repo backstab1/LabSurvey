@@ -44,7 +44,7 @@ function parseSpec(raw: string | undefined): CrosstabSpec {
   try { s = JSON.parse(raw ?? ''); } catch { fail(400, 'spec: некорректный JSON'); }
   const refOk = (x: unknown) => !!x && typeof x === 'object'
     && ((typeof (x as { q?: unknown }).q === 'string') || (typeof (x as { param?: unknown }).param === 'string'));
-  if (!s || !Array.isArray(s.rows) || !Array.isArray(s.cols) || !s.rows.every(refOk) || !s.cols.every(refOk)) fail(400, 'spec: rows и cols — списки переменных');
+  if (!s || !Array.isArray(s.rows) || !Array.isArray(s.cols) || !s.rows.every(refOk) || !s.cols.every(refOk)) fail(400, 'spec: rows и cols – списки переменных');
   if (s.rows.length > 100 || s.cols.length > 10) fail(400, 'Не больше 100 строк и 10 переменных в шапке');
   return s;
 }
@@ -121,7 +121,7 @@ export async function dataRoutes(app: FastifyInstance) {
   app.get<{ Params: Params; Querystring: { spec?: string; measures?: string } }>('/api/admin/projects/:id/crosstab.xlsx', async (req, reply) => {
     const { l, spec, result } = await crosstab(req.params.id, req.query.spec);
     const measures = (req.query.measures?.split(',').filter((m) => ['colPct', 'rowPct', 'count'].includes(m)) ?? ['colPct']) as Measure[];
-    const sig = spec.sig === 0 ? 'значимость не проверялась' : `буквы — столбец значимо больше указанных (${Math.round((spec.sig ?? 0.95) * 100)}%, база от ${result.minBase})`;
+    const sig = spec.sig === 0 ? 'значимость не проверялась' : `буквы – столбец значимо больше указанных (${Math.round((spec.sig ?? 0.95) * 100)}%, база от ${result.minBase})`;
     const note = `Анкет: ${result.total}${spec.test ? ' (тестовые)' : ''}${spec.filter ? ', подгруппа' : ''}; ${sig}`;
     const date = new Date().toISOString().slice(0, 10);
     return sendDownload(reply, `${l.project.title.slice(0, 60)}_таблицы_${date}.xlsx`, XLSX_TYPE,

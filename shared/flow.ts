@@ -189,7 +189,7 @@ export function analyzeFlow(survey: Survey): FlowAnalysis {
       issues.push({ id: node.id, level: 'warning', message: 'До вопроса нельзя дойти: все пути ведут мимо него' });
     }
     for (const e of node.out) {
-      if (e.backward) issues.push({ id: node.id, level: 'warning', message: `Переход назад к ${e.rawTarget} — возможен бесконечный цикл` });
+      if (e.backward) issues.push({ id: node.id, level: 'warning', message: `Переход назад к ${e.rawTarget} – возможен бесконечный цикл` });
     }
   }
   if (nodes.length && !endReachable) {

@@ -23,7 +23,7 @@ export const TEMPLATES: Template[] = [
       blocks: [{ id: 'B1', questions: [
         { id: 'NPS', type: 'scale', text: 'Насколько вероятно, что вы порекомендуете нас друзьям или коллегам?', from: 0, to: 10,
           labels: { 0: 'Точно не порекомендую', 10: 'Точно порекомендую' }, autoNext: true },
-        { id: 'H_seg', type: 'hidden', text: 'Сегмент NPS (1 — критик, 2 — нейтрал, 3 — сторонник)', calc: 'if(NPS >= 9, 3, if(NPS >= 7, 2, 1))' },
+        { id: 'H_seg', type: 'hidden', text: 'Сегмент NPS (1 – критик, 2 – нейтрал, 3 – сторонник)', calc: 'if(NPS >= 9, 3, if(NPS >= 7, 2, 1))' },
         { id: 'WHY_BAD', type: 'text', text: 'Что нам стоит улучшить в первую очередь?', multiline: true, required: false,
           showIf: { q: 'H_seg', op: 'eq', value: 1 } },
         { id: 'WHY_MID', type: 'text', text: 'Чего не хватило до высшей оценки?', multiline: true, required: false,
@@ -50,7 +50,7 @@ export const TEMPLATES: Template[] = [
     id: 'enps', title: 'Вовлечённость сотрудников', description: 'eNPS, шкала согласия с утверждениями и индекс вовлечённости',
     survey: {
       formatVersion: 2, title: 'Опрос вовлечённости сотрудников',
-      settings: { allowBack: true, showProgress: true, completeMessage: 'Спасибо! Опрос анонимный — ответы видны только в сводном виде.' },
+      settings: { allowBack: true, showProgress: true, completeMessage: 'Спасибо! Опрос анонимный – ответы видны только в сводном виде.' },
       blocks: [
         { id: 'B_main', title: 'Работа в компании', questions: [
           { id: 'ENPS', type: 'scale', text: 'Насколько вероятно, что вы порекомендуете компанию как место работы?', from: 0, to: 10,

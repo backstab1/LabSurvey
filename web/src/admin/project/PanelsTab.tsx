@@ -37,12 +37,12 @@ export function PanelsTab({ info, readOnly, reload }: { info: ProjectInfo; readO
           {!readOnly && <button className="btn btn-primary btn-sm" disabled={!dirty || busy} onClick={save}>{dirty ? 'Сохранить' : 'Сохранено'}</button>}
         </div>
         <p className="muted small" style={{ margin: 0 }}>
-          Панель — источник респондентов: панель-подрядчик, рассылка, соцсеть. У каждой своя ссылка (<code>?panel=код</code>), свой лимит
-          и свои адреса возврата по статусам — они важнее редиректов из анкеты. Код панели попадает в данные как <code>url_panel</code>,
+          Панель – источник респондентов: панель-подрядчик, рассылка, соцсеть. У каждой своя ссылка (<code>?panel=код</code>), свой лимит
+          и свои адреса возврата по статусам – они важнее редиректов из анкеты. Код панели попадает в данные как <code>url_panel</code>,
           в квотах его можно проверить условием <code>param.panel = "код"</code>.
         </p>
         {error && <div className="error-box">{error}</div>}
-        {panels.length === 0 && <p className="muted" style={{ margin: 0 }}>Панелей нет — все приходят по общей ссылке проекта.</p>}
+        {panels.length === 0 && <p className="muted" style={{ margin: 0 }}>Панелей нет – все приходят по общей ссылке проекта.</p>}
         {panels.map((p, i) => {
           const c = counts.get(p.id);
           const done = c?.statuses.completed ?? 0;
@@ -60,7 +60,7 @@ export function PanelsTab({ info, readOnly, reload }: { info: ProjectInfo; readO
                   <input className="input grow" placeholder="Название, например «Панель А» или «Рассылка по базе»" value={p.title ?? ''} aria-label="Название панели"
                     onChange={(e) => setAt(i, { title: e.target.value || undefined })} />
                   <label className="row" style={{ gap: 6 }} title="Лимит завершённых анкет с панели"><span className="muted small">лимит</span>
-                    <input className="input mini" type="number" min={1} placeholder="—" value={p.limit ?? ''} aria-label="Лимит панели"
+                    <input className="input mini" type="number" min={1} placeholder="–" value={p.limit ?? ''} aria-label="Лимит панели"
                       onChange={(e) => setAt(i, { limit: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} />
                   </label>
                   <label className="check" title="Приём остановлен: новые респонденты с этой панели видят «Опрос закрыт»">
@@ -83,7 +83,7 @@ export function PanelsTab({ info, readOnly, reload }: { info: ProjectInfo; readO
                   <label className="field"><span>Макрос панели для ID</span>
                     <input className="input mono" placeholder="{ID}" value={p.idMacro ?? ''} disabled={!p.idParam}
                       onChange={(e) => setAt(i, { idMacro: e.target.value.trim() || undefined })} />
-                    <span className="field-help">Как панель подставляет ID: [%RID%], {'{uid}'}, ##ID## — попадёт в ссылку</span>
+                    <span className="field-help">Как панель подставляет ID: [%RID%], {'{uid}'}, ##ID## – попадёт в ссылку</span>
                   </label>
                 </div>
               </fieldset>
@@ -93,7 +93,7 @@ export function PanelsTab({ info, readOnly, reload }: { info: ProjectInfo; readO
                   onClick={() => copyText(link, 'Ссылка для панели скопирована')}>Копировать</button>
               </div>
               <details className="js-details" open={!saved}>
-                <summary>Редиректы по статусам{redirects ? ` (${redirects} из 4)` : ' — не заданы, действуют редиректы анкеты'}</summary>
+                <summary>Редиректы по статусам{redirects ? ` (${redirects} из 4)` : ' – не заданы, действуют редиректы анкеты'}</summary>
                 <fieldset className="plain grid2" disabled={readOnly} style={{ marginTop: 6 }}>
                   {PANEL_REDIRECTS.map(([k, label, slug]) => (
                     <label key={k} className="field"><span>{label}</span>
@@ -102,7 +102,7 @@ export function PanelsTab({ info, readOnly, reload }: { info: ProjectInfo; readO
                     </label>
                   ))}
                   <span className="field-help" style={{ gridColumn: '1 / -1' }}>
-                    Подстановки: <code>{idRef}</code> — ID респондента у панели, <code>{'{{resp_id}}'}</code> — ID анкеты, <code>{'{{Q1}}'}</code> — ответ на вопрос.
+                    Подстановки: <code>{idRef}</code> – ID респондента у панели, <code>{'{{resp_id}}'}</code> – ID анкеты, <code>{'{{Q1}}'}</code> – ответ на вопрос.
                   </span>
                 </fieldset>
               </details>

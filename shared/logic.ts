@@ -713,7 +713,7 @@ export function answerText(ctx: RespondentContext, q: Question, rowCode?: string
     }
     case 'conjoint': {
       if (typeof a.v !== 'object' || Array.isArray(a.v) || a.v === null) return '';
-      return Object.entries(a.v as Record<string, number>).map(([s, c]) => `${s}: ${c === 0 ? (q.none ?? '—') : `карточка ${c}`}`).join('; ');
+      return Object.entries(a.v as Record<string, number>).map(([s, c]) => `${s}: ${c === 0 ? (q.none ?? '–') : `карточка ${c}`}`).join('; ');
     }
     default:
       return String(a.v ?? '');

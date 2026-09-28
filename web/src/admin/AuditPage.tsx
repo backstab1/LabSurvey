@@ -86,7 +86,7 @@ export function AuditPage() {
                 <tr key={e.id}>
                   <td className="muted small" style={{ whiteSpace: 'nowrap' }}>{fmt(e.at)}</td>
                   <td>
-                    {e.login ? <button className="btn-link" style={{ padding: 0 }} onClick={() => set({ login: e.login! })}>{e.login}</button> : <span className="muted">—</span>}
+                    {e.login ? <button className="btn-link" style={{ padding: 0 }} onClick={() => set({ login: e.login! })}>{e.login}</button> : <span className="muted">–</span>}
                     {e.via === 'ai' && <span className="badge ai" title={`Через ИИ-коннектор${e.details?.app ? `: ${e.details.app}` : ''}`}>ИИ</span>}
                   </td>
                   <td>{e.action}</td>
@@ -101,7 +101,7 @@ export function AuditPage() {
                           {' · '}<button className="btn-link small" style={{ padding: 0 }} onClick={() => set({ targetType: e.targetType ?? '', targetId: e.targetId ?? '' })}>история</button>
                         </div>
                       </>
-                    ) : <span className="muted">—</span>}
+                    ) : <span className="muted">–</span>}
                   </td>
                   <td className="wide-only muted small">{detailsText(e.details)}</td>
                   <td className="wide-only muted small mono">{e.ip ?? ''}</td>

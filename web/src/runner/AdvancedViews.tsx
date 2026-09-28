@@ -115,7 +115,7 @@ export function FileUpload({ q, answer, onChange }: { q: FileQuestion; answer?: 
       }
       if (picked.length > max - files.length) setError(`Можно приложить не больше ${max} файл${max === 1 ? 'а' : 'ов'}`);
     } catch {
-      setError('Нет связи — попробуйте ещё раз');
+      setError('Нет связи – попробуйте ещё раз');
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';

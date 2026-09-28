@@ -59,7 +59,7 @@ test('mail template: substitutions, html button, escaping', () => {
   assert.ok(m.text.includes('https://s.ru/s/P1?inv=tok'));
   assert.ok(m.text.includes('ID 1024, .'));
   assert.ok(m.html.includes('<b>Анна &lt;b&gt;</b>'), 'жирный и экранирование');
-  assert.ok(m.html.includes('>Пройти опрос</a>'), 'строка со ссылкой — кнопка');
+  assert.ok(m.html.includes('>Пройти опрос</a>'), 'строка со ссылкой – кнопка');
 });
 
 test('mailing: invite, skip bad addresses, reminder only to those who did not finish, errors per person', async () => {

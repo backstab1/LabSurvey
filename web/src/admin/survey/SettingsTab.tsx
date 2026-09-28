@@ -26,7 +26,7 @@ export function SettingsTab({ def, onChange }: { def: Survey; onChange: (d: Surv
       <input type="checkbox" checked={!!st[key]}
         // Значение, совпадающее с умолчанием, не пишем в JSON
         onChange={(e) => setSettings({ [key]: e.target.checked === !!DEFAULT_SETTINGS[key] ? undefined : e.target.checked })} />
-      <span>{label}{hint && <small className="muted"> — {hint}</small>}</span>
+      <span>{label}{hint && <small className="muted"> – {hint}</small>}</span>
     </label>
   );
   const pipes = pipeTargets(def);
@@ -77,7 +77,7 @@ export function SettingsTab({ def, onChange }: { def: Survey; onChange: (d: Surv
         {check('allowBack', 'Кнопка «Назад»')}
         {check('allowEarlyFinish', 'Кнопка «Завершить опрос досрочно»')}
         {check('showQuestionNumbers', 'Показывать номер вопроса', '«Вопрос 3» по порядку показа')}
-        {check('enterSubmits', 'Enter в поле ввода — «Далее»')}
+        {check('enterSubmits', 'Enter в поле ввода – «Далее»')}
         <label className="field" style={{ maxWidth: 360 }}><span>Ограничение времени на прохождение, минут</span>
           <input className="input" type="number" min={1} placeholder="без ограничения" value={st.timeLimitMin ?? ''}
             onChange={(e) => setSettings({ timeLimitMin: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} />
@@ -115,8 +115,8 @@ export function SettingsTab({ def, onChange }: { def: Survey; onChange: (d: Surv
         <h2>Завершение</h2>
         <p className="muted small" style={{ margin: 0 }}>
           Если указан адрес перехода, респондент сразу попадает туда (например, обратно в панель), и сообщение не показывается.
-          В тексте и адресе работают подстановки: <code>{'{{param.pid}}'}</code> — параметр ссылки, <code>{'{{Q1}}'}</code> — ответ
-          (в адресе — код), <code>{'{{resp_id}}'}</code> — ID анкеты.
+          В тексте и адресе работают подстановки: <code>{'{{param.pid}}'}</code> – параметр ссылки, <code>{'{{Q1}}'}</code> – ответ
+          (в адресе – код), <code>{'{{resp_id}}'}</code> – ID анкеты.
         </p>
         <Finish title="Опрос пройден" message={text('completeMessage', 'Сообщение', { area: true })}
           redirect={text('redirectComplete', 'Перейти по адресу', { placeholder: 'https://panel.example/complete?pid={{param.pid}}', mono: true })} />

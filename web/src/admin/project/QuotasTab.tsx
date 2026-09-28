@@ -153,17 +153,17 @@ export function QuotasTab({ info, readOnly, reload }: { info: ProjectInfo; readO
               {collapsed.size ? 'Развернуть всё' : 'Свернуть всё'}
             </button>
           )}
-          {!readOnly && <button className="btn btn-secondary btn-sm" onClick={() => setSplitAt([])} title="Сразу несколько квот — по вариантам вопроса">+ Квоты по вопросу</button>}
+          {!readOnly && <button className="btn btn-secondary btn-sm" onClick={() => setSplitAt([])} title="Сразу несколько квот – по вариантам вопроса">+ Квоты по вопросу</button>}
           {!readOnly && <button className="btn btn-secondary btn-sm" onClick={addRoot}>+ Квота</button>}
           {!readOnly && <button className="btn btn-primary btn-sm" disabled={!dirty || busy} onClick={save}>{dirty ? 'Сохранить' : 'Сохранено'}</button>}
         </div>
         <p className="muted small" style={{ margin: 0 }}>
           Счётчик считает завершённые анкеты, подходящие под условие. Вложенная квота действует внутри родительской: условие родителя
           писать не нужно (Москва → Женщины → 18–24). Когда лимит любой квоты набран, следующие подходящие респонденты заканчивают опрос
-          со статусом «Сверх квоты» (сообщение и переход — в анкете → Настройки → Завершение). Проверка идёт после каждого ответа,
+          со статусом «Сверх квоты» (сообщение и переход – в анкете → Настройки → Завершение). Проверка идёт после каждого ответа,
           поэтому квотные вопросы ставьте в начало анкеты. Условие может использовать и параметр ссылки: <code>param.src = "vk"</code>.
         </p>
-        {quotas.length === 0 && <p className="muted" style={{ margin: 0 }}>Квот нет — принимаются все, кто прошёл анкету.</p>}
+        {quotas.length === 0 && <p className="muted" style={{ margin: 0 }}>Квот нет – принимаются все, кто прошёл анкету.</p>}
         {quotas.length > 0 && (
           <div className="qtree">
             <div className="qtree-head muted small">
@@ -175,7 +175,7 @@ export function QuotasTab({ info, readOnly, reload }: { info: ProjectInfo; readO
                 siblings={quotas.length} />
             ))}
             {info.published && flat.length > 0 && (
-              <div className="muted small qtree-foot">Набрано квот: {fullCount} из {flat.length} · счётчики — по опубликованной версии, после сохранения</div>
+              <div className="muted small qtree-foot">Набрано квот: {fullCount} из {flat.length} · счётчики – по опубликованной версии, после сохранения</div>
             )}
           </div>
         )}
@@ -237,7 +237,7 @@ function QuotaNode({ q, path, def, readOnly, progress, collapsed, ops, siblings 
             readOnly
               ? <span className="qsum warn" title="Сумма вложенных квот">Σ {sum}</span>
               : <Menu className="qsum warn" title="Не совпадает с суммой вложенных квот" label={<>Σ {sum}</>} items={[
-                { label: `Поставить ${sum} — сумму вложенных`, onClick: () => patch({ limit: sum }) },
+                { label: `Поставить ${sum} – сумму вложенных`, onClick: () => patch({ limit: sum }) },
                 { label: `Распределить ${q.limit} поровну вниз`, onClick: () => ops.distribute(path) },
               ]} />
           )}
@@ -271,7 +271,7 @@ function QuotaNode({ q, path, def, readOnly, progress, collapsed, ops, siblings 
           ))}
         </div>
       )}
-      {kids.length > 0 && !open && <div className="qchildren muted small qfolded" onClick={() => ops.toggle(q.id)}>вложенных: {kids.length} — развернуть</div>}
+      {kids.length > 0 && !open && <div className="qchildren muted small qfolded" onClick={() => ops.toggle(q.id)}>вложенных: {kids.length} – развернуть</div>}
     </div>
   );
 }
@@ -286,7 +286,7 @@ const RANGE_TYPES = new Set(['number', 'slider', 'hidden']);
 function parseRanges(text: string, qid: string): SplitPart[] | string {
   const out: SplitPart[] = [];
   for (const raw of text.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean)) {
-    const s = raw.replace(/\s/g, '').replace(/[–—]/g, '-');
+    const s = raw.replace(/\s/g, '').replace(/[––]/g, '-');
     let m: RegExpMatchArray | null;
     const num = (x: string) => Number(x.replace(',', '.'));
     if ((m = s.match(/^(-?\d+(?:[.,]\d+)?)-(-?\d+(?:[.,]\d+)?)$/))) {
@@ -299,7 +299,7 @@ function parseRanges(text: string, qid: string): SplitPart[] | string {
       out.push({ title: `до ${num(m[1])}`, if: { q: qid, op: 'lte', value: num(m[1]) } });
     } else if ((m = s.match(/^-?\d+(?:[.,]\d+)?$/))) {
       out.push({ title: String(num(s)), if: { q: qid, op: 'eq', value: num(s) } });
-    } else return `Не понял «${raw}» — пишите 18-24, 45+ или до 17`;
+    } else return `Не понял «${raw}» – пишите 18-24, 45+ или до 17`;
   }
   return out;
 }
@@ -326,7 +326,7 @@ function SplitDialog({ def, info, parent, sameLevel, onClose, onApply }: {
     values = allOptions(def, q).filter(isChoice).map((o) => ({ key: String(o.code), label: plainText(o.text) || String(o.code), if: { q: q.id, op: 'eq', value: o.code } }));
   } else if (q?.type === 'scale') {
     values = [
-      ...Array.from({ length: q.to - q.from + 1 }, (_, k) => q.from + k).map((v) => ({ key: String(v), label: q.labels?.[v] ? `${v} — ${plainText(q.labels[v])}` : String(v), if: { q: q.id, op: 'eq', value: v } as Condition })),
+      ...Array.from({ length: q.to - q.from + 1 }, (_, k) => q.from + k).map((v) => ({ key: String(v), label: q.labels?.[v] ? `${v} – ${plainText(q.labels[v])}` : String(v), if: { q: q.id, op: 'eq', value: v } as Condition })),
       ...(q.extraOptions ?? []).map((o) => ({ key: String(o.code), label: plainText(o.text), if: { q: q.id, op: 'eq', value: o.code } as Condition })),
     ];
   }
@@ -348,7 +348,7 @@ function SplitDialog({ def, info, parent, sameLevel, onClose, onApply }: {
   };
   const groups = [
     { label: 'Вопросы', items: questions.map((x) => ({ value: `q:${x.id}`, label: `${x.id}. ${plainText(x.text).slice(0, 70) || x.type}` })) },
-    ...(info.panels.length ? [{ label: 'Параметры ссылки', items: [{ value: 'panel', label: 'panel — панель' }] }] : []),
+    ...(info.panels.length ? [{ label: 'Параметры ссылки', items: [{ value: 'panel', label: 'panel – панель' }] }] : []),
   ];
 
   return (
@@ -361,11 +361,11 @@ function SplitDialog({ def, info, parent, sameLevel, onClose, onApply }: {
       <div className="stack">
         <p className="muted small" style={{ margin: 0 }}>
           {parent
-            ? <>Для каждого выбранного значения появится вложенная квота с условием только на этот вопрос — условие «{parent.title || parent.id}» уже действует.</>
+            ? <>Для каждого выбранного значения появится вложенная квота с условием только на этот вопрос – условие «{parent.title || parent.id}» уже действует.</>
             : <>Для каждого выбранного значения появится отдельная квота. Потом любую из них можно разбить дальше.</>}
         </p>
         <label className="field"><span>Вопрос</span>
-          <SearchSelect value={source} groups={groups} onChange={choose} placeholder="— выберите вопрос —" />
+          <SearchSelect value={source} groups={groups} onChange={choose} placeholder="– выберите вопрос –" />
         </label>
         {values && (
           <div className="stack" style={{ gap: 4 }}>
@@ -387,7 +387,7 @@ function SplitDialog({ def, info, parent, sameLevel, onClose, onApply }: {
         {rangeParts && (
           <label className="field"><span>Интервалы (включительно), через запятую</span>
             <input className="input mono" value={ranges} onChange={(e) => setRanges(e.target.value)} placeholder="18-24, 25-34, 35+" />
-            {typeof rangeParts === 'string' ? <span className="field-error">{rangeParts}</span> : <span className="field-help">«45+» — от 45 и больше, «до 17» — 17 и меньше</span>}
+            {typeof rangeParts === 'string' ? <span className="field-error">{rangeParts}</span> : <span className="field-help">«45+» – от 45 и больше, «до 17» – 17 и меньше</span>}
           </label>
         )}
         {!parent && (
@@ -397,14 +397,14 @@ function SplitDialog({ def, info, parent, sameLevel, onClose, onApply }: {
         )}
         {ok && (
           <p className="small" style={{ margin: 0 }}>
-            Лимиты: {(parts as SplitPart[]).map((pt, k) => `${pt.title} — ${preview[k]}`).join(', ')}
-            <span className="muted"> (поровну из {each}{parent ? ' — лимита родителя' : ''}; поправите в таблице)</span>
+            Лимиты: {(parts as SplitPart[]).map((pt, k) => `${pt.title} – ${preview[k]}`).join(', ')}
+            <span className="muted"> (поровну из {each}{parent ? ' – лимита родителя' : ''}; поправите в таблице)</span>
           </p>
         )}
         {parent && sameLevel > 1 && (
           <label className="check">
             <input type="checkbox" checked={allSame} onChange={(e) => setAllSame(e.target.checked)} />
-            Так же разбить все квоты этого уровня ({sameLevel}) — например, и мужчин, и женщин в каждом городе
+            Так же разбить все квоты этого уровня ({sameLevel}) – например, и мужчин, и женщин в каждом городе
           </label>
         )}
       </div>

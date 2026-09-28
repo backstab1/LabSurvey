@@ -16,14 +16,14 @@ import type { Survey } from '../shared/types.ts';
 
 const FORMAT_DOC = readFileSync(resolve('docs/survey-format.md'), 'utf8');
 
-const INSTRUCTIONS = `SurveyLAB — сервис опросов команды. Через этот коннектор ты создаёшь и правишь черновики анкет.
+const INSTRUCTIONS = `SurveyLAB – сервис опросов команды. Через этот коннектор ты создаёшь и правишь черновики анкет.
 Порядок работы:
-1. Перед первой анкетой в разговоре вызови get_format_guide — там формат JSON анкеты, типы вопросов, логика и примеры.
-2. Составь анкету по заданию пользователя (язык анкеты — как у пользователя, обычно русский).
-3. Проверь её через validate_survey и исправь все ошибки (errors). Предупреждения (warnings) — на твоё усмотрение, но упомяни важные.
+1. Перед первой анкетой в разговоре вызови get_format_guide – там формат JSON анкеты, типы вопросов, логика и примеры.
+2. Составь анкету по заданию пользователя (язык анкеты – как у пользователя, обычно русский).
+3. Проверь её через validate_survey и исправь все ошибки (errors). Предупреждения (warnings) – на твоё усмотрение, но упомяни важные.
 4. Сохрани через create_survey (новая) или update_survey (правка существующей: сначала get_survey, потом update_survey с его updatedAt).
 5. Дай пользователю ссылку на конструктор из ответа инструмента. Анкета сохраняется как черновик: опубликовать её
-   и запустить сбор пользователь должен сам в SurveyLAB — не говори, что анкета опубликована или запущена.`;
+   и запустить сбор пользователь должен сам в SurveyLAB – не говори, что анкета опубликована или запущена.`;
 
 const text = (data: unknown) => ({ content: [{ type: 'text' as const, text: typeof data === 'string' ? data : JSON.stringify(data, null, 2) }] });
 const fail = (message: string) => ({ ...text(message), isError: true });
@@ -32,7 +32,7 @@ const fail = (message: string) => ({ ...text(message), isError: true });
 function parseDefinition(raw: unknown): { def?: unknown; error?: string } {
   let v = raw;
   if (typeof v === 'string') {
-    try { v = JSON.parse(v); } catch (e) { return { error: `definition: некорректный JSON — ${(e as Error).message}` }; }
+    try { v = JSON.parse(v); } catch (e) { return { error: `definition: некорректный JSON – ${(e as Error).message}` }; }
   }
   if (!v || typeof v !== 'object') return { error: 'definition: ожидается объект анкеты' };
   return { def: migrateSurvey(v) };
@@ -45,7 +45,7 @@ const issues = (v: ValidationResult) => ({
 });
 
 const definition = z.union([z.record(z.string(), z.unknown()), z.string()])
-  .describe('Анкета в формате SurveyLAB (formatVersion 2) — объект или JSON-строка. Формат: get_format_guide.');
+  .describe('Анкета в формате SurveyLAB (formatVersion 2) – объект или JSON-строка. Формат: get_format_guide.');
 
 function buildServer(user: SessionUser, base: string, app: string, ip: string | null): McpServer {
   const server = new McpServer({ name: 'surveylab', version: '1.0.0' }, { instructions: INSTRUCTIONS });
@@ -75,7 +75,7 @@ function buildServer(user: SessionUser, base: string, app: string, ip: string | 
 
   server.registerTool('get_survey', {
     title: 'Открыть анкету',
-    description: 'Черновик анкеты целиком (JSON), результат проверки и updatedAt — его нужно передать в update_survey.',
+    description: 'Черновик анкеты целиком (JSON), результат проверки и updatedAt – его нужно передать в update_survey.',
     inputSchema: { id: z.string().describe('ID анкеты из list_surveys') },
     annotations: { readOnlyHint: true },
   }, async ({ id }) => {
@@ -104,23 +104,23 @@ function buildServer(user: SessionUser, base: string, app: string, ip: string | 
     inputSchema: { definition },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
   }, async (args) => {
-    if (!canWrite) return fail('У пользователя доступ только на просмотр — создавать анкеты нельзя');
+    if (!canWrite) return fail('У пользователя доступ только на просмотр – создавать анкеты нельзя');
     const { def, error } = parseDefinition(args.definition);
     if (error) return fail(error);
     const v = validateSurvey(def);
-    if (!draftShapeOk(def)) return fail(`Анкета не сохранена — сломана структура. ${JSON.stringify(issues(v))}`);
+    if (!draftShapeOk(def)) return fail(`Анкета не сохранена – сломана структура. ${JSON.stringify(issues(v))}`);
     const s = await surveys.create(def as Survey);
     await log('Создал анкету', s.id, s.title);
     return text({
       id: s.id, title: s.title, updatedAt: s.updatedAt, editorUrl: editorUrl(s.id), check: issues(v),
       note: v.ok ? 'Сохранено как черновик. Опубликовать и запустить сбор пользователь может в конструкторе.'
-        : 'Сохранено как черновик, но есть ошибки — исправь их через update_survey.',
+        : 'Сохранено как черновик, но есть ошибки – исправь их через update_survey.',
     });
   });
 
   server.registerTool('update_survey', {
     title: 'Изменить анкету',
-    description: 'Заменяет черновик анкеты целиком. Опубликованная версия не меняется. Передай updatedAt из get_survey: если анкету за это время меняли, правка не применится — перечитай её.',
+    description: 'Заменяет черновик анкеты целиком. Опубликованная версия не меняется. Передай updatedAt из get_survey: если анкету за это время меняли, правка не применится – перечитай её.',
     inputSchema: {
       id: z.string().describe('ID анкеты'),
       updatedAt: z.string().describe('updatedAt из get_survey / create_survey'),
@@ -128,7 +128,7 @@ function buildServer(user: SessionUser, base: string, app: string, ip: string | 
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
   }, async (args) => {
-    if (!canWrite) return fail('У пользователя доступ только на просмотр — менять анкеты нельзя');
+    if (!canWrite) return fail('У пользователя доступ только на просмотр – менять анкеты нельзя');
     const s = await surveys.get(args.id);
     if (!s) return fail('Анкета не найдена');
     if (s.updatedAt !== args.updatedAt) {
@@ -137,7 +137,7 @@ function buildServer(user: SessionUser, base: string, app: string, ip: string | 
     const { def, error } = parseDefinition(args.definition);
     if (error) return fail(error);
     const v = validateSurvey(def);
-    if (!draftShapeOk(def)) return fail(`Черновик не сохранён — сломана структура. ${JSON.stringify(issues(v))}`);
+    if (!draftShapeOk(def)) return fail(`Черновик не сохранён – сломана структура. ${JSON.stringify(issues(v))}`);
     await surveys.saveDraft(s.id, def as Survey);
     const saved = (await surveys.get(s.id))!;
     await log('Изменил черновик анкеты', s.id, saved.title, 30);

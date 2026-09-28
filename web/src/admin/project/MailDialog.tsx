@@ -44,7 +44,7 @@ function defaultTemplate(people: Invitee[], title: string): { subject: string; b
   return {
     subject: `Приглашение на опрос: ${title}`,
     body: `${nameCol ? `Здравствуйте, {{param.${nameCol}}}!` : 'Здравствуйте!'}\n\n`
-      + 'Приглашаем вас пройти короткий опрос — это займёт около 10 минут. Ваши ответы помогут нам стать лучше.\n\n{{link}}\n\n'
+      + 'Приглашаем вас пройти короткий опрос – это займёт около 10 минут. Ваши ответы помогут нам стать лучше.\n\n{{link}}\n\n'
       + 'Ссылка персональная, пожалуйста, не пересылайте её. Начатую анкету можно продолжить позже по той же ссылке.\n\nСпасибо!',
   };
 }
@@ -73,7 +73,7 @@ export function MailDialog({ projectId, projectTitle, people, status, onClose, o
   const recipients = counts[audience];
   const sample = audienceOf(people, audience, emailField)[0] ?? people[0];
   const sampleLink = sample ? `${window.location.origin}/s/${projectId}?${INVITE_PARAM}=${sample.token}` : '';
-  const templateError = !subject.trim() ? 'Укажите тему письма' : !hasLinkPlaceholder(body) ? 'Добавьте в текст {{link}} — персональную ссылку' : '';
+  const templateError = !subject.trim() ? 'Укажите тему письма' : !hasLinkPlaceholder(body) ? 'Добавьте в текст {{link}} – персональную ссылку' : '';
 
   const insert = (token: string) => {
     const el = bodyRef.current;
@@ -110,7 +110,7 @@ export function MailDialog({ projectId, projectTitle, people, status, onClose, o
         <div className="stack">
           <p style={{ margin: 0 }}>Почта для рассылки ещё не настроена. Это делает администратор сервера один раз: в файле <code>.env</code> указывается почтовый ящик, с которого уходят письма.</p>
           <pre className="mono small" style={{ background: 'var(--bg)', padding: 12, borderRadius: 8, margin: 0 }}>{'SMTP_HOST=smtp.yandex.ru\nSMTP_PORT=465\nSMTP_USER=surveys@example.ru\nSMTP_PASS=пароль приложения\nMAIL_FROM=Опросы <surveys@example.ru>'}</pre>
-          <p className="muted small" style={{ margin: 0 }}>Подойдут Яндекс 360, Mail.ru для бизнеса, Unisender Go, SendPulse или корпоративный почтовый сервер. После изменения перезапустите сервис. Подробнее — в <a href="/docs.html#mailing" target="_blank" rel="noopener">документации</a>.</p>
+          <p className="muted small" style={{ margin: 0 }}>Подойдут Яндекс 360, Mail.ru для бизнеса, Unisender Go, SendPulse или корпоративный почтовый сервер. После изменения перезапустите сервис. Подробнее – в <a href="/docs.html#mailing" target="_blank" rel="noopener">документации</a>.</p>
           <p className="muted small" style={{ margin: 0 }}>Пока можно скачать ссылки в CSV и разослать их своей почтовой программой.</p>
         </div>
       </Modal>
@@ -128,17 +128,17 @@ export function MailDialog({ projectId, projectTitle, people, status, onClose, o
         <div className="stack">
           <label className="field"><span>Столбец с адресом</span>
             <select className="input" value={emailField} onChange={(e) => setEmailField(e.target.value)}>
-              {!emailField && <option value="">— выберите —</option>}
+              {!emailField && <option value="">– выберите –</option>}
               {columns.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-            <span className="field-help">Адрес есть у {withEmail} из {people.length}{withEmail < people.length ? ' — остальным письмо не уйдёт' : ''}</span>
+            <span className="field-help">Адрес есть у {withEmail} из {people.length}{withEmail < people.length ? ' – остальным письмо не уйдёт' : ''}</span>
           </label>
           <div className="field"><span>Кому</span>
             {(['not_sent', 'not_completed', 'all'] as Audience[]).map((a) => (
               <label key={a} className="check">
                 <input type="radio" name="aud" checked={audience === a} onChange={() => setAudience(a)} />
                 <span>{a === 'not_sent' ? 'Кому ещё не отправляли' : a === 'not_completed' ? 'Напоминание: кто не завершил' : 'Всем в списке'}
-                  <small className="muted"> — {counts[a]}</small></span>
+                  <small className="muted"> – {counts[a]}</small></span>
               </label>
             ))}
           </div>
@@ -172,7 +172,7 @@ export function MailDialog({ projectId, projectTitle, people, status, onClose, o
             </div>
           </div>
           <p className="muted small" style={{ margin: 0 }}>
-            Отправитель: {status.from}. Письма уходят постепенно — до {status.perMinute} в минуту; если закрыть страницу или перезапустить сервер, рассылка продолжится.
+            Отправитель: {status.from}. Письма уходят постепенно – до {status.perMinute} в минуту; если закрыть страницу или перезапустить сервер, рассылка продолжится.
           </p>
           {status.serverError && <div className="error-box">Почтовый сервер недоступен: {status.serverError.message}. Очередь ждёт и пробует снова.</div>}
           {templateError && <div className="error-box">{templateError}</div>}
@@ -247,5 +247,5 @@ export function MailMark({ p }: { p: Invitee }) {
   if (p.mailPending) return <span className="badge test">в очереди</span>;
   if (p.mailError) return <span className="badge closed" title={p.mailError}>ошибка</span>;
   if (p.mailSentAt) return <span className="muted small" title={`Писем: ${p.mailCount}`}>{fmtDate(p.mailSentAt)}{p.mailCount > 1 ? ` (×${p.mailCount})` : ''}</span>;
-  return <span className="muted small">—</span>;
+  return <span className="muted small">–</span>;
 }

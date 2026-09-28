@@ -54,7 +54,7 @@ export function questionSettings(def: Survey, q: Question, set: (p: Patch) => vo
     if (q.rankCount) on.push(`Топ-${q.rankCount}`);
     body.push(
       <div key="rank" className="flag-line">
-        <span>Сколько мест заполнить<small className="muted"> (пусто — все варианты)</small></span>
+        <span>Сколько мест заполнить<small className="muted"> (пусто – все варианты)</small></span>
         <input className="input mini" type="number" min={1} placeholder="все" value={q.rankCount ?? ''}
           onChange={(e) => set({ rankCount: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })} />
       </div>,
@@ -158,7 +158,7 @@ export function questionSettings(def: Survey, q: Question, set: (p: Patch) => vo
     if (cols > 1) on.push(`${cols} колонки`);
     body.push(
       <div key="cols" className="flag-line">
-        <span>Варианты в колонки<small className="muted"> (на телефоне — одна)</small></span>
+        <span>Варианты в колонки<small className="muted"> (на телефоне – одна)</small></span>
         <Segmented value={String(cols)} onChange={(v) => set({ columnCount: v === '1' ? undefined : Number(v) })}
           options={[{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }]} />
       </div>,
@@ -166,7 +166,7 @@ export function questionSettings(def: Survey, q: Question, set: (p: Patch) => vo
   }
   if (q.type === 'single' || q.type === 'multi') flag('showOtherAlways', 'Отключить скрытие полей с открытыми значениями', 'Поле видно сразу, ввод текста отмечает вариант');
   if (q.type === 'single' || q.type === 'multi') {
-    flag('search', 'Добавить строку поиска', 'Поле поиска над вариантами — для длинных списков');
+    flag('search', 'Добавить строку поиска', 'Поле поиска над вариантами – для длинных списков');
     if (q.options.some((o) => o.group) || q.collapseGroups) flag('collapseGroups', 'Показывать группы в свёрнутом виде', 'Респондент раскрывает группу нажатием');
   }
   if (q.type === 'single' || q.type === 'multi' || q.type === 'matrix') flag('hideMarker', 'Скрыть маркер выбора', 'Без кружков и квадратиков: выбор подсвечивается');
@@ -187,8 +187,8 @@ export function questionSettings(def: Survey, q: Question, set: (p: Patch) => vo
     if (q.attention) on.push(q.attention.onFail === 'screenout' ? 'Контрольный: отсев' : 'Контрольный вопрос');
     body.push(
       <div key="attention" className="flag-line stack" style={{ alignItems: 'stretch', gap: 6 }}>
-        <span>Контрольный вопрос<small className="muted"> — правильный ответ; при ошибке анкета помечается как подозрительная</small></span>
-        <ConditionField def={def} value={q.attention?.correct} self={q.id} placeholder={`пусто — не проверять; например, ${q.id} = 3`}
+        <span>Контрольный вопрос<small className="muted"> – правильный ответ; при ошибке анкета помечается как подозрительная</small></span>
+        <ConditionField def={def} value={q.attention?.correct} self={q.id} placeholder={`пусто – не проверять; например, ${q.id} = 3`}
           onChange={(c) => set({ attention: c ? { correct: c, ...(q.attention?.onFail ? { onFail: q.attention.onFail } : {}) } : undefined })} />
         {q.attention && (
           <Segmented value={q.attention.onFail ?? 'flag'} onChange={(v) => set({ attention: { correct: q.attention!.correct, ...(v === 'screenout' ? { onFail: 'screenout' as const } : {}) } })}

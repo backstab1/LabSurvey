@@ -164,7 +164,7 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
             <div className="list-head" role="row">
               <span>Код</span><span>Текст</span><span />
             </div>
-            {options.length === 0 && <div className="list-empty muted small">Вариантов нет — нажмите «+ Добавить» или «Списком».</div>}
+            {options.length === 0 && <div className="list-empty muted small">Вариантов нет – нажмите «+ Добавить» или «Списком».</div>}
             {options.map((o, i) => {
               const isOpen = open === i;
               return (
@@ -254,7 +254,7 @@ export function OptionsListDialog({ title, options, onChange, onClose, features,
               );
             })}
           </div>
-          <p className="muted small" style={{ margin: 0 }}>Enter в тексте — следующий вариант. Вставка нескольких строк — несколько вариантов («97. Другое» задаёт код).</p>
+          <p className="muted small" style={{ margin: 0 }}>Enter в тексте – следующий вариант. Вставка нескольких строк – несколько вариантов («97. Другое» задаёт код).</p>
         </div>
       )}
     </Modal>
@@ -325,7 +325,7 @@ function OptionSettings({ o, features: f, set }: { o: Option; features: ListFeat
         <div className="flags">{right}</div>
       </div>
       {(showScript || o.script) && !isGroup && (
-        <label className="field"><span>Скрипт проверки: вернуть строку — это текст ошибки. <code>sl.value</code> — открытое значение, <code>sl.get("Q1")</code> — ответы</span>
+        <label className="field"><span>Скрипт проверки: вернуть строку – это текст ошибки. <code>sl.value</code> – открытое значение, <code>sl.get("Q1")</code> – ответы</span>
           <textarea className="input mono" rows={3} spellCheck={false} value={o.script ?? ''} placeholder='if (Number(sl.value) > 100) return "Не больше 100";'
             onChange={(e) => set({ script: e.target.value || undefined })} />
           {scriptError && <span className="field-error">Синтаксическая ошибка: {scriptError}</span>}
@@ -344,7 +344,7 @@ function CarryForward({ def, self, value, onChange }: CarryProps) {
       <span className="small">Добавить варианты из вопроса</span>
       <select className="input" value={value?.question ?? ''}
         onChange={(e) => onChange(e.target.value ? { question: e.target.value, filter: value?.filter ?? 'selected' } : undefined)}>
-        <option value="">— не переносить —</option>
+        <option value="">– не переносить –</option>
         {sources.map((s) => <option key={s.id} value={s.id}>{s.id}{s.text ? ` · ${s.text.slice(0, 50)}` : ''}</option>)}
         {value && !sources.some((s) => s.id === value.question) && <option value={value.question}>{value.question}</option>}
       </select>

@@ -23,7 +23,7 @@ export function SheetsCard({ info, reload }: { info: ProjectInfo; reload: () => 
         <h2>Google Sheets</h2>
         <div className="warn-box">
           Не настроен сервисный аккаунт Google. Укажите путь к JSON-ключу в <code>GOOGLE_APPLICATION_CREDENTIALS</code> (файл .env) и перезапустите сервер.
-          Инструкция — в README.
+          Инструкция – в README.
         </div>
       </div>
     );
@@ -67,7 +67,7 @@ export function SheetsCard({ info, reload }: { info: ProjectInfo; reload: () => 
         ))}
       </div>
       {cfg?.lastError && <div className="error-box">Последняя ошибка: {cfg.lastError}</div>}
-      {cfg?.lastSyncAt && !cfg.lastError && <div className="ok-box">Последняя синхронизация: {fmtDate(cfg.lastSyncAt, '—')}</div>}
+      {cfg?.lastSyncAt && !cfg.lastError && <div className="ok-box">Последняя синхронизация: {fmtDate(cfg.lastSyncAt, '–')}</div>}
       <div className="row">
         <button className="btn btn-secondary" onClick={save}>Сохранить</button>
         <button className="btn btn-primary" disabled={!cfg?.spreadsheetId || busy} onClick={async () => {
@@ -110,7 +110,7 @@ export function NotifyCard({ info, reload }: { info: ProjectInfo; reload: () => 
     <div className="card stack">
       <h2>Уведомления</h2>
       <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-        Сообщения о ходе сбора. Вебхук получает JSON (для завершённых анкет — с ответами); в Telegram приходит короткий текст.
+        Сообщения о ходе сбора. Вебхук получает JSON (для завершённых анкет – с ответами); в Telegram приходит короткий текст.
       </p>
       <div className="grid2">
         <label className="field"><span>Вебхук (POST JSON)</span>
@@ -155,7 +155,7 @@ export function NotifyCard({ info, reload }: { info: ProjectInfo; reload: () => 
             await reload();
           }
         }}>Отправить тест</button>
-        {cfg?.lastSentAt && <span className="muted small">последнее: {fmtDate(cfg.lastSentAt, '—')}</span>}
+        {cfg?.lastSentAt && <span className="muted small">последнее: {fmtDate(cfg.lastSentAt, '–')}</span>}
       </div>
     </div>
   );
